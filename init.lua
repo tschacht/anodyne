@@ -301,6 +301,9 @@ local function moveToCorner(corner)
   elseif corner == "bottomleft" then
     targetFrame.x = screenFrame.x
     targetFrame.y = screenFrame.y + screenFrame.h - currentFrame.h
+  elseif corner == "centerbottom" then
+    targetFrame.x = screenFrame.x + (screenFrame.w - currentFrame.w) / 2
+    targetFrame.y = screenFrame.y + screenFrame.h - currentFrame.h
   elseif corner == "bottomright" then
     targetFrame.x = screenFrame.x + screenFrame.w - currentFrame.w
     targetFrame.y = screenFrame.y + screenFrame.h - currentFrame.h
@@ -445,6 +448,7 @@ local function showModalGroupPrompt(group)
       modalAlert(table.concat({
         "Move bottom corners:",
         CONFIG.symbols.left .. " = bottom-left",
+        "C = center-bottom",
         CONFIG.symbols.right .. " = bottom-right",
         "B = back",
       }, "\n"))
@@ -563,6 +567,9 @@ local function handleMoveSelection(direction, shifted)
     if direction == "left" then
       moveToCorner("bottomleft")
       modalState.moveBottomMode = false
+    elseif direction == "c" then
+      moveToCorner("centerbottom")
+      modalState.moveBottomMode = false
     elseif direction == "right" then
       moveToCorner("bottomright")
       modalState.moveBottomMode = false
@@ -571,9 +578,12 @@ local function handleMoveSelection(direction, shifted)
       showModalGroupPrompt("move")
       return
     else
-      modalAlert("Use Left, Right, or B")
+      modalAlert("Use Left, C, Right, or B")
       return
     end
+
+    showModalGroupPrompt("move")
+    return
   end
 
   if direction == "c" then
@@ -950,6 +960,12 @@ local function buildMenuItems()
     title = "Bottom Left [M B " .. CONFIG.symbols.left .. "]",
     fn = function()
       moveToCorner("bottomleft")
+    end,
+  })
+  table.insert(items, {
+    title = "Center Bottom [M B C]",
+    fn = function()
+      moveToCorner("centerbottom")
     end,
   })
   table.insert(items, {
