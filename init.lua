@@ -371,9 +371,41 @@ local function startModalTimer()
   end)
 end
 
+local function getModalHomeWindow()
+  local win = getValidWindow(hs.window.focusedWindow())
+  if win then
+    WindowManager.lastFocusedWindow = win
+    return win
+  end
+
+  win = getValidWindow(WindowManager.lastFocusedWindow)
+  if win then
+    return win
+  end
+
+  win = getValidWindow(hs.window.frontmostWindow())
+  if win then
+    WindowManager.lastFocusedWindow = win
+  end
+
+  return win
+end
+
+local function formatCurrentWindowSize()
+  local win = getModalHomeWindow()
+  if not win then
+    return "Current: no focused window"
+  end
+
+  local frame = win:frame()
+  return string.format("Current: %d x %d", round(frame.w), round(frame.h))
+end
+
 local function showModalHome()
   modalAlert(table.concat({
     "Window mode:",
+    formatCurrentWindowSize(),
+    "",
     "A = aspect",
     "W = width",
     "H = height",
