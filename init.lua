@@ -26,7 +26,13 @@ local CONFIG = {
   heightPresets = { 1000, 1200, 1400, 1500 },
   growStep = 50,
   moveStep = 50,
+  undoDepth = 3,
 }
+
+local undoDepth = tonumber(CONFIG.undoDepth)
+if not undoDepth or undoDepth < 1 or undoDepth ~= math.floor(undoDepth) then
+  error("CONFIG.undoDepth must be a positive integer")
+end
 
 local MODE_SELECTORS = {
   { key = "a", screen = "aspect", label = "Aspect" },
@@ -142,6 +148,10 @@ local modalState = WindowManager.modalState
 modalState.active = false
 modalState.screen = "home"
 modalState.targetWindow = nil
+modalState.sessionInitialFrame = nil
+modalState.sessionInitialScreen = nil
+WindowManager.frameHistory = {}
+local frameHistory = WindowManager.frameHistory
 
 local function deleteObject(object)
   if object and object.delete then
@@ -174,6 +184,11 @@ if WindowManager.windowFilter then
     WindowManager.windowFilter:unsubscribeAll()
   end)
 end
+if WindowManager.historyWindowFilter then
+  pcall(function()
+    WindowManager.historyWindowFilter:unsubscribeAll()
+  end)
+end
 
 WindowManager.menu = hs.menubar.new()
 local menu = WindowManager.menu
@@ -183,6 +198,8 @@ end
 
 WindowManager.windowFilter = hs.window.filter.new()
 local windowFilter = WindowManager.windowFilter
+WindowManager.historyWindowFilter = hs.window.filter.new(true)
+local historyWindowFilter = WindowManager.historyWindowFilter
 WindowManager.lastFocusedWindow = hs.window.frontmostWindow()
 
 local function alert(message)
@@ -320,6 +337,72 @@ local function clamp(value, minValue, maxValue)
   return math.max(minValue, math.min(value, maxValue))
 end
 
+local function copyFrame(frame)
+  return { x = frame.x, y = frame.y, w = frame.w, h = frame.h }
+end
+
+local function framesEqual(first, second)
+  return round(first.x) == round(second.x) and round(first.y) == round(second.y) and round(first.w) == round(second.w) and round(first.h) == round(second.h)
+end
+
+local function screenSnapshot(screen)
+  local identityOk, identity = pcall(function()
+    return screen:getUUID() or tostring(screen:id())
+  end)
+  local frameOk, frame = pcall(function()
+    return screen:fullFrame()
+  end)
+  if not identityOk or not identity or not frameOk or not frame then
+    return nil
+  end
+
+  return { identity = identity, frame = copyFrame(frame) }
+end
+
+local function windowScreenSnapshot(win)
+  local ok, screen = pcall(function()
+    return win:screen()
+  end)
+  if not ok or not screen then
+    return nil
+  end
+  return screenSnapshot(screen)
+end
+
+local function screenSnapshotIsCurrent(snapshot)
+  if not snapshot then
+    return false
+  end
+
+  for _, screen in ipairs(hs.screen.allScreens()) do
+    local currentSnapshot = screenSnapshot(screen)
+    if currentSnapshot and currentSnapshot.identity == snapshot.identity and framesEqual(currentSnapshot.frame, snapshot.frame) then
+      return true
+    end
+  end
+  return false
+end
+
+local function recordFrameHistory(windowId, beforeFrame, afterFrame, beforeScreen)
+  local history = frameHistory[windowId] or {}
+
+  if #history > 0 and not framesEqual(history[#history].after, beforeFrame) then
+    history = {}
+  end
+
+  table.insert(history, {
+    before = copyFrame(beforeFrame),
+    after = copyFrame(afterFrame),
+    beforeScreen = beforeScreen,
+  })
+
+  while #history > undoDepth do
+    table.remove(history, 1)
+  end
+
+  frameHistory[windowId] = history
+end
+
 local function clampFrameToScreen(frame, screenFrame, options)
   local screenWidth = round(screenFrame.w)
   local screenHeight = round(screenFrame.h)
@@ -340,18 +423,192 @@ local function clampFrameToScreen(frame, screenFrame, options)
   }
 end
 
+local function actionFailure(message)
+  if not modalState.active then
+    alert(message)
+  end
+  return false, message
+end
+
+local function setFrameAndRead(win, frame)
+  local setOk = pcall(function()
+    -- An authoritative readback is required for transactional undo history.
+    win:setFrame(frame, 0)
+  end)
+  if not setOk then
+    return nil, "The window could not be changed", false
+  end
+
+  local frameOk, actualFrame = pcall(function()
+    return win:frame()
+  end)
+  if not frameOk or not actualFrame then
+    return nil, "The window frame could not be verified", true
+  end
+
+  return copyFrame(actualFrame), nil, false
+end
+
+local function setFrameExactly(win, targetFrame, currentFrame, frameDescription)
+  local actualFrame, failureMessage, historyInvalidated = setFrameAndRead(win, targetFrame)
+  if not actualFrame then
+    return nil, failureMessage, historyInvalidated
+  end
+  if framesEqual(currentFrame, actualFrame) then
+    return nil, "The window did not accept " .. frameDescription, false
+  end
+  if framesEqual(actualFrame, targetFrame) then
+    return actualFrame, nil, false
+  end
+
+  local rollbackFrame = setFrameAndRead(win, currentFrame)
+  if not rollbackFrame or not framesEqual(rollbackFrame, currentFrame) then
+    return nil, "The window changed but could not restore " .. frameDescription .. " exactly", true
+  end
+  return nil, "The window could not restore " .. frameDescription .. " exactly", false
+end
+
 local function applyFrame(win, frame, label, options)
-  local screenFrame = win:screen():frame()
-  local clampedFrame = clampFrameToScreen(frame, screenFrame, options)
-  win:setFrame(clampedFrame)
+  local idOk, windowId = pcall(function()
+    return win:id()
+  end)
+  if not idOk or not windowId then
+    return actionFailure("The target window is no longer available")
+  end
+
+  local currentScreen = windowScreenSnapshot(win)
+  if not currentScreen then
+    return actionFailure("The window screen could not be verified")
+  end
+
+  local frameOk, currentFrame = pcall(function()
+    return win:frame()
+  end)
+  if not frameOk or not currentFrame then
+    return actionFailure("The target window is no longer available")
+  end
+
+  local targetFrame
+  if options and options.clampToScreen == false then
+    targetFrame = copyFrame(frame)
+  else
+    local screenFrameOk, screenFrame = pcall(function()
+      return win:screen():frame()
+    end)
+    if not screenFrameOk or not screenFrame then
+      return actionFailure("The window screen could not be verified")
+    end
+    targetFrame = clampFrameToScreen(frame, screenFrame, options)
+  end
+  local actualFrame = currentFrame
+
+  if not framesEqual(currentFrame, targetFrame) then
+    local failureMessage
+    local historyInvalidated = false
+    if options and options.requireExact then
+      actualFrame, failureMessage, historyInvalidated = setFrameExactly(win, targetFrame, currentFrame, options.frameDescription or "the requested frame")
+    else
+      actualFrame, failureMessage, historyInvalidated = setFrameAndRead(win, targetFrame)
+    end
+    if historyInvalidated then
+      frameHistory[windowId] = nil
+    end
+    if not actualFrame then
+      return actionFailure(failureMessage)
+    end
+    if framesEqual(currentFrame, actualFrame) then
+      return actionFailure("The window did not accept that change")
+    end
+
+    recordFrameHistory(windowId, currentFrame, actualFrame, currentScreen)
+  end
 
   if options and options.showSize then
-    alert(string.format("%s (%d x %d)", label, clampedFrame.w, clampedFrame.h))
+    alert(string.format("%s (%d x %d)", label, round(actualFrame.w), round(actualFrame.h)))
   else
     alert(label)
   end
 
-  return clampedFrame
+  return true
+end
+
+local function resetSessionFrame()
+  if not modalState.active or not modalState.sessionInitialFrame or not modalState.sessionInitialScreen then
+    return actionFailure("No active window session to reset")
+  end
+  if not screenSnapshotIsCurrent(modalState.sessionInitialScreen) then
+    return actionFailure("The screen configuration changed; session reset is unavailable")
+  end
+
+  local win = getFocusedWindow()
+  if not win then
+    return false
+  end
+
+  return applyFrame(win, copyFrame(modalState.sessionInitialFrame), "Reset session", {
+    showSize = true,
+    clampToScreen = false,
+    requireExact = true,
+    frameDescription = "the session frame",
+  })
+end
+
+local function undoLastFrame()
+  local win = getFocusedWindow()
+  if not win then
+    return false
+  end
+
+  local idOk, windowId = pcall(function()
+    return win:id()
+  end)
+  if not idOk or not windowId then
+    return actionFailure("The target window is no longer available")
+  end
+
+  local history = frameHistory[windowId]
+  if not history or #history == 0 then
+    return actionFailure("Nothing to undo for this window")
+  end
+
+  local entry = history[#history]
+  local frameOk, currentFrame = pcall(function()
+    return win:frame()
+  end)
+  if not frameOk or not currentFrame then
+    frameHistory[windowId] = nil
+    return actionFailure("The target window is no longer available")
+  end
+  if not framesEqual(currentFrame, entry.after) then
+    frameHistory[windowId] = nil
+    return actionFailure("Undo history was reset because the window changed outside WI")
+  end
+
+  if not screenSnapshotIsCurrent(entry.beforeScreen) then
+    return actionFailure("The screen configuration changed; the previous frame is unavailable")
+  end
+
+  local restoredFrame = copyFrame(entry.before)
+  if framesEqual(currentFrame, restoredFrame) then
+    frameHistory[windowId] = nil
+    return actionFailure("The previous window position is no longer available")
+  end
+
+  local actualFrame, failureMessage, historyInvalidated = setFrameExactly(win, restoredFrame, currentFrame, "the previous frame")
+  if historyInvalidated then
+    frameHistory[windowId] = nil
+  end
+  if not actualFrame then
+    return actionFailure(failureMessage)
+  end
+
+  table.remove(history)
+  if #history == 0 or not framesEqual(history[#history].after, actualFrame) then
+    frameHistory[windowId] = nil
+  end
+
+  alert(string.format("Undo (%d x %d)", round(actualFrame.w), round(actualFrame.h)))
+  return true
 end
 
 local function applyAspectPreset(preset)
@@ -374,13 +631,12 @@ local function applyAspectPreset(preset)
   end
   local targetHeight = targetWidth / ratio
 
-  applyFrame(win, {
+  return applyFrame(win, {
     x = currentFrame.x,
     y = currentFrame.y,
     w = targetWidth,
     h = targetHeight,
   }, "Aspect " .. preset.label, { showSize = true, allowBelowMinimum = true })
-  return true
 end
 
 local function applyWidthPreset(width)
@@ -391,13 +647,12 @@ local function applyWidthPreset(width)
 
   local currentFrame = win:frame()
 
-  applyFrame(win, {
+  return applyFrame(win, {
     x = currentFrame.x,
     y = currentFrame.y,
     w = width,
     h = currentFrame.h,
   }, string.format("Width %d px", width), { showSize = true })
-  return true
 end
 
 local function applyHeightPreset(height)
@@ -408,13 +663,12 @@ local function applyHeightPreset(height)
 
   local currentFrame = win:frame()
 
-  applyFrame(win, {
+  return applyFrame(win, {
     x = currentFrame.x,
     y = currentFrame.y,
     w = currentFrame.w,
     h = height,
   }, string.format("Height %d px", height), { showSize = true })
-  return true
 end
 
 local function moveToCorner(corner)
@@ -455,8 +709,7 @@ local function moveToCorner(corner)
     return false
   end
 
-  applyFrame(win, targetFrame, "Move " .. corner)
-  return true
+  return applyFrame(win, targetFrame, "Move " .. corner)
 end
 
 local function growWindow(deltaWidth, deltaHeight, label)
@@ -467,13 +720,12 @@ local function growWindow(deltaWidth, deltaHeight, label)
 
   local currentFrame = win:frame()
 
-  applyFrame(win, {
+  return applyFrame(win, {
     x = currentFrame.x,
     y = currentFrame.y,
     w = currentFrame.w + deltaWidth,
     h = currentFrame.h + deltaHeight,
   }, label, { showSize = true })
-  return true
 end
 
 local function shrinkWindow(deltaWidth, deltaHeight, label)
@@ -484,13 +736,12 @@ local function shrinkWindow(deltaWidth, deltaHeight, label)
 
   local currentFrame = win:frame()
 
-  applyFrame(win, {
+  return applyFrame(win, {
     x = currentFrame.x,
     y = currentFrame.y,
     w = currentFrame.w - deltaWidth,
     h = currentFrame.h - deltaHeight,
   }, label, { showSize = true })
-  return true
 end
 
 local function stopModalTimer()
@@ -600,8 +851,7 @@ local function moveByStep(direction)
     return false
   end
 
-  applyFrame(win, targetFrame, string.format("Move %s %d px", direction, CONFIG.moveStep))
-  return true
+  return applyFrame(win, targetFrame, string.format("Move %s %d px", direction, CONFIG.moveStep))
 end
 
 local SCREEN_TITLES = {
@@ -637,6 +887,14 @@ end
 
 local function formatNavigationControlLine()
   return "Navigation: ⌫ = back/home · Esc = exit"
+end
+
+local function formatUndoLine()
+  return "U = undo last action"
+end
+
+local function formatSessionResetLine()
+  return "Shift+U = reset session"
 end
 
 local function buildModalLines(status)
@@ -700,6 +958,8 @@ local function buildModalLines(status)
 
   table.insert(lines, "")
   appendModeNavigationLines(lines)
+  table.insert(lines, formatUndoLine())
+  table.insert(lines, formatSessionResetLine())
   table.insert(lines, formatNavigationControlLine())
 
   if status then
@@ -725,26 +985,29 @@ local function transitionTo(screen)
   renderModal()
 end
 
-local function completeModalAction(success)
+local function completeModalAction(success, failureMessage)
   if success then
     stopModalRefreshTimer()
-    local animationDuration = tonumber(hs.window.animationDuration) or 0
-    WindowManager.modalRefreshTimer = hs.timer.doAfter(math.max(0.05, animationDuration + 0.05), function()
+    WindowManager.modalRefreshTimer = hs.timer.doAfter(0.05, function()
       WindowManager.modalRefreshTimer = nil
       if modalState.active then
         renderModal()
       end
     end)
   else
-    renderModal("The target window is no longer available")
+    renderModal(failureMessage or "The target window is no longer available")
   end
 end
 
 local function runMenuAction(actionFn)
-  local success = actionFn()
   if modalState.active then
+    stopModalRefreshTimer()
     startModalTimer()
-    completeModalAction(success)
+  end
+
+  local success, failureMessage = actionFn()
+  if modalState.active then
+    completeModalAction(success, failureMessage)
   end
 end
 
@@ -863,6 +1126,18 @@ local function handleModalKey(keyName, flags)
     return
   end
 
+  if plain and keyName == "u" then
+    local success, failureMessage = undoLastFrame()
+    completeModalAction(success, failureMessage)
+    return
+  end
+
+  if shifted and keyName == "u" then
+    local success, failureMessage = resetSessionFrame()
+    completeModalAction(success, failureMessage)
+    return
+  end
+
   if plain and MODE_BY_KEY[keyName] then
     transitionTo(MODE_BY_KEY[keyName])
     return
@@ -911,10 +1186,11 @@ local function handleModalKey(keyName, flags)
 
     local cornerAction = plain and findCornerAction(screen, keyName, false) or nil
     if cornerAction then
-      if moveToCorner(cornerAction.corner) then
+      local success, failureMessage = moveToCorner(cornerAction.corner)
+      if success then
         transitionTo("move")
       else
-        completeModalAction(false)
+        completeModalAction(false, failureMessage)
       end
       return
     end
@@ -972,10 +1248,30 @@ end
 
 local function buildMenuItems()
   local modalHotkeyLabel = formatModalHotkeyLabel()
+  local sessionSnapshotAvailable = modalState.active and modalState.sessionInitialFrame and modalState.sessionInitialScreen
+  local sessionScreenChanged = sessionSnapshotAvailable and not screenSnapshotIsCurrent(modalState.sessionInitialScreen)
+  local sessionResetAvailable = sessionSnapshotAvailable and not sessionScreenChanged
+  local sessionResetTitle = "Reset Session [Shift+U]"
+  if sessionScreenChanged then
+    sessionResetTitle = sessionResetTitle .. " (screen configuration changed)"
+  end
   local items = {
     { title = "Keyboard Mode: " .. modalHotkeyLabel, disabled = true },
     { title = formatNavigationLine(), disabled = true },
     { title = formatNavigationControlLine(), disabled = true },
+    {
+      title = "Undo Last Action [U]",
+      fn = function()
+        runMenuAction(undoLastFrame)
+      end,
+    },
+    {
+      title = sessionResetTitle,
+      disabled = not sessionResetAvailable,
+      fn = function()
+        runMenuAction(resetSessionFrame)
+      end,
+    },
     { title = "-" },
     { title = string.format("Aspect Presets [A then 1-%d]", #CONFIG.aspectPresets), disabled = true },
   }
@@ -1085,14 +1381,28 @@ windowFilter:subscribe(hs.window.filter.windowFocused, function(win)
   end
 end)
 
+historyWindowFilter:subscribe(hs.window.filter.windowDestroyed, function(win)
+  local ok, windowId = pcall(function()
+    return win:id()
+  end)
+  if ok and windowId then
+    frameHistory[windowId] = nil
+  end
+end)
+
 WindowManager.windowMode = hs.hotkey.modal.new()
 windowMode = WindowManager.windowMode
 
 function windowMode:entered()
   local targetWindow = getModalHomeWindow()
+  local frameOk, initialFrame = pcall(function()
+    return targetWindow and copyFrame(targetWindow:frame()) or nil
+  end)
   modalState.active = true
   modalState.screen = "home"
   modalState.targetWindow = targetWindow
+  modalState.sessionInitialFrame = frameOk and initialFrame or nil
+  modalState.sessionInitialScreen = targetWindow and windowScreenSnapshot(targetWindow) or nil
   startModalTimer()
   startModalKeyGuard()
   renderModal()
@@ -1106,6 +1416,8 @@ function windowMode:exited()
   modalState.active = false
   modalState.screen = "home"
   modalState.targetWindow = nil
+  modalState.sessionInitialFrame = nil
+  modalState.sessionInitialScreen = nil
 end
 
 WindowManager.entryHotkey = hs.hotkey.bind(CONFIG.modalHotkey.modifiers, CONFIG.modalHotkey.key, function()
