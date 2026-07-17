@@ -1,7 +1,7 @@
 local CONFIG = {
   menuTitle = "WI",
   alertDuration = 0.4,
-  modalDuration = 5,
+  modalDuration = 8,
   symbols = {
     left = "←",
     up = "↑",
@@ -9,7 +9,6 @@ local CONFIG = {
     down = "↓",
     shift = "shift",
   },
-  winWinGridParts = 50,
   minimumWidth = 500,
   minimumHeight = 500,
   modalHotkey = {
@@ -27,18 +26,122 @@ local CONFIG = {
   heightPresets = { 1000, 1200, 1400, 1500 },
   growStep = 50,
   moveStep = 50,
-  cornerPresets = {
-    { label = "Top Left", key = "topleft" },
-    { label = "Center Top", key = "centertop" },
-    { label = "Top Right", key = "topright" },
-    { label = "Bottom Left", key = "bottomleft" },
-    { label = "Bottom Right", key = "bottomright" },
+}
+
+local MODE_SELECTORS = {
+  { key = "a", screen = "aspect", label = "Aspect" },
+  { key = "w", screen = "width", label = "Width" },
+  { key = "h", screen = "height", label = "Height" },
+  { key = "m", screen = "move", label = "Move" },
+  { key = "r", screen = "resize", label = "Resize" },
+}
+
+local MODE_BY_KEY = {}
+for _, selector in ipairs(MODE_SELECTORS) do
+  MODE_BY_KEY[selector.key] = selector.screen
+end
+
+local MOVE_STEP_ACTIONS = {
+  { key = "left", direction = "left", label = "Move Left", symbol = CONFIG.symbols.left },
+  { key = "right", direction = "right", label = "Move Right", symbol = CONFIG.symbols.right },
+  { key = "up", direction = "up", label = "Move Up", symbol = CONFIG.symbols.up },
+  { key = "down", direction = "down", label = "Move Down", symbol = CONFIG.symbols.down },
+}
+
+local CORNER_ACTIONS = {
+  {
+    key = "left",
+    shifted = true,
+    screen = "move",
+    corner = "topleft",
+    label = "Top Left",
+    shortcut = CONFIG.symbols.shift .. " + " .. CONFIG.symbols.left,
+  },
+  { key = "c", screen = "move", corner = "centertop", label = "Center Top", shortcut = "C" },
+  {
+    key = "right",
+    shifted = true,
+    screen = "move",
+    corner = "topright",
+    label = "Top Right",
+    shortcut = CONFIG.symbols.shift .. " + " .. CONFIG.symbols.right,
+  },
+  {
+    key = "left",
+    screen = "move_bottom",
+    corner = "bottomleft",
+    label = "Bottom Left",
+    shortcut = CONFIG.symbols.left,
+  },
+  { key = "c", screen = "move_bottom", corner = "centerbottom", label = "Center Bottom", shortcut = "C" },
+  {
+    key = "right",
+    screen = "move_bottom",
+    corner = "bottomright",
+    label = "Bottom Right",
+    shortcut = CONFIG.symbols.right,
+  },
+}
+
+local RESIZE_ACTIONS = {
+  {
+    key = "right",
+    label = "Grow Width",
+    prompt = "grow width",
+    shortcut = CONFIG.symbols.right,
+    deltaWidth = CONFIG.growStep,
+    deltaHeight = 0,
+  },
+  {
+    key = "down",
+    label = "Grow Height",
+    prompt = "grow height",
+    shortcut = CONFIG.symbols.down,
+    deltaWidth = 0,
+    deltaHeight = CONFIG.growStep,
+  },
+  {
+    key = "left",
+    label = "Shrink Width",
+    prompt = "shrink width",
+    shortcut = CONFIG.symbols.left,
+    deltaWidth = -CONFIG.growStep,
+    deltaHeight = 0,
+  },
+  {
+    key = "up",
+    label = "Shrink Height",
+    prompt = "shrink height",
+    shortcut = CONFIG.symbols.up,
+    deltaWidth = 0,
+    deltaHeight = -CONFIG.growStep,
+  },
+  {
+    key = "g",
+    label = "Grow Width + Height",
+    prompt = "grow width + height",
+    shortcut = "G",
+    deltaWidth = CONFIG.growStep,
+    deltaHeight = CONFIG.growStep,
+  },
+  {
+    key = "s",
+    label = "Shrink Width + Height",
+    prompt = "shrink width + height",
+    shortcut = "S",
+    deltaWidth = -CONFIG.growStep,
+    deltaHeight = -CONFIG.growStep,
   },
 }
 
 local WindowManager = rawget(_G, "WindowManager") or {}
 _G.WindowManager = WindowManager
 local windowMode
+WindowManager.modalState = WindowManager.modalState or {}
+local modalState = WindowManager.modalState
+modalState.active = false
+modalState.screen = "home"
+modalState.targetWindow = nil
 
 local function deleteObject(object)
   if object and object.delete then
@@ -48,18 +151,29 @@ local function deleteObject(object)
   end
 end
 
+local function stopObject(object)
+  if object and object.stop then
+    pcall(function()
+      object:stop()
+    end)
+  end
+end
+
+stopObject(WindowManager.modalTimer)
+stopObject(WindowManager.modalRefreshTimer)
+stopObject(WindowManager.modalKeyGuard)
 deleteObject(WindowManager.entryHotkey)
 deleteObject(WindowManager.windowMode)
 deleteObject(WindowManager.modalTimer)
+deleteObject(WindowManager.modalRefreshTimer)
 deleteObject(WindowManager.modalCanvas)
 deleteObject(WindowManager.modalKeyGuard)
-
-local winwin = hs.loadSpoon("WinWin")
-if not winwin then
-  error("Failed to load WinWin spoon")
+deleteObject(WindowManager.menu)
+if WindowManager.windowFilter then
+  pcall(function()
+    WindowManager.windowFilter:unsubscribeAll()
+  end)
 end
-
-winwin.gridparts = CONFIG.winWinGridParts
 
 WindowManager.menu = hs.menubar.new()
 local menu = WindowManager.menu
@@ -93,9 +207,6 @@ local function stopModalKeyGuard()
   if WindowManager.modalKeyGuard then
     pcall(function()
       WindowManager.modalKeyGuard:stop()
-    end)
-    pcall(function()
-      WindowManager.modalKeyGuard:delete()
     end)
     WindowManager.modalKeyGuard = nil
   end
@@ -166,6 +277,16 @@ local function getValidWindow(candidate)
 end
 
 local function getFocusedWindow()
+  if modalState.active then
+    local modalWindow = getValidWindow(modalState.targetWindow)
+    if modalWindow then
+      return modalWindow
+    end
+
+    alert("Modal target window is no longer available")
+    return nil
+  end
+
   local win = getValidWindow(hs.window.focusedWindow())
   if win then
     WindowManager.lastFocusedWindow = win
@@ -199,9 +320,15 @@ local function clamp(value, minValue, maxValue)
   return math.max(minValue, math.min(value, maxValue))
 end
 
-local function clampFrameToScreen(frame, screenFrame)
-  local width = clamp(round(frame.w), CONFIG.minimumWidth, round(screenFrame.w))
-  local height = clamp(round(frame.h), CONFIG.minimumHeight, round(screenFrame.h))
+local function clampFrameToScreen(frame, screenFrame, options)
+  local screenWidth = round(screenFrame.w)
+  local screenHeight = round(screenFrame.h)
+  local requestedMinimumWidth = options and options.allowBelowMinimum and 1 or CONFIG.minimumWidth
+  local requestedMinimumHeight = options and options.allowBelowMinimum and 1 or CONFIG.minimumHeight
+  local minimumWidth = math.min(requestedMinimumWidth, screenWidth)
+  local minimumHeight = math.min(requestedMinimumHeight, screenHeight)
+  local width = clamp(round(frame.w), minimumWidth, screenWidth)
+  local height = clamp(round(frame.h), minimumHeight, screenHeight)
   local maxX = round(screenFrame.x + screenFrame.w - width)
   local maxY = round(screenFrame.y + screenFrame.h - height)
 
@@ -215,7 +342,7 @@ end
 
 local function applyFrame(win, frame, label, options)
   local screenFrame = win:screen():frame()
-  local clampedFrame = clampFrameToScreen(frame, screenFrame)
+  local clampedFrame = clampFrameToScreen(frame, screenFrame, options)
   win:setFrame(clampedFrame)
 
   if options and options.showSize then
@@ -223,29 +350,43 @@ local function applyFrame(win, frame, label, options)
   else
     alert(label)
   end
+
+  return clampedFrame
 end
 
 local function applyAspectPreset(preset)
   local win = getFocusedWindow()
   if not win then
-    return
+    return false
   end
 
   local currentFrame = win:frame()
-  local targetHeight = currentFrame.w * preset.height / preset.width
+  local screenFrame = win:screen():frame()
+  local ratio = preset.width / preset.height
+  local minimumWidthForRatio = math.max(CONFIG.minimumWidth, CONFIG.minimumHeight * ratio)
+  local maximumWidthForRatio = math.min(screenFrame.w, screenFrame.h * ratio)
+  local targetWidth
+
+  if maximumWidthForRatio < minimumWidthForRatio then
+    targetWidth = maximumWidthForRatio
+  else
+    targetWidth = clamp(currentFrame.w, minimumWidthForRatio, maximumWidthForRatio)
+  end
+  local targetHeight = targetWidth / ratio
 
   applyFrame(win, {
     x = currentFrame.x,
     y = currentFrame.y,
-    w = currentFrame.w,
+    w = targetWidth,
     h = targetHeight,
-  }, "Aspect " .. preset.label, { showSize = true })
+  }, "Aspect " .. preset.label, { showSize = true, allowBelowMinimum = true })
+  return true
 end
 
 local function applyWidthPreset(width)
   local win = getFocusedWindow()
   if not win then
-    return
+    return false
   end
 
   local currentFrame = win:frame()
@@ -256,12 +397,13 @@ local function applyWidthPreset(width)
     w = width,
     h = currentFrame.h,
   }, string.format("Width %d px", width), { showSize = true })
+  return true
 end
 
 local function applyHeightPreset(height)
   local win = getFocusedWindow()
   if not win then
-    return
+    return false
   end
 
   local currentFrame = win:frame()
@@ -272,12 +414,13 @@ local function applyHeightPreset(height)
     w = currentFrame.w,
     h = height,
   }, string.format("Height %d px", height), { showSize = true })
+  return true
 end
 
 local function moveToCorner(corner)
   local win = getFocusedWindow()
   if not win then
-    return
+    return false
   end
 
   local currentFrame = win:frame()
@@ -309,16 +452,17 @@ local function moveToCorner(corner)
     targetFrame.y = screenFrame.y + screenFrame.h - currentFrame.h
   else
     alert("Unknown corner: " .. tostring(corner))
-    return
+    return false
   end
 
   applyFrame(win, targetFrame, "Move " .. corner)
+  return true
 end
 
 local function growWindow(deltaWidth, deltaHeight, label)
   local win = getFocusedWindow()
   if not win then
-    return
+    return false
   end
 
   local currentFrame = win:frame()
@@ -329,12 +473,13 @@ local function growWindow(deltaWidth, deltaHeight, label)
     w = currentFrame.w + deltaWidth,
     h = currentFrame.h + deltaHeight,
   }, label, { showSize = true })
+  return true
 end
 
 local function shrinkWindow(deltaWidth, deltaHeight, label)
   local win = getFocusedWindow()
   if not win then
-    return
+    return false
   end
 
   local currentFrame = win:frame()
@@ -345,15 +490,7 @@ local function shrinkWindow(deltaWidth, deltaHeight, label)
     w = currentFrame.w - deltaWidth,
     h = currentFrame.h - deltaHeight,
   }, label, { showSize = true })
-end
-
-WindowManager.modalState = WindowManager.modalState or { group = nil, moveBottomMode = false }
-local modalState = WindowManager.modalState
-WindowManager.modalFlags = WindowManager.modalFlags or {}
-
-local function resetModalState()
-  modalState.group = nil
-  modalState.moveBottomMode = false
+  return true
 end
 
 local function stopModalTimer()
@@ -374,7 +511,20 @@ local function startModalTimer()
   end)
 end
 
+local function stopModalRefreshTimer()
+  if WindowManager.modalRefreshTimer then
+    pcall(function()
+      WindowManager.modalRefreshTimer:stop()
+    end)
+    WindowManager.modalRefreshTimer = nil
+  end
+end
+
 local function getModalHomeWindow()
+  if modalState.active then
+    return getValidWindow(modalState.targetWindow)
+  end
+
   local win = getValidWindow(hs.window.focusedWindow())
   if win then
     WindowManager.lastFocusedWindow = win
@@ -404,20 +554,6 @@ local function formatCurrentWindowSize()
   return string.format("Current: %d x %d", round(frame.w), round(frame.h))
 end
 
-local function showModalHome()
-  modalAlert(table.concat({
-    "Window mode:",
-    formatCurrentWindowSize(),
-    "",
-    "A = aspect",
-    "W = width",
-    "H = height",
-    "M = move",
-    "R = resize",
-    "Esc = cancel",
-  }, "\n"))
-end
-
 local function formatPresetOptions(presets, labelFn)
   local labels = {}
 
@@ -426,94 +562,6 @@ local function formatPresetOptions(presets, labelFn)
   end
 
   return table.concat(labels, "\n")
-end
-
-local function showModalGroupPrompt(group)
-  startModalTimer()
-
-  if group == "aspect" then
-    modalAlert("Aspect preset:\n" .. formatPresetOptions(CONFIG.aspectPresets, function(preset)
-      return preset.label
-    end))
-  elseif group == "width" then
-    modalAlert("Width preset:\n" .. formatPresetOptions(CONFIG.widthPresets, function(width)
-      return tostring(width)
-    end))
-  elseif group == "height" then
-    modalAlert("Height preset:\n" .. formatPresetOptions(CONFIG.heightPresets, function(height)
-      return tostring(height)
-    end))
-  elseif group == "move" then
-    if modalState.moveBottomMode then
-      modalAlert(table.concat({
-        "Move bottom corners:",
-        CONFIG.symbols.left .. " = bottom-left",
-        "C = center-bottom",
-        CONFIG.symbols.right .. " = bottom-right",
-        "B = back",
-      }, "\n"))
-    else
-      modalAlert(table.concat({
-        "Move:",
-        CONFIG.symbols.left .. " = move left " .. CONFIG.moveStep,
-        CONFIG.symbols.right .. " = move right " .. CONFIG.moveStep,
-        CONFIG.symbols.up .. " = move up " .. CONFIG.moveStep,
-        CONFIG.symbols.down .. " = move down " .. CONFIG.moveStep,
-        CONFIG.symbols.shift .. " + " .. CONFIG.symbols.left .. " = top-left",
-        CONFIG.symbols.shift .. " + " .. CONFIG.symbols.right .. " = top-right",
-        "C = center-top",
-        "B = bottom corners",
-      }, "\n"))
-    end
-  elseif group == "resize" then
-    modalAlert(table.concat({
-      "Resize:",
-      CONFIG.symbols.right .. " = grow width",
-      CONFIG.symbols.down .. " = grow height",
-      CONFIG.symbols.left .. " = shrink width",
-      CONFIG.symbols.up .. " = shrink height",
-      "G = grow width + height",
-      "S = shrink width + height",
-    }, "\n"))
-  end
-end
-
-local function setModalGroup(group)
-  modalState.group = group
-  modalState.moveBottomMode = false
-  showModalGroupPrompt(group)
-end
-
-local function selectPreset(presets, index, applyFn, label)
-  local preset = presets[index]
-  if not preset then
-    modalAlert("No " .. label .. " preset " .. tostring(index))
-    return false
-  end
-
-  applyFn(preset)
-  return true
-end
-
-local function handleNumberSelection(index)
-  startModalTimer()
-
-  if modalState.group == "aspect" then
-    if not selectPreset(CONFIG.aspectPresets, index, applyAspectPreset, "aspect") then
-      return
-    end
-  elseif modalState.group == "width" then
-    if not selectPreset(CONFIG.widthPresets, index, applyWidthPreset, "width") then
-      return
-    end
-  elseif modalState.group == "height" then
-    if not selectPreset(CONFIG.heightPresets, index, applyHeightPreset, "height") then
-      return
-    end
-  else
-    modalAlert("Choose A, W, or H first")
-    return
-  end
 end
 
 local function snapPositionForDirection(origin, current, step, direction)
@@ -531,7 +579,7 @@ end
 local function moveByStep(direction)
   local win = getFocusedWindow()
   if not win then
-    return
+    return false
   end
 
   local currentFrame = win:frame()
@@ -549,296 +597,353 @@ local function moveByStep(direction)
     targetFrame.y = snapPositionForDirection(screenFrame.y, currentFrame.y, CONFIG.moveStep, direction)
   else
     alert("Unknown move direction: " .. tostring(direction))
-    return
+    return false
   end
 
   applyFrame(win, targetFrame, string.format("Move %s %d px", direction, CONFIG.moveStep))
-end
-
-local function handleMoveSelection(direction, shifted)
-  startModalTimer()
-
-  if modalState.group ~= "move" then
-    modalAlert("Press M first")
-    return
-  end
-
-  if modalState.moveBottomMode then
-    if direction == "left" then
-      moveToCorner("bottomleft")
-      modalState.moveBottomMode = false
-    elseif direction == "c" then
-      moveToCorner("centerbottom")
-      modalState.moveBottomMode = false
-    elseif direction == "right" then
-      moveToCorner("bottomright")
-      modalState.moveBottomMode = false
-    elseif direction == "b" then
-      modalState.moveBottomMode = false
-      showModalGroupPrompt("move")
-      return
-    else
-      modalAlert("Use Left, C, Right, or B")
-      return
-    end
-
-    showModalGroupPrompt("move")
-    return
-  end
-
-  if direction == "c" then
-    moveToCorner("centertop")
-  elseif direction == "b" then
-    modalState.moveBottomMode = true
-    showModalGroupPrompt("move")
-    return
-  elseif direction == "left" and shifted then
-    moveToCorner("topleft")
-  elseif direction == "right" and shifted then
-    moveToCorner("topright")
-  elseif direction == "left" or direction == "right" or direction == "up" or direction == "down" then
-    moveByStep(direction)
-  else
-    modalAlert("Use arrows, Shift+Left, Shift+Right, C, or B")
-    return
-  end
-
-  showModalGroupPrompt("move")
-end
-
-local function handleSizeSelection(direction)
-  startModalTimer()
-
-  if modalState.group ~= "resize" then
-    modalAlert("Press R first")
-    return
-  end
-
-  if direction == "right" then
-    growWindow(CONFIG.growStep, 0, "Grow width +" .. CONFIG.growStep .. " px")
-  elseif direction == "down" then
-    growWindow(0, CONFIG.growStep, "Grow height +" .. CONFIG.growStep .. " px")
-  elseif direction == "left" then
-    shrinkWindow(CONFIG.growStep, 0, "Shrink width -" .. CONFIG.growStep .. " px")
-  elseif direction == "up" then
-    shrinkWindow(0, CONFIG.growStep, "Shrink height -" .. CONFIG.growStep .. " px")
-  else
-    modalAlert("Use Left, Up, Right, or Down")
-    return
-  end
-end
-
-local function handleResizeShortcut(action)
-  startModalTimer()
-
-  if modalState.group ~= "resize" then
-    modalAlert("Press R first")
-    return
-  end
-
-  if action == "grow_both" then
-    growWindow(CONFIG.growStep, CONFIG.growStep, "Grow size +" .. CONFIG.growStep .. " px")
-  elseif action == "shrink_both" then
-    shrinkWindow(CONFIG.growStep, CONFIG.growStep, "Shrink size -" .. CONFIG.growStep .. " px")
-  else
-    modalAlert("Use G or S in resize mode")
-  end
-end
-
-local function hasOnlyShift(flags)
-  if not flags.shift then
-    return false
-  end
-
-  for key, enabled in pairs(flags) do
-    if enabled and key ~= "shift" then
-      return false
-    end
-  end
-
   return true
 end
 
-local function hasOnlyModalEntryModifiers(flags)
-  local expected = {}
+local SCREEN_TITLES = {
+  home = "Window mode",
+  aspect = "Aspect preset",
+  width = "Width preset",
+  height = "Height preset",
+  move = "Move",
+  move_bottom = "Move bottom positions",
+  resize = "Resize",
+}
 
-  for _, modifier in ipairs(CONFIG.modalHotkey.modifiers) do
-    expected[modifier] = true
+local function appendLines(target, source)
+  for _, line in ipairs(source) do
+    table.insert(target, line)
   end
+end
 
-  for key, enabled in pairs(flags) do
-    if enabled and not expected[key] then
-      return false
+local function formatNavigationLine()
+  local labels = {}
+  for _, selector in ipairs(MODE_SELECTORS) do
+    table.insert(labels, string.upper(selector.key) .. " " .. selector.label)
+  end
+  return "Modes: " .. table.concat(labels, " · ")
+end
+
+local function appendModeNavigationLines(lines)
+  table.insert(lines, "Modes:")
+  for _, selector in ipairs(MODE_SELECTORS) do
+    table.insert(lines, string.upper(selector.key) .. " = " .. selector.label)
+  end
+end
+
+local function formatNavigationControlLine()
+  return "Navigation: ⌫ = back/home · Esc = exit"
+end
+
+local function buildModalLines(status)
+  local screen = modalState.screen or "home"
+  local lines = { (SCREEN_TITLES[screen] or "Window mode") .. ":", formatCurrentWindowSize(), "" }
+
+  if screen == "home" then
+    table.insert(lines, "Choose a mode with A, W, H, M, or R")
+  elseif screen == "aspect" then
+    appendLines(
+      lines,
+      hs.fnutils.split(
+        formatPresetOptions(CONFIG.aspectPresets, function(preset)
+          return preset.label
+        end),
+        "\n"
+      )
+    )
+  elseif screen == "width" then
+    appendLines(
+      lines,
+      hs.fnutils.split(
+        formatPresetOptions(CONFIG.widthPresets, function(width)
+          return tostring(width) .. " px"
+        end),
+        "\n"
+      )
+    )
+  elseif screen == "height" then
+    appendLines(
+      lines,
+      hs.fnutils.split(
+        formatPresetOptions(CONFIG.heightPresets, function(height)
+          return tostring(height) .. " px"
+        end),
+        "\n"
+      )
+    )
+  elseif screen == "move" then
+    for _, action in ipairs(MOVE_STEP_ACTIONS) do
+      table.insert(lines, string.format("%s = %s %d px", action.symbol, string.lower(action.label), CONFIG.moveStep))
+    end
+    for _, action in ipairs(CORNER_ACTIONS) do
+      if action.screen == "move" then
+        table.insert(lines, action.shortcut .. " = " .. string.lower(action.label))
+      end
+    end
+    table.insert(lines, "B = bottom positions")
+  elseif screen == "move_bottom" then
+    for _, action in ipairs(CORNER_ACTIONS) do
+      if action.screen == "move_bottom" then
+        table.insert(lines, action.shortcut .. " = " .. string.lower(action.label))
+      end
+    end
+    table.insert(lines, "B or ⌫ = back to Move")
+  elseif screen == "resize" then
+    for _, action in ipairs(RESIZE_ACTIONS) do
+      table.insert(lines, action.shortcut .. " = " .. action.prompt .. " " .. CONFIG.growStep .. " px")
     end
   end
 
-  for modifier, _ in pairs(expected) do
-    if not flags[modifier] then
-      return false
+  table.insert(lines, "")
+  appendModeNavigationLines(lines)
+  table.insert(lines, formatNavigationControlLine())
+
+  if status then
+    table.insert(lines, "")
+    table.insert(lines, "Status: " .. status)
+  end
+
+  return lines
+end
+
+local function renderModal(status)
+  modalAlert(table.concat(buildModalLines(status), "\n"))
+end
+
+local function transitionTo(screen)
+  stopModalRefreshTimer()
+  if not SCREEN_TITLES[screen] then
+    renderModal("Unknown mode " .. tostring(screen))
+    return
+  end
+
+  modalState.screen = screen
+  renderModal()
+end
+
+local function completeModalAction(success)
+  if success then
+    stopModalRefreshTimer()
+    local animationDuration = tonumber(hs.window.animationDuration) or 0
+    WindowManager.modalRefreshTimer = hs.timer.doAfter(math.max(0.05, animationDuration + 0.05), function()
+      WindowManager.modalRefreshTimer = nil
+      if modalState.active then
+        renderModal()
+      end
+    end)
+  else
+    renderModal("The target window is no longer available")
+  end
+end
+
+local function runMenuAction(actionFn)
+  local success = actionFn()
+  if modalState.active then
+    startModalTimer()
+    completeModalAction(success)
+  end
+end
+
+local function isArrowKey(keyName)
+  return keyName == "left" or keyName == "right" or keyName == "up" or keyName == "down"
+end
+
+local function hasNoCommandModifiers(keyName, flags)
+  return not flags.cmd and not flags.alt and not flags.ctrl and not flags.shift and (isArrowKey(keyName) or not flags.fn)
+end
+
+local function hasOnlyShift(keyName, flags)
+  return flags.shift == true and not flags.cmd and not flags.alt and not flags.ctrl and (isArrowKey(keyName) or not flags.fn)
+end
+
+local function findCornerAction(screen, keyName, shifted)
+  for _, action in ipairs(CORNER_ACTIONS) do
+    local actionShifted = action.shifted == true
+    if action.screen == screen and action.key == keyName and actionShifted == shifted then
+      return action
     end
   end
-
-  return true
+  return nil
 end
 
-local function isPlainModalKey(keyName, flags)
-  if next(flags) ~= nil then
-    return false
+local function findMoveStepAction(keyName)
+  for _, action in ipairs(MOVE_STEP_ACTIONS) do
+    if action.key == keyName then
+      return action
+    end
+  end
+  return nil
+end
+
+local function findResizeAction(keyName)
+  for _, action in ipairs(RESIZE_ACTIONS) do
+    if action.key == keyName then
+      return action
+    end
+  end
+  return nil
+end
+
+local function applyResizeAction(action)
+  local magnitude = math.max(math.abs(action.deltaWidth), math.abs(action.deltaHeight))
+  local sign = action.deltaWidth < 0 or action.deltaHeight < 0
+  local label = string.format("%s %s%d px", action.label, sign and "-" or "+", magnitude)
+
+  if sign then
+    return shrinkWindow(math.abs(action.deltaWidth), math.abs(action.deltaHeight), label)
+  end
+  return growWindow(action.deltaWidth, action.deltaHeight, label)
+end
+
+local function handlePresetSelection(index)
+  local screen = modalState.screen
+  local preset
+  local applyFn
+
+  if screen == "aspect" then
+    preset = CONFIG.aspectPresets[index]
+    applyFn = applyAspectPreset
+  elseif screen == "width" then
+    preset = CONFIG.widthPresets[index]
+    applyFn = applyWidthPreset
+  elseif screen == "height" then
+    preset = CONFIG.heightPresets[index]
+    applyFn = applyHeightPreset
   end
 
-  return keyName == "escape"
-    or keyName == "a"
-    or keyName == "w"
-    or keyName == "h"
-    or keyName == "m"
-    or keyName == "b"
-    or keyName == "c"
-    or keyName == "r"
-    or keyName == "g"
-    or keyName == "s"
-    or keyName == "up"
-    or keyName == "down"
-    or keyName == "left"
-    or keyName == "right"
-    or tonumber(keyName) ~= nil
+  if not applyFn then
+    renderModal("Number keys are not available in " .. (SCREEN_TITLES[screen] or "this mode"))
+  elseif not preset then
+    renderModal(string.format("No %s preset %d", string.lower(SCREEN_TITLES[screen]), index))
+  else
+    completeModalAction(applyFn(preset))
+  end
 end
 
-local function isAllowedModalKey(keyName, flags)
-  return isPlainModalKey(keyName, flags) or (hasOnlyShift(flags) and (keyName == "left" or keyName == "right"))
+local function formatKeyName(keyName, flags)
+  local label = keyName
+  if keyName == "delete" then
+    label = "Backspace"
+  elseif #keyName == 1 then
+    label = string.upper(keyName)
+  end
+  local modifiers = {}
+  if flags.ctrl then
+    table.insert(modifiers, "Ctrl")
+  end
+  if flags.alt then
+    table.insert(modifiers, "Alt")
+  end
+  if flags.cmd then
+    table.insert(modifiers, "Cmd")
+  end
+  if flags.shift then
+    table.insert(modifiers, "Shift")
+  end
+  if flags.fn and not isArrowKey(keyName) then
+    table.insert(modifiers, "Fn")
+  end
+  if #modifiers > 0 then
+    label = table.concat(modifiers, "+") .. "+" .. label
+  end
+  return label
 end
 
 local function handleModalKey(keyName, flags)
-  if keyName == "escape" and next(flags) == nil then
+  stopModalRefreshTimer()
+  local plain = hasNoCommandModifiers(keyName, flags)
+  local shifted = hasOnlyShift(keyName, flags)
+
+  if plain and keyName == "escape" then
     windowMode:exit()
-    return true
+    return
   end
 
-  if keyName == "a" and next(flags) == nil then
-    setModalGroup("aspect")
-    return true
+  if plain and MODE_BY_KEY[keyName] then
+    transitionTo(MODE_BY_KEY[keyName])
+    return
   end
 
-  if keyName == "w" and next(flags) == nil then
-    setModalGroup("width")
-    return true
-  end
-
-  if keyName == "h" and next(flags) == nil then
-    setModalGroup("height")
-    return true
-  end
-
-  if keyName == "m" and next(flags) == nil then
-    setModalGroup("move")
-    return true
-  end
-
-  if keyName == "b" and next(flags) == nil then
-    handleMoveSelection("b", false)
-    return true
-  end
-
-  if keyName == "c" and next(flags) == nil then
-    handleMoveSelection("c", false)
-    return true
-  end
-
-  if keyName == "r" and next(flags) == nil then
-    setModalGroup("resize")
-    return true
-  end
-
-  if keyName == "g" and next(flags) == nil then
-    handleResizeShortcut("grow_both")
-    return true
-  end
-
-  if keyName == "s" and next(flags) == nil then
-    handleResizeShortcut("shrink_both")
-    return true
-  end
-
-  local number = tonumber(keyName)
-  if number and next(flags) == nil then
-    handleNumberSelection(number)
-    return true
-  end
-
-  if keyName == "up" and next(flags) == nil then
-    if modalState.group == "move" then
-      handleMoveSelection("up", false)
+  if plain and keyName == "delete" then
+    if modalState.screen == "move_bottom" then
+      transitionTo("move")
+    elseif modalState.screen ~= "home" then
+      transitionTo("home")
     else
-      handleSizeSelection("up")
+      renderModal("Already at Home")
     end
-    return true
+    return
   end
 
-  if keyName == "down" and next(flags) == nil then
-    if modalState.group == "move" then
-      handleMoveSelection("down", false)
-    else
-      handleSizeSelection("down")
-    end
-    return true
+  local screen = modalState.screen or "home"
+  local number = plain and tonumber(keyName) or nil
+  if number then
+    handlePresetSelection(number)
+    return
   end
 
-  if keyName == "left" then
-    if hasOnlyShift(flags) then
-      handleMoveSelection("left", true)
-      return true
+  if screen == "move" then
+    if plain and keyName == "b" then
+      transitionTo("move_bottom")
+      return
     end
 
-    if next(flags) == nil then
-      if modalState.group == "move" then
-        handleMoveSelection("left", false)
+    local cornerAction = findCornerAction(screen, keyName, shifted)
+    if cornerAction and (plain or shifted) then
+      completeModalAction(moveToCorner(cornerAction.corner))
+      return
+    end
+
+    local stepAction = plain and findMoveStepAction(keyName) or nil
+    if stepAction then
+      completeModalAction(moveByStep(stepAction.direction))
+      return
+    end
+  elseif screen == "move_bottom" then
+    if plain and keyName == "b" then
+      transitionTo("move")
+      return
+    end
+
+    local cornerAction = plain and findCornerAction(screen, keyName, false) or nil
+    if cornerAction then
+      if moveToCorner(cornerAction.corner) then
+        transitionTo("move")
       else
-        handleSizeSelection("left")
+        completeModalAction(false)
       end
-      return true
+      return
+    end
+  elseif screen == "resize" and plain then
+    local resizeAction = findResizeAction(keyName)
+    if resizeAction then
+      completeModalAction(applyResizeAction(resizeAction))
+      return
     end
   end
 
-  if keyName == "right" then
-    if hasOnlyShift(flags) then
-      handleMoveSelection("right", true)
-      return true
-    end
-
-    if next(flags) == nil then
-      if modalState.group == "move" then
-        handleMoveSelection("right", false)
-      else
-        handleSizeSelection("right")
-      end
-      return true
-    end
-  end
-
-  return false
+  renderModal(string.format("%s is not available in %s", formatKeyName(keyName, flags), SCREEN_TITLES[screen]))
 end
 
 local function startModalKeyGuard()
   stopModalKeyGuard()
-  WindowManager.modalFlags = {}
 
   WindowManager.modalKeyGuard = hs.eventtap.new({
     hs.eventtap.event.types.keyDown,
     hs.eventtap.event.types.keyUp,
     hs.eventtap.event.types.flagsChanged,
   }, function(event)
-    if not windowMode then
+    if not windowMode or not modalState.active then
       return false
     end
 
     local eventType = event:getType()
     if eventType == hs.eventtap.event.types.flagsChanged then
-      WindowManager.modalFlags = event:getFlags()
-      if hasOnlyModalEntryModifiers(WindowManager.modalFlags) then
-        resetModalState()
-        startModalTimer()
-        showModalHome()
-      end
-      return true
+      return false
     end
 
     if eventType == hs.eventtap.event.types.keyUp then
@@ -849,19 +954,16 @@ local function startModalKeyGuard()
       return true
     end
 
+    startModalTimer()
     local keyCode = event:getKeyCode()
     local keyName = hs.keycodes.map[keyCode]
     if not keyName then
+      renderModal("Unrecognized key")
       return true
     end
 
-    local flags = WindowManager.modalFlags or event:getFlags()
-    startModalTimer()
-
-    if handleModalKey(keyName, flags) then
-      return true
-    end
-
+    local flags = event:getFlags()
+    handleModalKey(keyName, flags)
     return true
   end)
 
@@ -872,39 +974,53 @@ local function buildMenuItems()
   local modalHotkeyLabel = formatModalHotkeyLabel()
   local items = {
     { title = "Keyboard Mode: " .. modalHotkeyLabel, disabled = true },
+    { title = formatNavigationLine(), disabled = true },
+    { title = formatNavigationControlLine(), disabled = true },
     { title = "-" },
-    { title = "Aspect Presets [A then 1-9]", disabled = true },
+    { title = string.format("Aspect Presets [A then 1-%d]", #CONFIG.aspectPresets), disabled = true },
   }
 
   for index, preset in ipairs(CONFIG.aspectPresets) do
     table.insert(items, {
       title = string.format("%s [A %d]", preset.label, index),
       fn = function()
-        applyAspectPreset(preset)
+        runMenuAction(function()
+          return applyAspectPreset(preset)
+        end)
       end,
     })
   end
 
   table.insert(items, { title = "-" })
-  table.insert(items, { title = "Width Presets [W then 1-9]", disabled = true })
+  table.insert(items, {
+    title = string.format("Width Presets [W then 1-%d]", #CONFIG.widthPresets),
+    disabled = true,
+  })
 
   for index, width in ipairs(CONFIG.widthPresets) do
     table.insert(items, {
       title = string.format("%d px [W %d]", width, index),
       fn = function()
-        applyWidthPreset(width)
+        runMenuAction(function()
+          return applyWidthPreset(width)
+        end)
       end,
     })
   end
 
   table.insert(items, { title = "-" })
-  table.insert(items, { title = "Height Presets [H then 1-9]", disabled = true })
+  table.insert(items, {
+    title = string.format("Height Presets [H then 1-%d]", #CONFIG.heightPresets),
+    disabled = true,
+  })
 
   for index, height in ipairs(CONFIG.heightPresets) do
     table.insert(items, {
       title = string.format("%d px [H %d]", height, index),
       fn = function()
-        applyHeightPreset(height)
+        runMenuAction(function()
+          return applyHeightPreset(height)
+        end)
       end,
     })
   end
@@ -914,118 +1030,46 @@ local function buildMenuItems()
     title = "Move " .. CONFIG.moveStep .. " px [M then arrows / C / B]",
     disabled = true,
   })
-  table.insert(items, {
-    title = "Move Left [M " .. CONFIG.symbols.left .. "]",
-    fn = function()
-      moveByStep("left")
-    end,
-  })
-  table.insert(items, {
-    title = "Move Right [M " .. CONFIG.symbols.right .. "]",
-    fn = function()
-      moveByStep("right")
-    end,
-  })
-  table.insert(items, {
-    title = "Move Up [M " .. CONFIG.symbols.up .. "]",
-    fn = function()
-      moveByStep("up")
-    end,
-  })
-  table.insert(items, {
-    title = "Move Down [M " .. CONFIG.symbols.down .. "]",
-    fn = function()
-      moveByStep("down")
-    end,
-  })
-  table.insert(items, {
-    title = "Top Left [M " .. CONFIG.symbols.shift .. " + " .. CONFIG.symbols.left .. "]",
-    fn = function()
-      moveToCorner("topleft")
-    end,
-  })
-  table.insert(items, {
-    title = "Center Top [M C]",
-    fn = function()
-      moveToCorner("centertop")
-    end,
-  })
-  table.insert(items, {
-    title = "Top Right [M " .. CONFIG.symbols.shift .. " + " .. CONFIG.symbols.right .. "]",
-    fn = function()
-      moveToCorner("topright")
-    end,
-  })
-  table.insert(items, {
-    title = "Bottom Left [M B " .. CONFIG.symbols.left .. "]",
-    fn = function()
-      moveToCorner("bottomleft")
-    end,
-  })
-  table.insert(items, {
-    title = "Center Bottom [M B C]",
-    fn = function()
-      moveToCorner("centerbottom")
-    end,
-  })
-  table.insert(items, {
-    title = "Bottom Right [M B " .. CONFIG.symbols.right .. "]",
-    fn = function()
-      moveToCorner("bottomright")
-    end,
-  })
+
+  for _, action in ipairs(MOVE_STEP_ACTIONS) do
+    table.insert(items, {
+      title = string.format("%s [M %s]", action.label, action.symbol),
+      fn = function()
+        runMenuAction(function()
+          return moveByStep(action.direction)
+        end)
+      end,
+    })
+  end
+
+  for _, action in ipairs(CORNER_ACTIONS) do
+    local shortcut = action.screen == "move_bottom" and "M B " .. action.shortcut or "M " .. action.shortcut
+    table.insert(items, {
+      title = string.format("%s [%s]", action.label, shortcut),
+      fn = function()
+        runMenuAction(function()
+          return moveToCorner(action.corner)
+        end)
+      end,
+    })
+  end
 
   table.insert(items, { title = "-" })
   table.insert(items, {
-    title = "Resize "
-      .. CONFIG.growStep
-      .. " px [R then "
-      .. CONFIG.symbols.left
-      .. " "
-      .. CONFIG.symbols.up
-      .. " "
-      .. CONFIG.symbols.right
-      .. " "
-      .. CONFIG.symbols.down
-      .. " G S]",
+    title = "Resize " .. CONFIG.growStep .. " px [R then arrows / G / S]",
     disabled = true,
   })
-  table.insert(items, {
-    title = "Grow Width [R " .. CONFIG.symbols.right .. "]",
-    fn = function()
-      growWindow(CONFIG.growStep, 0, "Grow width +" .. CONFIG.growStep .. " px")
-    end,
-  })
-  table.insert(items, {
-    title = "Grow Height [R " .. CONFIG.symbols.down .. "]",
-    fn = function()
-      growWindow(0, CONFIG.growStep, "Grow height +" .. CONFIG.growStep .. " px")
-    end,
-  })
-  table.insert(items, {
-    title = "Shrink Width [R " .. CONFIG.symbols.left .. "]",
-    fn = function()
-      shrinkWindow(CONFIG.growStep, 0, "Shrink width -" .. CONFIG.growStep .. " px")
-    end,
-  })
-  table.insert(items, {
-    title = "Shrink Height [R " .. CONFIG.symbols.up .. "]",
-    fn = function()
-      shrinkWindow(0, CONFIG.growStep, "Shrink height -" .. CONFIG.growStep .. " px")
-    end,
-  })
-  table.insert(items, {
-    title = "Grow Width + Height [R G]",
-    fn = function()
-      growWindow(CONFIG.growStep, CONFIG.growStep, "Grow size +" .. CONFIG.growStep .. " px")
-    end,
-  })
-  table.insert(items, {
-    title = "Shrink Width + Height [R S]",
-    fn = function()
-      shrinkWindow(CONFIG.growStep, CONFIG.growStep, "Shrink size -" .. CONFIG.growStep .. " px")
-    end,
-  })
+
+  for _, action in ipairs(RESIZE_ACTIONS) do
+    table.insert(items, {
+      title = string.format("%s [R %s]", action.label, action.shortcut),
+      fn = function()
+        runMenuAction(function()
+          return applyResizeAction(action)
+        end)
+      end,
+    })
+  end
 
   return items
 end
@@ -1045,106 +1089,24 @@ WindowManager.windowMode = hs.hotkey.modal.new()
 windowMode = WindowManager.windowMode
 
 function windowMode:entered()
-  resetModalState()
-  WindowManager.modalFlags = {}
+  local targetWindow = getModalHomeWindow()
+  modalState.active = true
+  modalState.screen = "home"
+  modalState.targetWindow = targetWindow
   startModalTimer()
   startModalKeyGuard()
-  showModalHome()
+  renderModal()
 end
 
 function windowMode:exited()
   stopModalTimer()
+  stopModalRefreshTimer()
   stopModalKeyGuard()
   closeModalOverlay()
-  WindowManager.modalFlags = {}
-  resetModalState()
+  modalState.active = false
+  modalState.screen = "home"
+  modalState.targetWindow = nil
 end
-
-windowMode:bind({}, "escape", function()
-  windowMode:exit()
-end)
-
-windowMode:bind({}, "a", function()
-  setModalGroup("aspect")
-end)
-
-windowMode:bind({}, "w", function()
-  setModalGroup("width")
-end)
-
-windowMode:bind({}, "h", function()
-  setModalGroup("height")
-end)
-
-windowMode:bind({}, "m", function()
-  setModalGroup("move")
-end)
-
-windowMode:bind({}, "b", function()
-  handleMoveSelection("b", false)
-end)
-
-windowMode:bind({}, "c", function()
-  handleMoveSelection("c", false)
-end)
-
-windowMode:bind({}, "r", function()
-  setModalGroup("resize")
-end)
-
-windowMode:bind({}, "g", function()
-  handleResizeShortcut("grow_both")
-end)
-
-windowMode:bind({}, "s", function()
-  handleResizeShortcut("shrink_both")
-end)
-
-for index = 1, 9 do
-  windowMode:bind({}, tostring(index), function()
-    handleNumberSelection(index)
-  end)
-end
-
-windowMode:bind({}, "up", function()
-  if modalState.group == "move" then
-    handleMoveSelection("up", false)
-  else
-    handleSizeSelection("up")
-  end
-end)
-
-windowMode:bind({}, "down", function()
-  if modalState.group == "move" then
-    handleMoveSelection("down", false)
-  else
-    handleSizeSelection("down")
-  end
-end)
-
-windowMode:bind({}, "left", function()
-  if modalState.group == "move" then
-    handleMoveSelection("left", false)
-  else
-    handleSizeSelection("left")
-  end
-end)
-
-windowMode:bind({ "shift" }, "left", function()
-  handleMoveSelection("left", true)
-end)
-
-windowMode:bind({}, "right", function()
-  if modalState.group == "move" then
-    handleMoveSelection("right", false)
-  else
-    handleSizeSelection("right")
-  end
-end)
-
-windowMode:bind({ "shift" }, "right", function()
-  handleMoveSelection("right", true)
-end)
 
 WindowManager.entryHotkey = hs.hotkey.bind(CONFIG.modalHotkey.modifiers, CONFIG.modalHotkey.key, function()
   windowMode:enter()
