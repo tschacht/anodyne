@@ -1,6 +1,6 @@
 local CONFIG = {
   menuTitle = "WI",
-  alertDuration = 0.4,
+  menuFailureDuration = 2,
   modalDuration = 8,
   symbols = {
     left = "←",
@@ -89,6 +89,11 @@ local CORNER_ACTIONS = {
   },
 }
 
+local CORNER_LABEL_BY_NAME = {}
+for _, action in ipairs(CORNER_ACTIONS) do
+  CORNER_LABEL_BY_NAME[action.corner] = action.label
+end
+
 local RESIZE_ACTIONS = {
   {
     key = "right",
@@ -171,11 +176,13 @@ end
 
 stopObject(WindowManager.modalTimer)
 stopObject(WindowManager.modalRefreshTimer)
+stopObject(WindowManager.menuFailureTimer)
 stopObject(WindowManager.modalKeyGuard)
 deleteObject(WindowManager.entryHotkey)
 deleteObject(WindowManager.windowMode)
 deleteObject(WindowManager.modalTimer)
 deleteObject(WindowManager.modalRefreshTimer)
+deleteObject(WindowManager.menuFailureTimer)
 deleteObject(WindowManager.modalCanvas)
 deleteObject(WindowManager.modalKeyGuard)
 deleteObject(WindowManager.menu)
@@ -202,10 +209,6 @@ WindowManager.historyWindowFilter = hs.window.filter.new(true)
 local historyWindowFilter = WindowManager.historyWindowFilter
 WindowManager.lastFocusedWindow = hs.window.frontmostWindow()
 
-local function alert(message)
-  hs.alert.show(message, { textSize = 18 }, nil, CONFIG.alertDuration)
-end
-
 local function formatModalHotkeyLabel()
   return table.concat(CONFIG.modalHotkey.modifiers, "+") .. "+" .. string.upper(CONFIG.modalHotkey.key)
 end
@@ -220,6 +223,15 @@ local function closeModalOverlay()
   end
 end
 
+local function stopMenuFailureTimer()
+  if WindowManager.menuFailureTimer then
+    pcall(function()
+      WindowManager.menuFailureTimer:stop()
+    end)
+    WindowManager.menuFailureTimer = nil
+  end
+end
+
 local function stopModalKeyGuard()
   if WindowManager.modalKeyGuard then
     pcall(function()
@@ -230,6 +242,7 @@ local function stopModalKeyGuard()
 end
 
 local function modalAlert(message)
+  stopMenuFailureTimer()
   closeModalOverlay()
 
   local screenFrame = hs.screen.mainScreen():frame()
@@ -271,6 +284,23 @@ local function modalAlert(message)
   WindowManager.modalCanvas = canvas
 end
 
+local function showMenuFailure(message)
+  modalAlert("WI action failed\n" .. (message or "The action could not be completed"))
+
+  local timer
+  timer = hs.timer.doAfter(CONFIG.menuFailureDuration, function()
+    if WindowManager.menuFailureTimer ~= timer then
+      return
+    end
+
+    WindowManager.menuFailureTimer = nil
+    if not modalState.active then
+      closeModalOverlay()
+    end
+  end)
+  WindowManager.menuFailureTimer = timer
+end
+
 local function getValidWindow(candidate)
   if not candidate then
     return nil
@@ -300,8 +330,7 @@ local function getFocusedWindow()
       return modalWindow
     end
 
-    alert("Modal target window is no longer available")
-    return nil
+    return nil, "Modal target window is no longer available"
   end
 
   local win = getValidWindow(hs.window.focusedWindow())
@@ -317,8 +346,7 @@ local function getFocusedWindow()
 
   win = getValidWindow(hs.window.frontmostWindow())
   if not win then
-    alert("No focused window")
-    return nil
+    return nil, "No focused window"
   end
 
   WindowManager.lastFocusedWindow = win
@@ -424,9 +452,6 @@ local function clampFrameToScreen(frame, screenFrame, options)
 end
 
 local function actionFailure(message)
-  if not modalState.active then
-    alert(message)
-  end
   return false, message
 end
 
@@ -501,6 +526,7 @@ local function applyFrame(win, frame, label, options)
     targetFrame = clampFrameToScreen(frame, screenFrame, options)
   end
   local actualFrame = currentFrame
+  local changed = false
 
   if not framesEqual(currentFrame, targetFrame) then
     local failureMessage
@@ -521,15 +547,20 @@ local function applyFrame(win, frame, label, options)
     end
 
     recordFrameHistory(windowId, currentFrame, actualFrame, currentScreen)
+    changed = true
   end
 
+  local statusMessage
   if options and options.showSize then
-    alert(string.format("%s (%d x %d)", label, round(actualFrame.w), round(actualFrame.h)))
+    statusMessage = string.format("%s (%d x %d)", label, round(actualFrame.w), round(actualFrame.h))
   else
-    alert(label)
+    statusMessage = label
+  end
+  if not changed then
+    statusMessage = "No change — " .. statusMessage
   end
 
-  return true
+  return true, nil, statusMessage
 end
 
 local function resetSessionFrame()
@@ -540,9 +571,9 @@ local function resetSessionFrame()
     return actionFailure("The screen configuration changed; session reset is unavailable")
   end
 
-  local win = getFocusedWindow()
+  local win, failureMessage = getFocusedWindow()
   if not win then
-    return false
+    return actionFailure(failureMessage)
   end
 
   return applyFrame(win, copyFrame(modalState.sessionInitialFrame), "Reset session", {
@@ -554,9 +585,9 @@ local function resetSessionFrame()
 end
 
 local function undoLastFrame()
-  local win = getFocusedWindow()
+  local win, focusFailureMessage = getFocusedWindow()
   if not win then
-    return false
+    return actionFailure(focusFailureMessage)
   end
 
   local idOk, windowId = pcall(function()
@@ -607,14 +638,13 @@ local function undoLastFrame()
     frameHistory[windowId] = nil
   end
 
-  alert(string.format("Undo (%d x %d)", round(actualFrame.w), round(actualFrame.h)))
-  return true
+  return true, nil, string.format("Undid last action (%d x %d)", round(actualFrame.w), round(actualFrame.h))
 end
 
 local function applyAspectPreset(preset)
-  local win = getFocusedWindow()
+  local win, failureMessage = getFocusedWindow()
   if not win then
-    return false
+    return actionFailure(failureMessage)
   end
 
   local currentFrame = win:frame()
@@ -640,9 +670,9 @@ local function applyAspectPreset(preset)
 end
 
 local function applyWidthPreset(width)
-  local win = getFocusedWindow()
+  local win, failureMessage = getFocusedWindow()
   if not win then
-    return false
+    return actionFailure(failureMessage)
   end
 
   local currentFrame = win:frame()
@@ -656,9 +686,9 @@ local function applyWidthPreset(width)
 end
 
 local function applyHeightPreset(height)
-  local win = getFocusedWindow()
+  local win, failureMessage = getFocusedWindow()
   if not win then
-    return false
+    return actionFailure(failureMessage)
   end
 
   local currentFrame = win:frame()
@@ -672,9 +702,9 @@ local function applyHeightPreset(height)
 end
 
 local function moveToCorner(corner)
-  local win = getFocusedWindow()
+  local win, failureMessage = getFocusedWindow()
   if not win then
-    return false
+    return actionFailure(failureMessage)
   end
 
   local currentFrame = win:frame()
@@ -705,17 +735,16 @@ local function moveToCorner(corner)
     targetFrame.x = screenFrame.x + screenFrame.w - currentFrame.w
     targetFrame.y = screenFrame.y + screenFrame.h - currentFrame.h
   else
-    alert("Unknown corner: " .. tostring(corner))
-    return false
+    return actionFailure("Unknown corner: " .. tostring(corner))
   end
 
-  return applyFrame(win, targetFrame, "Move " .. corner)
+  return applyFrame(win, targetFrame, "Move to " .. string.lower(CORNER_LABEL_BY_NAME[corner] or corner))
 end
 
 local function growWindow(deltaWidth, deltaHeight, label)
-  local win = getFocusedWindow()
+  local win, failureMessage = getFocusedWindow()
   if not win then
-    return false
+    return actionFailure(failureMessage)
   end
 
   local currentFrame = win:frame()
@@ -729,9 +758,9 @@ local function growWindow(deltaWidth, deltaHeight, label)
 end
 
 local function shrinkWindow(deltaWidth, deltaHeight, label)
-  local win = getFocusedWindow()
+  local win, failureMessage = getFocusedWindow()
   if not win then
-    return false
+    return actionFailure(failureMessage)
   end
 
   local currentFrame = win:frame()
@@ -828,9 +857,9 @@ local function snapPositionForDirection(origin, current, step, direction)
 end
 
 local function moveByStep(direction)
-  local win = getFocusedWindow()
+  local win, failureMessage = getFocusedWindow()
   if not win then
-    return false
+    return actionFailure(failureMessage)
   end
 
   local currentFrame = win:frame()
@@ -847,8 +876,7 @@ local function moveByStep(direction)
   elseif direction == "up" or direction == "down" then
     targetFrame.y = snapPositionForDirection(screenFrame.y, currentFrame.y, CONFIG.moveStep, direction)
   else
-    alert("Unknown move direction: " .. tostring(direction))
-    return false
+    return actionFailure("Unknown move direction: " .. tostring(direction))
   end
 
   return applyFrame(win, targetFrame, string.format("Move %s %d px", direction, CONFIG.moveStep))
@@ -974,7 +1002,7 @@ local function renderModal(status)
   modalAlert(table.concat(buildModalLines(status), "\n"))
 end
 
-local function transitionTo(screen)
+local function transitionTo(screen, status)
   stopModalRefreshTimer()
   if not SCREEN_TITLES[screen] then
     renderModal("Unknown mode " .. tostring(screen))
@@ -982,16 +1010,16 @@ local function transitionTo(screen)
   end
 
   modalState.screen = screen
-  renderModal()
+  renderModal(status)
 end
 
-local function completeModalAction(success, failureMessage)
+local function completeModalAction(success, failureMessage, successMessage)
   if success then
     stopModalRefreshTimer()
     WindowManager.modalRefreshTimer = hs.timer.doAfter(0.05, function()
       WindowManager.modalRefreshTimer = nil
       if modalState.active then
-        renderModal()
+        renderModal(successMessage)
       end
     end)
   else
@@ -1003,11 +1031,16 @@ local function runMenuAction(actionFn)
   if modalState.active then
     stopModalRefreshTimer()
     startModalTimer()
+  else
+    stopMenuFailureTimer()
+    closeModalOverlay()
   end
 
-  local success, failureMessage = actionFn()
+  local success, failureMessage, successMessage = actionFn()
   if modalState.active then
-    completeModalAction(success, failureMessage)
+    completeModalAction(success, failureMessage, successMessage)
+  elseif not success then
+    showMenuFailure(failureMessage)
   end
 end
 
@@ -1127,14 +1160,12 @@ local function handleModalKey(keyName, flags)
   end
 
   if plain and keyName == "u" then
-    local success, failureMessage = undoLastFrame()
-    completeModalAction(success, failureMessage)
+    completeModalAction(undoLastFrame())
     return
   end
 
   if shifted and keyName == "u" then
-    local success, failureMessage = resetSessionFrame()
-    completeModalAction(success, failureMessage)
+    completeModalAction(resetSessionFrame())
     return
   end
 
@@ -1186,9 +1217,9 @@ local function handleModalKey(keyName, flags)
 
     local cornerAction = plain and findCornerAction(screen, keyName, false) or nil
     if cornerAction then
-      local success, failureMessage = moveToCorner(cornerAction.corner)
+      local success, failureMessage, successMessage = moveToCorner(cornerAction.corner)
       if success then
-        transitionTo("move")
+        transitionTo("move", successMessage)
       else
         completeModalAction(false, failureMessage)
       end
@@ -1411,6 +1442,7 @@ end
 function windowMode:exited()
   stopModalTimer()
   stopModalRefreshTimer()
+  stopMenuFailureTimer()
   stopModalKeyGuard()
   closeModalOverlay()
   modalState.active = false
