@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plan: Anodyne Refactor and Test Coverage</title>
+<style>
+  :root {
+    --ink: #e9eef3;
+    --muted: #a8b4c0;
+    --bg: #09131f;
+    --panel: #111f2d;
+    --panel-2: #172838;
+    --line: #2d4659;
+    --cyan: #79d1df;
+    --amber: #f2b84b;
+    --green: #88d498;
+    --red: #ff8b8b;
+    --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    --sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans); line-height: 1.58; }
+  main { width: min(1120px, calc(100% - 32px)); margin: 0 auto; padding: 48px 0 96px; }
+  header { border-bottom: 1px solid var(--line); margin-bottom: 28px; padding-bottom: 22px; }
+  h1 { font-size: clamp(2rem, 5vw, 3.7rem); line-height: 1.03; letter-spacing: -0.04em; margin: 0 0 18px; }
+  h2 { color: var(--cyan); font-size: 1.45rem; margin: 0 0 12px; }
+  h3 { font-size: 1.16rem; margin: 0 0 10px; }
+  h4 { color: #d9e7ef; margin: 22px 0 8px; }
+  p { margin: 8px 0 14px; }
+  a { color: var(--cyan); }
+  code, pre { font-family: var(--mono); }
+  code { background: #0b1722; border: 1px solid #253b4c; border-radius: 5px; padding: 0.1rem 0.35rem; }
+  pre { overflow: auto; background: #07111a; border: 1px solid var(--line); border-radius: 10px; padding: 16px; line-height: 1.45; }
+  section, .phase { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; margin: 18px 0; padding: 24px; }
+  .phase { background: linear-gradient(145deg, var(--panel), #0e1a26); }
+  figure { margin: 22px 0; }
+  figure img { width: 100%; display: block; border-radius: 14px; border: 1px solid var(--line); }
+  figcaption { color: var(--muted); font-size: 0.9rem; margin-top: 8px; }
+  .meta { color: var(--muted); }
+  dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 18px; }
+  dt { color: var(--cyan); }
+  dd { margin: 0; overflow-wrap: anywhere; }
+  ul, ol { padding-left: 1.3rem; }
+  li { margin: 7px 0; }
+  .checklist { list-style: none; padding-left: 0; }
+  .checklist li { border-left: 2px solid var(--line); padding-left: 12px; }
+  .status { color: var(--amber); }
+  .loop, .callout { background: #0a1824; border-left: 4px solid var(--amber); border-radius: 6px; margin-top: 18px; padding: 14px 16px; }
+  .callout.good { border-color: var(--green); }
+  .callout.risk { border-color: var(--red); }
+  .tag { border-radius: 999px; display: inline-block; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; padding: 2px 8px; text-transform: uppercase; }
+  .tag.existing { background: #2a4050; }
+  .tag.new { background: #1e4b4f; color: #c7f5f5; }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+  th, td { border-bottom: 1px solid var(--line); padding: 10px; text-align: left; vertical-align: top; }
+  th { color: var(--cyan); }
+  .architecture { display: grid; grid-template-columns: 1fr; gap: 10px; margin: 20px 0; }
+  .arch-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .node { background: var(--panel-2); border: 1px solid var(--line); border-radius: 9px; padding: 12px; text-align: center; }
+  .node.boundary { border-color: var(--amber); }
+  .node.core { border-color: var(--cyan); }
+  .arrow { color: var(--muted); text-align: center; }
+  .contract { font-family: var(--mono); color: var(--amber); white-space: nowrap; }
+  details { margin: 10px 0; }
+  summary { cursor: pointer; color: #dce8ef; font-weight: 650; }
+  @media (max-width: 760px) {
+    main { width: min(100% - 20px, 1120px); padding-top: 24px; }
+    section, .phase { padding: 18px; }
+    .arch-row { grid-template-columns: 1fr; }
+    dl { grid-template-columns: 1fr; }
+    table { display: block; overflow-x: auto; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Plan: Anodyne Refactor and Test Coverage</h1>
+    <details class="meta">
+      <summary>Metadata</summary>
+      <dl>
+        <dt>created</dt><dd>2026-07-18T10:46:12+02:00</dd>
+        <dt>modified</dt><dd>2026-07-18T10:46:12+02:00; 2026-07-18T11:02:25+02:00; 2026-07-18T11:16:21+02:00</dd>
+        <dt>commits</dt><dd>4f97972666c39c6df5f55df84ad24f20cbe338e5</dd>
+        <dt>agent name</dt><dd>Codex /root; Codex /root; Codex /root</dd>
+        <dt>session id</dt><dd>019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22</dd>
+        <dt>back refs</dt><dd><code>init.lua</code>, current <code>master</code>, architecture/test/review specialist reports</dd>
+        <dt>forward refs</dt><dd>Anodyne mandatory implementation milestones 1–7; public distribution requires a separate future plan</dd>
+      </dl>
+    </details>
+  </header>
+
+  <figure>
+    <img src="anodyne-refactor-and-test-plan/architecture-hero.png" alt="Conceptual flow from a thin loader through modular logic, review gates, and a macOS adapter">
+    <figcaption>A thin loader enters a modular Anodyne core; each extraction crosses an independent review gate before reaching Hammerspoon.</figcaption>
+  </figure>
+
+  <section id="purpose">
+    <h2>Purpose</h2>
+    <p>Turn the current 1,457-line Hammerspoon entrypoint into a testable module named <strong>Anodyne</strong>, leaving the root <code>init.lua</code> as a thin composition loader. Execute the migration autonomously with a pinned, project-local Lua toolchain, Busted, and LuaCov. Every implementation choice, transition, fallback, review outcome, and terminal blocker is predetermined below; no product or engineering question is routed back to the owner during execution.</p>
+  </section>
+
+  <section id="problem">
+    <h2>Problem</h2>
+    <p>The current <code>init.lua</code> eagerly owns configuration, frame mathematics, transactional window changes, undo state, modal routing, presentation, timers, canvases, filters, hotkeys, and reload cleanup. Its behavior is mostly private local functions, and loading it creates native Hammerspoon resources immediately. A large mechanical move would be difficult to verify and could silently regress reload safety, window targeting, rollback, or global key capture.</p>
+    <div class="callout risk"><strong>Critical constraint:</strong> reload teardown is observable behavior. The existing code stops, deletes, and unsubscribes old native objects before installing replacements. Anodyne must preserve that contract throughout the migration.</div>
+  </section>
+
+  <section id="solution">
+    <h2>Solution</h2>
+    <p>First establish a strict fake <code>hs</code> runtime and behavior-level characterization suite. Then relocate the implementation behind an explicit Anodyne lifecycle facade and extract one dependency layer at a time: pure calculations, transactional actions, state/input/presentation, controller orchestration, and finally the Hammerspoon adapter. Keep production code compatible with Lua 5.4; run Busted outside Hammerspoon; automatically attempt only the bounded, non-window-mutating Hammerspoon smoke checks defined here.</p>
+    <pre><code>-- final root init.lua
+local previous = { anodyne = rawget(_G, "Anodyne"), legacy = rawget(_G, "WindowManager") }
+_G.Anodyne = require("Anodyne").replace({ hs = hs, previous = previous })
+_G.WindowManager = nil</code></pre>
+  </section>
+
+  <section id="architecture">
+    <h2>Target Architecture</h2>
+    <div class="architecture" role="img" aria-label="Anodyne dependency direction">
+      <div class="arch-row"><div class="node boundary"><code>init.lua</code><br>load and start only</div><div class="node"><code>Anodyne/init.lua</code><br>facade and lifecycle</div><div class="node"><code>Anodyne/controller.lua</code><br>state and orchestration</div><div class="node boundary"><code>Anodyne/adapter/hammerspoon.lua</code><br>all hs calls and resources</div></div>
+      <div class="arrow">loader → facade → controller ↔ adapter</div>
+      <div class="arch-row"><div class="node core"><code>Anodyne/core/geometry.lua</code></div><div class="node core"><code>Anodyne/core/history.lua</code></div><div class="node core"><code>Anodyne/core/keymap.lua</code></div><div class="node"><code>Anodyne/view.lua</code> + <code>Anodyne/window_actions.lua</code></div></div>
+      <div class="arrow">pure decisions flow upward; native dependencies never flow into core</div>
+    </div>
+
+    <h3>Module contracts</h3>
+    <table>
+      <thead><tr><th>Module</th><th>Owns</th><th>Must not own</th></tr></thead>
+      <tbody>
+        <tr><td><code>Anodyne/init.lua</code></td><td>Inert facade with <code>new({hs, config, modules})</code> and <code>replace({hs, previous, config})</code>; <code>previous</code> is a keyed set of modern/legacy instances; instances expose idempotent <code>:start()</code>, <code>:stop()</code>, and <code>:isRunning()</code></td><td>Window algorithms, menu/key decisions, or module-load side effects</td></tr>
+        <tr><td><code>Anodyne/config.lua</code></td><td>Defaults, validation, immutable action/preset metadata and derived maps</td><td>Mutable session state or <code>hs</code></td></tr>
+        <tr><td><code>Anodyne/core/geometry.lua</code></td><td>Copy/equality/rounding, clamp, aspect/corner/resize targets, grid snapping</td><td>Windows, screens, history, globals</td></tr>
+        <tr><td><code>Anodyne/core/history.lua</code></td><td>Per-window bounded transitions, continuity and invalidation decisions</td><td>Calling <code>setFrame</code> or discovering screens</td></tr>
+        <tr><td><code>Anodyne/core/keymap.lua</code></td><td>Raw key/flags + current mode → intent</td><td>Rendering, timers, or action execution</td></tr>
+        <tr><td><code>Anodyne/window_actions.lua</code></td><td>Focus resolution, snapshots, authoritative readback, exact rollback, undo/reset and action outcomes</td><td>Menus, canvases, hotkey registration</td></tr>
+        <tr><td><code>Anodyne/view.lua</code></td><td>Menu model and modal text from config/state</td><td>Creating native UI objects</td></tr>
+        <tr><td><code>Anodyne/controller.lua</code></td><td>Runtime/modal state, intent orchestration, scheduling policy, feedback policy</td><td>Direct global <code>hs</code> access</td></tr>
+        <tr><td><code>Anodyne/adapter/hammerspoon.lua</code></td><td>Native object creation, callback wiring, timers, filters, event tap, canvas, menu, disposal</td><td>Domain decisions already represented as intents/actions</td></tr>
+      </tbody>
+    </table>
+
+    <p>The runtime instance owns every mutable value: native resources, last-focused window, modal session, and frame history. Pure modules receive state/config explicitly and retain no module-level mutable state. Configuration is deep-copied per instance, validates known keys/types, replaces list values atomically, and is immutable after construction. <code>modules</code> is an internal composition seam. The only final global is <code>_G.Anodyne</code>, holding the active instance.</p>
+  </section>
+
+  <section id="spoon-decision">
+    <h2>Spoon Distribution Decision</h2>
+    <div class="callout good"><strong>Decision: module-first and Spoon-ready; do not package or publish a Spoon in this plan.</strong> Finish and review the behavioral refactor against the normal <code>Anodyne/</code> module tree. Public distribution, license selection, author/homepage metadata, release ZIPs, and repository submission require a separate future plan and are never raised as questions during this execution.</div>
+    <table>
+      <thead><tr><th>Dimension</th><th>Distributable Spoon benefit</th><th>Cost or constraint</th></tr></thead>
+      <tbody>
+        <tr><td>Installation and use</td><td>Native Hammerspoon convention: install <code>Anodyne.spoon</code>, call <code>hs.loadSpoon("Anodyne")</code>, then <code>spoon.Anodyne:start()</code>.</td><td>Requires a packaged directory/ZIP, release/version policy, metadata, license, and user documentation.</td></tr>
+        <tr><td>Lifecycle</td><td>Standard <code>:init()</code>, <code>:start()</code>, <code>:stop()</code>, and optional <code>:bindHotkeys()</code> make ownership explicit.</td><td>Loading must be inert; current defaults, hotkeys, and configuration become a public compatibility surface that should not be frozen during mechanical extraction.</td></tr>
+        <tr><td>Internal modules</td><td>The same pure logic and controller can be reused.</td><td>Official Spoon guidance says Spoon-internal Lua files are loaded with <code>dofile(hs.spoons.resourcePath(...))</code>, not ordinary <code>require()</code>. A Spoon-first layout would complicate standalone imports, tests, and coverage paths.</td></tr>
+        <tr><td>Sharing</td><td>Easy distribution to other Hammerspoon users and possible submission to the official Spoons repository.</td><td>Creates maintenance obligations across Hammerspoon versions and demands stable configuration, hotkey, documentation, and release contracts.</td></tr>
+        <tr><td>Source ownership</td><td>A generated bundle can contain everything users need.</td><td>Hand-maintaining both <code>Anodyne/</code> and <code>Spoons/Anodyne.spoon/</code> would create drift. The module tree must remain canonical and the bundle must be generated and tested.</td></tr>
+      </tbody>
+    </table>
+    <p>To preserve the future option, leaf modules return tables, receive dependencies explicitly, and avoid resolving their own source paths. Composition accepts an explicit module table plus <code>hs</code>. A later distribution plan may generate a bundle from canonical source and add a thin resource-path loader without changing domain code.</p>
+  </section>
+
+  <section id="contracts">
+    <h2>Behavior Contracts to Preserve</h2>
+    <table>
+      <thead><tr><th>ID</th><th>Contract</th><th>Current evidence</th></tr></thead>
+      <tbody>
+        <tr><td class="contract">A-LIFE-01</td><td>Repeated load/start/stop leaves exactly one active registration set and no stale timers, taps, filters, canvases, menus, or hotkeys.</td><td><code>init.lua:148–210, 1408–1457</code></td></tr>
+        <tr><td class="contract">A-WIN-01</td><td>Outside modal: focused → remembered → frontmost fallback. Inside modal: remain pinned to the entry window; never fall through to another window if it becomes invalid.</td><td><code>init.lua:304–354, 803–825</code></td></tr>
+        <tr><td class="contract">A-FRAME-01</td><td>Clamp requested frames to usable screen bounds and configured minimums, including screens smaller than those minimums.</td><td><code>init.lua:434–452</code></td></tr>
+        <tr><td class="contract">A-TXN-01</td><td>Record authoritative readback, reject ignored changes, roll back inexact exact-writes, and invalidate history when verification or rollback fails.</td><td><code>init.lua:458–564</code></td></tr>
+        <tr><td class="contract">A-HIST-01</td><td>History is per-window, copied, bounded to depth three, reset on discontinuity/external mutation, and cleared when a window is destroyed.</td><td><code>init.lua:414–431, 587–642, 1415–1422</code></td></tr>
+        <tr><td class="contract">A-SCREEN-01</td><td>Undo/reset require the original screen identity and unchanged <code>fullFrame()</code>; usable placement continues to use <code>frame()</code>.</td><td><code>init.lua:376–412, 566–585</code></td></tr>
+        <tr><td class="contract">A-KEY-01</td><td>Preserve key precedence, modifier rules, arrow/Fn exception, navigation, invalid-key feedback, and event consumption.</td><td><code>init.lua:1047–1274</code></td></tr>
+        <tr><td class="contract">A-UI-01</td><td>Preserve menu order/titles, modal content, current size, status/error policy, delays, and active-vs-inactive action feedback.</td><td><code>init.lua:885–1045, 1280–1401</code></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="decision-register">
+    <h2>Autonomous Decision Register</h2>
+    <p>These decisions are binding for Milestones 1–7. Agents do not ask the owner to choose among alternatives. When a gate cannot pass, follow its fallback; when the fallback is exhausted, record the named terminal state, preserve the worktree, and stop without advancing.</p>
+
+    <h3>Architecture and scope decisions</h3>
+    <table>
+      <thead><tr><th>ID</th><th>Trigger</th><th>Predetermined decision</th><th>Evidence / terminal rule</th></tr></thead>
+      <tbody>
+        <tr><td class="contract">D-SCOPE-01</td><td>A behavior cleanup or bug fix is discovered.</td><td>Preserve observed behavior. Milestones 1–7 allow no intentional changes to commands, frames, strings, ordering, timing, targeting, or error policy. Log suspected bugs as post-parity work.</td><td>Any unexplained characterization delta is REWORK. No approval question is asked.</td></tr>
+        <tr><td class="contract">D-API-01</td><td>The Anodyne facade is created.</td><td><code>require("Anodyne")</code> is inert. <code>new({hs, config, modules})</code> returns a stopped instance; <code>replace({hs, previous, config})</code> deduplicates the keyed modern/legacy prior set, tears it down, creates/starts the replacement, and returns it. Successful <code>:start()</code> returns <code>self</code>; failed <code>:start()</code> raises an aggregate error after cleanup. <code>:stop()</code> returns <code>self, errors</code>. <code>:isRunning()</code> is true whenever resources may still be active and false only when fully stopped.</td><td>Ordering, repeated calls, teardown exceptions, legacy-shape cleanup, direct-start retry, and partial-start failures require fault-injected tests. A leaked resource is blocking.</td></tr>
+        <tr><td class="contract">D-LIFE-01</td><td>Previous teardown or new startup partially fails.</td><td>This is the sole safety-hardening exception to D-SCOPE-01. <code>:stop()</code> is idempotent, attempts every cleanup, and returns <code>self, nil</code> on success or <code>self, errors</code> with an aggregate list. <code>replace()</code> returns the running instance on success and raises an aggregate error on any prior-cleanup or startup failure; it installs nothing after teardown errors. A failed direct <code>:start()</code> cleans every new resource: successful cleanup leaves the instance stopped/retryable; cleanup errors leave it faulted, <code>:isRunning()</code> true, and further starts blocked until repeated <code>:stop()</code> proves full cleanup.</td><td>The loader assigns globals only after successful <code>replace()</code>, so failure leaves prior handles recoverable. A successful retrying <code>:stop()</code> moves faulted → stopped and makes <code>:isRunning()</code> false. Continue only when all cleanup attempts were recorded.</td></tr>
+        <tr><td class="contract">D-CONFIG-01</td><td>Config extraction or test/smoke overrides are needed.</td><td>Deep-copy current defaults per instance. Deep-merge known map keys, replace lists atomically, reject unknown keys/types, and freeze configuration after construction. Default invocation remains behavior-identical.</td><td>Mutation/non-aliasing, invalid-key/type, and default-parity tests are mandatory.</td></tr>
+        <tr><td class="contract">D-GLOBAL-01</td><td>Migrating from the monolith global.</td><td>Pass both globals as keyed prior entries. Cleanup order is modern Anodyne first, then legacy WindowManager; identical objects are stopped once. Legacy-shaped tables use the characterized cleanup routine. Milestone 3 assigns both globals to the successfully started instance; Milestone 7 clears the alias only after successful replacement and leaves <code>_G.Anodyne</code>.</td><td>Failure before assignment preserves old global handles. After Milestone 7, only the root loader may read/clear <code>_G.WindowManager</code> for one-time migration; no Anodyne module may reference or assign it, and reload tests must prove it remains nil.</td></tr>
+        <tr><td class="contract">D-BOUNDARY-01</td><td>A dependency could live in more than one module.</td><td>All project modules live below <code>Anodyne/</code>; pure decisions below <code>Anodyne/core/</code>; all raw <code>hs</code> calls below <code>Anodyne/adapter/</code>. Ports are the smallest opaque interfaces proven by tests.</td><td>Forbidden-reference and require-cycle checks are hard gates. Duplicate canonical implementations are forbidden.</td></tr>
+        <tr><td class="contract">D-SPOON-01</td><td>Milestone 7 is approved.</td><td>Stop. Spoon packaging/publication is skipped, not optional work inside this plan. Do not invent a license, author metadata, public API, or release.</td><td>Milestone 7 is the implementation completion boundary. Future distribution requires a separate plan.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Toolchain, test, and coverage decisions</h3>
+    <table>
+      <thead><tr><th>ID</th><th>Trigger</th><th>Predetermined decision</th><th>Evidence / fallback / terminal rule</th></tr></thead>
+      <tbody>
+        <tr><td class="contract">D-TOOL-01</td><td>Choosing the standalone Lua runtime.</td><td>The installed Hammerspoon embedded patch release is authoritative; observed target is Lua 5.4.7. If it reports another 5.4.x, pin that exact patch. A different major/minor is outside this architecture.</td><td>Record both versions. Exact-patch mismatch blocks tests; non-5.4 Hammerspoon yields <code>BLOCKED-ENVIRONMENT</code>.</td></tr>
+        <tr><td class="contract">D-TOOL-02</td><td>Choosing Hererocks and test-tool artifacts.</td><td>Resolve metadata only from official HTTPS endpoints: GitHub Releases/Commits APIs for <code>luarocks/hererocks</code>, GitHub Releases for StyLua, and the LuaRocks 5.4 manifest for rocks. Use the newest non-prerelease immutable Hererocks tag supporting the exact pair; otherwise resolve current upstream HEAD once. Resolve the highest compatible Busted 2.3.x/LuaCov 0.17.x once. Before executing any downloaded code, write immutable URLs/revisions and SHA-256 values to <code>tools/versions.env</code>. Pin StyLua 2.5.2 under <code>.tools/</code>.</td><td>No <code>latest</code> execution, floating branch, mirror substitution, widening, or checksum bypass. Failure after three same-input fetch attempts (1s/3s/9s backoff) is <code>BLOCKED-ENVIRONMENT</code>.</td></tr>
+        <tr><td class="contract">D-LOCK-01</td><td>Creating/restoring test dependencies.</td><td>Initial Milestone 1 may generate <code>luarocks.lock</code> once with <code>--pin</code>. First try rockspec <code>test_dependencies</code>; if a clean-tree proof shows they are not fully pinned/restored, automatically switch to a separate non-publishable test-tools rockspec with ordinary dependencies. Normal bootstrap only consumes the lock.</td><td>The installed porcelain graph must equal the lock. Any unlocked test tool, runtime pollution, or lock mutation during test/coverage is REWORK.</td></tr>
+        <tr><td class="contract">D-NET-01</td><td>Bootstrap requires discovery/downloads.</td><td>Milestone 1 authorizes metadata-only queries to the official endpoints in D-TOOL-02, followed by HTTPS artifact/rock downloads selected by that deterministic resolution into ignored project-local directories. Executable/source artifacts must be recorded and checksum-verified before use. No global installs or later dependency updates are authorized.</td><td>If platform policy denies the scoped operation or a prerequisite is missing, do not improvise an install; record <code>BLOCKED-ENVIRONMENT</code>.</td></tr>
+        <tr><td class="contract">D-TEST-01</td><td>A deterministic test command fails or times out.</td><td>Zero retries. All Busted targets run through project-local <code>tools/run_with_timeout.py</code>: focused suites 30 seconds, full suite 90 seconds. <code>tools/test-minimums.env</code> stores the accepted minimum discovered examples per target and changes only in an approved milestone that intentionally adds/removes tests. Empty or below-minimum discovery and “does not throw” assertions do not pass a contract.</td><td>Non-zero exit or timeout is REWORK. Fixing then rerunning is a repair attempt, not a retry. Mutation sensitivity must show red, restore, then green.</td></tr>
+        <tr><td class="contract">D-COV-01</td><td>Coverage is evaluated.</td><td>Use raw, unrounded line ratios. Milestones 1–3 report only. Floors activate when modules are introduced: Milestone 4 config/geometry 95%; Milestone 5 history 95% and window_actions 90%; Milestone 6 keymap 95%, controller 90%, view 85%; Milestone 7 adapter 75% and overall <code>Anodyne/**</code> 85%. Once introduced, a missing production file counts as 0%; not-yet-created future modules are not expected.</td><td>Pass <code>--milestone N</code> to the tracked checker. Pure modules get no exemption. Mandatory fault/decision scenarios cannot be waived by percentages.</td></tr>
+        <tr><td class="contract">D-COV-02</td><td>Coverage changes after an approved milestone.</td><td>File moves are mapped base-to-head. Unchanged modules may not lose covered lines. Newly uncovered changed lines block. A drop up to 0.5 points is allowed only in adapter code with a precise native-path rationale and strict-fake or smoke evidence.</td><td>Larger drops, pure-module drops, or expanded exclusions are REWORK. Exclusions remain specs, generated dependencies/artifacts, vendored Spoons, and the proven-thin root loader only.</td></tr>
+        <tr><td class="contract">D-SMOKE-01</td><td>A real-Hammerspoon boundary is reached.</td><td>Run only when a dedicated fixture supplies <code>ANODYNE_SMOKE_SAFE=1</code> and <code>hs</code> IPC responds. Never set the flag inside the target or launch Hammerspoon. Use menu title <code>ANODYNE-SMOKE</code> and <code>cmd+alt+ctrl+shift+F20</code>; preflight the fixture’s active/system hotkeys before registering. Any conflict or inability to snapshot/restore the prior instance defers before mutation. Never move/focus/resize a window or persist config. Use a four-second CLI timeout and guaranteed cleanup/restoration.</td><td>PASS exits 0 and writes <code>{"status":"PASS"}</code>; missing flag/IPC, conflict, or unsafe restore writes <code>{"status":"DEFERRED-ENVIRONMENT"}</code> and exits 0; a post-mutation defect writes FAIL and exits non-zero. Store ignored <code>coverage/smoke-status.json</code>. Deferral permits extraction but prevents full certification.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Repository, review, and completion decisions</h3>
+    <table>
+      <thead><tr><th>ID</th><th>Trigger</th><th>Predetermined decision</th><th>Evidence / fallback / terminal rule</th></tr></thead>
+      <tbody>
+        <tr><td class="contract">D-GIT-01</td><td>Execution begins.</td><td>Pin the base SHA. Reuse <code>codex/anodyne-refactor</code> only if its tip equals that base and it has no unrelated execution state; otherwise create the smallest available numeric suffix. Preserve unrelated changes and never stash/reset them. Commit the plan preflight, then one local checkpoint per approved milestone. Do not push or open a PR.</td><td>Overlapping unowned changes yield <code>BLOCKED-WORKTREE</code>. Unrelated changes are excluded from commits and listed in every handoff.</td></tr>
+        <tr><td class="contract">D-REVIEW-01</td><td>An implementation packet finishes.</td><td>The primary reruns narrow validation, then spawns a read-only reviewer who neither implemented nor previously reviewed that milestone. APPROVE advances; low documentation/maintainability notes may be recorded and advance; Critical/High/Medium or missing mandatory offline evidence is REWORK. D-SMOKE-01 deferral is a certification flag accompanying an otherwise normal offline verdict, not a reviewer verdict.</td><td>Implementer summaries are not evidence; the reviewer derives results from the repository.</td></tr>
+        <tr><td class="contract">D-REPAIR-01</td><td>A reviewer returns REWORK.</td><td>Return findings to the same implementer. Use a new reviewer after each repair. Allow three repair/re-review cycles; before the third, dispatch a debugger. A disputed finding gets one fresh adjudicator whose evidence-backed verdict controls.</td><td>REWORK after the third repair, or the same root blocker surviving three attempts, yields <code>BLOCKED-REVIEW</code>.</td></tr>
+        <tr><td class="contract">D-CONFLICT-01</td><td>Requirements, tests, and implementation disagree.</td><td>Precedence is: safety and explicit owner requirements → observed current behavior → approved A-* contracts → architecture plan → implementer preference. Preserve suspected bugs during refactor.</td><td>Unresolved ambiguity defaults to REWORK; irreconcilable conflict after adjudication is <code>BLOCKED-CONTRACT</code>.</td></tr>
+        <tr><td class="contract">D-DONE-01</td><td>Milestone 7 review finishes.</td><td>Approve and checkpoint each milestone on mandatory offline evidence even when smoke status is deferred. <code>COMPLETE</code> requires Milestones 1–7 offline-approved, final safe smoke PASS, intended commits present, and no overlapping/unintended changes. If smoke alone remains deferred, mark Milestone 7 <code>[x]</code>, mark its native-certification line <code>[d]</code>, create the checkpoint, and report <code>IMPLEMENTED-NOT-NATIVE-CERTIFIED</code>.</td><td>Any other failed mandatory gate uses its named blocker state. Preserve the worktree and record exact recovery evidence.</td></tr>
+      </tbody>
+    </table>
+    <div class="callout"><strong>No interactive decision path:</strong> agents may request a narrowly scoped platform permission when the execution environment requires it, but they do not ask design/product questions. A denied permission maps directly to the relevant environment state above.</div>
+  </section>
+
+  <section id="files" class="files">
+    <h2>Relevant Files</h2>
+    <h3>Existing Files</h3>
+    <ul>
+      <li><span class="tag existing">existing</span> <code>init.lua</code> — source behavior and final thin loader.</li>
+      <li><span class="tag existing">existing</span> <code>.stylua.toml</code> — formatting contract.</li>
+      <li><span class="tag existing">existing</span> <code>Spoons/WinWin.spoon/*</code> — unrelated vendored code; explicitly out of scope.</li>
+    </ul>
+    <h3>New Files</h3>
+    <ul>
+      <li><span class="tag new">new</span> <code>Anodyne/init.lua</code>, <code>Anodyne/config.lua</code>, <code>Anodyne/controller.lua</code>, <code>Anodyne/window_actions.lua</code>, <code>Anodyne/view.lua</code> — application layers.</li>
+      <li><span class="tag new">new</span> <code>Anodyne/core/{geometry,history,keymap}.lua</code> — deterministic pure logic.</li>
+      <li><span class="tag new">new</span> <code>Anodyne/adapter/hammerspoon.lua</code> — the only native boundary.</li>
+      <li><span class="tag new">new</span> <code>spec/support/fake_hs.lua</code> and Busted specs — strict deterministic tests.</li>
+      <li><span class="tag new">new</span> <code>.busted</code>, <code>.luacov</code>, <code>Makefile</code>, <code>.gitignore</code> — repeatable test and coverage commands.</li>
+      <li><span class="tag new">new</span> <code>tools/versions.env</code>, <code>tools/test-minimums.env</code>, <code>tools/bootstrap</code>, <code>tools/run_with_timeout.py</code>, <code>tools/check_coverage.lua</code>, and <code>tools/smoke.lua</code> — pinned bootstrap, tracked discovery floors, portable timeouts, machine-enforced coverage, and bounded native smoke.</li>
+      <li><span class="tag new">new</span> <code>anodyne-dev-0.rockspec</code> (or deterministic <code>anodyne-test-tools-dev-0.rockspec</code> fallback) and <code>luarocks.lock</code> — development-only dependency manifest and exact transitive versions; neither is a publication artifact.</li>
+      <li><span class="tag new">new</span> <code>README.md</code> — architecture, setup, test, coverage, and safe smoke instructions.</li>
+    </ul>
+  </section>
+
+  <section id="phases">
+    <h2>Implementation Phases</h2>
+    <p><strong>IMPORTANT:</strong> Execute each milestone in order. One implementation worker owns the milestone. When it finishes, the primary agent inspects the handoff and dispatches a fresh read-only reviewer agent. Apply D-REVIEW-01 and D-REPAIR-01 exactly; no milestone transition waits for owner input.</p>
+    <p>Status markers: <code>[]</code> idle · <code>[wip]</code> in progress · <code>[x]</code> complete · <code>[d]</code> deferred environment certification · <code>[f]</code> terminal blocker.</p>
+
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone 1: Toolchain and Behavior Inventory</h3>
+      <p>Establish reproducible Lua 5.4 development tooling and freeze the named compatibility contracts before touching runtime behavior.</p>
+      <h4>1.1 Implementation packet</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Apply D-GIT-01: record base SHA/status, create the local execution branch, classify every pre-existing change as plan-owned/unrelated/overlapping, commit the plan preflight, and stop with <code>BLOCKED-WORKTREE</code> if an unowned change overlaps a milestone-owned path.</li>
+        <li><code class="status">[]</code> Apply D-TOOL-01/D-TOOL-02 and record exact immutable source URLs, revisions, and SHA-256 values in <code>tools/versions.env</code>: Hammerspoon-matching Lua (observed <strong>5.4.7</strong>), LuaRocks <strong>3.13.0</strong>, resolved Busted <strong>2.3.x</strong>, LuaCov <strong>0.17.x</strong>, and StyLua <strong>2.5.2</strong>.</li>
+        <li><code class="status">[]</code> Add an idempotent <code>tools/bootstrap</code> that preflights Python 3, Git/download support, and Apple <code>cc</code>; verifies the pinned Hererocks artifact checksum; creates the ignored <code>.lua/</code> environment; and fails clearly instead of reusing a mismatched or partial environment.</li>
+        <li><code class="status">[]</code> Apply D-LOCK-01. Begin with <code>anodyne-dev-0.rockspec</code>, <code>rockspec_format = "3.0"</code>, Lua 5.4 constraints, and Busted/LuaCov in <code>test_dependencies</code>. From an empty tree, prove the lock restores their complete graph; if that proof fails, automatically replace it with the dedicated non-publishable test-tools rockspec fallback.</li>
+        <li><code class="status">[]</code> Generate the initial lock exactly once through the networked bootstrap path. Thereafter ordinary <code>bootstrap</code> consumes it without rewriting it; <code>make deps-update</code> exists only for a separate future dependency-update task and is not called by this plan.</li>
+        <li><code class="status">[]</code> Add <code>make toolchain-check</code>, <code>make test</code>, <code>make coverage</code>, and <code>make format-check</code>. Every target invokes project-local binaries directly, verifies the active LuaRocks tree/config cannot see user/system rocks, and never depends on shell activation or ambient <code>PATH</code>.</li>
+        <li><code class="status">[]</code> Implement <code>tools/run_with_timeout.py</code>, initialize reviewer-approved <code>tools/test-minimums.env</code>, and add milestone-aware raw coverage enforcement from D-TEST-01/D-COV-01. <code>make verify</code> is offline and never bootstraps, updates dependencies, contacts Hammerspoon, or reads smoke status.</li>
+        <li><code class="status">[]</code> Keep <code>.lua/</code>, <code>.tools/</code> or bootstrap cache, <code>coverage/</code>, and LuaCov data ignored. Keep <code>tools/versions.env</code>, bootstrap script, rockspec, lockfile, configs, and Makefile tracked.</li>
+        <li><code class="status">[]</code> Configure LuaCov with <code>includeuntestedfiles = true</code>, include project production Lua, and exclude only specs, vendored Spoon code, generated dependencies, and the final loader.</li>
+        <li><code class="status">[]</code> Encode A-LIFE-01 through A-UI-01 in a behavior inventory used by test names and reviewer handoffs.</li>
+      </ul>
+      <div class="callout"><strong>Why not plain Homebrew?</strong> On this machine the current unversioned Homebrew <code>lua</code> is 5.5, while Hammerspoon embeds Lua 5.4. A direct <code>brew install luarocks</code> would couple the test runner to the wrong interpreter family. Existing Python 3, Git, and Apple <code>cc</code> are prerequisites only; missing prerequisites at execution map to <code>BLOCKED-ENVIRONMENT</code> rather than an installation question.</div>
+      <h4>1.2 Independent reviewer gate</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Reviewer confirms no production behavior or source changed, dependencies are development-only, every production file will appear in coverage, and commands work from a clean shell without global Lua/LuaRocks.</li>
+        <li><code class="status">[]</code> Reviewer quarantines or bypasses <code>.lua/</code> without destructive deletion, performs the scoped D-NET-01 bootstrap, then confirms <code>toolchain-check</code> reports only project-local executables/config and exact versions. After bootstrap, tests must pass with network unavailable.</li>
+        <li><code class="status">[]</code> Reviewer confirms <code>test</code> and <code>coverage</code> never invoke bootstrap or modify the rockspec/lock; only <code>deps-update</code> may regenerate <code>luarocks.lock</code>.</li>
+        <li><code class="status">[]</code> Reviewer compares <code>luarocks.lock</code> with <code>./.lua/bin/luarocks list --porcelain</code> and confirms all direct/transitive test tools are locked. Hammerspoon startup must not add <code>.lua</code> to <code>package.path</code>/<code>package.cpath</code>, and no standalone native rock may be loaded into Hammerspoon.</li>
+      </ul>
+      <h4>1.3 Testing Strategy</h4>
+      <p>This is a tooling gate; coverage is informational and no percentage is enforced.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>make toolchain-check</code> — verifies exact versions, executable locations, and required commands.</li>
+        <li><code class="status">[]</code> <code>make test</code> — runner starts successfully with an empty or bootstrap spec and performs no network activity.</li>
+        <li><code class="status">[]</code> <code>make coverage</code> — produces a readable report and counts unexecuted production sources.</li>
+        <li><code class="status">[]</code> <code>git diff --check</code> — no whitespace damage.</li>
+      </ul>
+      <div class="loop">🔁 Advance only under D-REVIEW-01. Exhaust D-REPAIR-01 on rework; otherwise record the named terminal blocker without asking the owner.</div>
+    </div>
+
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone 2: Strict Fake and Characterization Safety Net</h3>
+      <p>Test the monolith through observable registrations and callbacks before changing its architecture. Do not export private functions for tests.</p>
+      <h4>2.1 Fake runtime packet</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Implement a strict <code>fake_hs</code> covering only used APIs: windows, screens, deterministic timers, menubar, modal hotkey, regular hotkey, filters, eventtap/events/keycodes, canvas indexing, and <code>fnutils.split</code>.</li>
+        <li><code class="status">[]</code> Reject unknown methods, wrong colon/dot usage, invalid arguments, use-after-delete, and double registration where real ownership forbids it.</li>
+        <li><code class="status">[]</code> Capture callbacks and expose deterministic test drivers from the fake, not from production code.</li>
+        <li><code class="status">[]</code> Add fault modes: thrown set, readback throw, ignored write, coerced write with successful rollback, failed rollback, invalid id/screen/frame, removed screen, changed full frame.</li>
+      </ul>
+      <h4>2.2 Characterization packet</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Cover load-twice cleanup, one active registration set, menu construction, entry/exit resource ownership, and destroyed-window cleanup.</li>
+        <li><code class="status">[]</code> Cover focused/remembered/frontmost fallback and modal target pinning.</li>
+        <li><code class="status">[]</code> Cover representative presets, corners, movement, resize, no-op, undo/reset, screen change, rollback, timer replacement, key routing, and inside/outside-modal feedback.</li>
+        <li><code class="status">[]</code> Demonstrate test sensitivity by temporarily mutating a copied formula or expected registration and showing a characterization failure; do not commit the mutation.</li>
+      </ul>
+      <h4>2.3 Independent reviewer gate</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Reviewer rejects permissive fakes, “does not throw” assertions, implementation-copied expectations, auto-regenerated snapshots, or missing safety/failure scenarios.</li>
+      </ul>
+      <h4>2.4 Testing Strategy</h4>
+      <p>Implement at least 20 behavior-oriented examples and the complete A-* scenario matrix. The scenario matrix, not the count, is the gate; coverage has no percentage floor yet.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>make test-characterization</code> — all named contracts pass against the current monolith.</li>
+        <li><code class="status">[]</code> <code>make coverage</code> — establishes the baseline report.</li>
+        <li><code class="status">[]</code> <code>make format-check</code> — specs and support code conform.</li>
+      </ul>
+      <div class="loop">🔁 Apply D-REVIEW-01/D-REPAIR-01 until fake fidelity and behavior sensitivity are approved or a terminal reviewer blocker is recorded.</div>
+    </div>
+
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone 3: Anodyne Facade and Thin Loader</h3>
+      <p>Mechanically relocate the implementation behind an explicit lifecycle without improving or reorganizing its domain logic.</p>
+      <h4>3.1 Relocation packet</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Implement the exact D-API-01 facade and D-LIFE-01 failure policy. Validate <code>new</code>/<code>replace</code> option keys; keep <code>modules</code> an internal composition seam.</li>
+        <li><code class="status">[]</code> Move current logic mechanically behind the facade; preserve defaults, strings, ordering, timing, callbacks, and cleanup order.</li>
+        <li><code class="status">[]</code> Reduce root <code>init.lua</code> to the Milestone 3 transitional loader shown below. Apply D-GLOBAL-01 deterministically: recognize both prior globals, deduplicate cleanup, retain the temporary alias through migration, and schedule mandatory removal in Milestone 7.</li>
+        <li><code class="status">[]</code> Make <code>start → start</code>, <code>start → stop → start</code>, repeated <code>stop</code>, aggregate teardown error, and every partial startup failure safe.</li>
+      </ul>
+      <h4>3.2 Independent reviewer gate</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Reviewer performs base/head behavior comparison, checks case-sensitive <code>require("Anodyne")</code>, verifies cleanup-before-replacement, and rejects any mixed behavior cleanup.</li>
+      </ul>
+      <pre><code>-- Milestone 3 transitional root init.lua
+local previous = { anodyne = rawget(_G, "Anodyne"), legacy = rawget(_G, "WindowManager") }
+local nextInstance = require("Anodyne").replace({ hs = hs, previous = previous })
+_G.Anodyne, _G.WindowManager = nextInstance, nextInstance</code></pre>
+      <h4>3.3 Testing Strategy</h4>
+      <p>Run the entire characterization suite unchanged, then apply D-SMOKE-01. Native smoke unavailability does not halt pure extraction, but it records <code>[d]</code> and prevents a final <code>COMPLETE</code> state.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>make test</code> — behavior parity after relocation.</li>
+        <li><code class="status">[]</code> <code>make smoke-load</code> — automatically attempt bounded load/start/stop/reload compatibility without launching Hammerspoon or touching an ordinary window.</li>
+        <li><code class="status">[]</code> <code>make coverage</code> — relocated implementation remains counted.</li>
+      </ul>
+      <div class="loop">🔁 Under D-SCOPE-01, any changed message, timing, key, menu position, action result, or resource count is REWORK. Preserve suspected bugs and continue without asking.</div>
+    </div>
+
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone 4: Pure Configuration and Geometry</h3>
+      <p>Extract the first truly pure layer and replace characterization-only protection with table-driven unit specifications.</p>
+      <h4>4.1 Extraction packet</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Extract defaults, validation, action metadata, and derived maps to <code>Anodyne/config.lua</code>.</li>
+        <li><code class="status">[]</code> Extract frame copy/equality/rounding, clamping, aspect targets, corner targets, resize targets, and directional grid snapping to <code>Anodyne/core/geometry.lua</code>.</li>
+        <li><code class="status">[]</code> Add decision tables for half rounding, negative origins, aligned/unaligned movement, tiny screens, oversized windows, minimum dimensions, all corners, and non-aliasing inputs.</li>
+        <li><code class="status">[]</code> Remove legacy duplicates only after new unit tests and unchanged characterization tests pass.</li>
+      </ul>
+      <h4>4.2 Independent reviewer gate</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Reviewer confirms core imports no <code>hs</code>, <code>_G</code>, timer, window, screen, or UI module; expected values are independently derived rather than copies of production formulas.</li>
+      </ul>
+      <h4>4.3 Testing Strategy</h4>
+      <p>Geometry and config are compact decision modules: require at least 95% line coverage plus explicit boundary matrices.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>make test-core</code> — pure tables pass.</li>
+        <li><code class="status">[]</code> <code>make test-characterization</code> — external behavior remains identical.</li>
+        <li><code class="status">[]</code> <code>make coverage</code> — <code>Anodyne/config.lua</code> and <code>Anodyne/core/geometry.lua</code> each meet the agreed floor.</li>
+      </ul>
+      <div class="loop">🔁 Percentage does not waive a missing boundary case.</div>
+    </div>
+
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone 5: Transactional Actions and History</h3>
+      <p>Extract the highest-risk correctness layer: authoritative frame mutation, screen snapshots, rollback, undo, and session reset.</p>
+      <h4>5.1 Extraction packet</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Extract per-window copied/bounded history transitions to <code>Anodyne/core/history.lua</code>.</li>
+        <li><code class="status">[]</code> Extract focus resolution, screen snapshots, apply/readback, exact rollback, undo/reset, and concrete frame actions to <code>Anodyne/window_actions.lua</code> using narrow injected window/screen ports.</li>
+        <li><code class="status">[]</code> Preserve actual readback as history <code>after</code>; no-op/rejected actions create no entry; external changes and failed restoration invalidate only required history.</li>
+        <li><code class="status">[]</code> Exercise every fake fault mode and window-destruction cleanup.</li>
+      </ul>
+      <h4>5.2 Independent reviewer gate</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Reviewer treats any rollback, screen identity/full-frame, modal target, or selective invalidation regression as high severity and rework.</li>
+      </ul>
+      <h4>5.3 Testing Strategy</h4>
+      <p>Require at least 95% for <code>Anodyne/core/history.lua</code> and 90% for <code>Anodyne/window_actions.lua</code>, with named success and failure scenarios independent of line coverage.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>make test-actions</code> — all transactional outcomes and history invariants pass.</li>
+        <li><code class="status">[]</code> <code>make test</code> — characterization and unit suites pass together.</li>
+        <li><code class="status">[]</code> <code>make coverage</code> — required module floors and uncovered-line review pass.</li>
+      </ul>
+      <div class="loop">🔁 A success-path-only suite is automatic rework.</div>
+    </div>
+
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone 6: Keymap, View, and Controller</h3>
+      <p>Separate intent interpretation and presentation from modal/session orchestration while preserving precedence and stale-callback safety.</p>
+      <h4>6.1 Extraction packet</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Extract raw key/flags/mode → intent into pure <code>Anodyne/core/keymap.lua</code>.</li>
+        <li><code class="status">[]</code> Extract menu models and modal lines into <code>Anodyne/view.lua</code>; retain exact ordered menu titles plus one exact modal rendering per mode and explicit status/error examples.</li>
+        <li><code class="status">[]</code> Extract session state, target pinning, transitions, action dispatch, feedback, and scheduling policy into <code>Anodyne/controller.lua</code>.</li>
+        <li><code class="status">[]</code> Model timer replacement so stopped/stale callbacks cannot close or redraw a newer session.</li>
+      </ul>
+      <h4>6.2 Independent reviewer gate</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Reviewer runs the full mode × key × modifier matrix, checks Escape/Backspace/numbers/arrows/unknown keys, modal target loss, event consumption intent, and exit cleanup.</li>
+      </ul>
+      <h4>6.3 Testing Strategy</h4>
+      <p>Require at least 95% for keymap, 90% for controller, and 85% for view. Decision matrices and stale timer tests remain mandatory.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>make test-controller</code> — state, intent, view, and timer scenarios pass.</li>
+        <li><code class="status">[]</code> <code>make test</code> — no facade-level behavior regression.</li>
+        <li><code class="status">[]</code> <code>make coverage</code> — module floors pass and untested source remains visible.</li>
+      </ul>
+      <div class="loop">🔁 Any path capable of leaving a global event tap active is blocking.</div>
+    </div>
+
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone 7: Hammerspoon Adapter, Hardening, and Final Thin Loader</h3>
+      <p>Concentrate all native integration in one adapter, remove transitional compatibility and duplicate monolith code, and prove the finished architecture.</p>
+      <h4>7.1 Adapter and cleanup packet</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Move menus, canvas, filters, event tap, keycodes, timers, modal/global hotkeys, callback wiring, and disposal to <code>Anodyne/adapter/hammerspoon.lua</code>.</li>
+        <li><code class="status">[]</code> Verify real signatures, colon-call semantics, callback return values, canvas indexing, and idempotent ownership with the strict fake.</li>
+        <li><code class="status">[]</code> Delete migrated legacy code and the temporary <code>_G.WindowManager</code> alias after equivalent facade tests pass; this removal is mandatory, not a decision gate.</li>
+        <li><code class="status">[]</code> Finalize README, dependency/setup commands, coverage interpretation, architecture map, reload instructions, and safe Hammerspoon smoke procedure.</li>
+      </ul>
+      <h4>7.2 Independent reviewer gate</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Fresh reviewer confirms the root loader owns no domain logic or resources, pure modules have no native/global dependencies, no circular requires exist, all source is counted, and final behavior traces match the baseline.</li>
+        <li><code class="status">[]</code> Reviewer requires strict-fake evidence and applies D-SMOKE-01 to load/reload, modal enter/exit without a real target, and cleanup. Missing safe IPC yields native-certification deferral, not an owner question.</li>
+      </ul>
+      <h4>7.3 Testing Strategy</h4>
+      <p>Hard floors are adapter 75% and overall Anodyne 85%, calculated without rounding. Every uncovered native path needs a precise line-level rationale plus strict-fake or smoke evidence.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>make verify</code> — format, full Busted suite, coverage, and static dependency checks pass.</li>
+        <li><code class="status">[]</code> <code>make smoke</code> — automatically attempt the bounded D-SMOKE-01 lifecycle check; mark this line <code>[d]</code> when its machine-readable status is deferred.</li>
+        <li><code class="status">[]</code> <code>git diff --check</code> — final tree is cleanly formatted.</li>
+      </ul>
+      <div class="loop">🔁 Apply D-DONE-01 exactly. Stop after Milestone 7; D-SPOON-01 excludes distribution work.</div>
+    </div>
+  </section>
+
+  <section id="validation">
+    <h2>Global Validation Commands</h2>
+    <p>These command contracts are fixed. Implementation may add focused aliases but may not weaken, rename, or silently broaden these entrypoints:</p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> <code>make bootstrap</code> — scoped network first-run setup creates the exact project-local toolchain and initial lock, or restores an existing lock without modifying it.</li>
+      <li><code class="status">[]</code> <code>make toolchain-check</code> — exact local Lua, LuaRocks, Busted, LuaCov, StyLua, active trees, and paths are verified.</li>
+      <li><code class="status">[]</code> <code>make format-check</code> — every owned Lua file follows StyLua.</li>
+      <li><code class="status">[]</code> <code>make test</code> — complete Busted suite passes.</li>
+      <li><code class="status">[]</code> <code>make coverage</code> — LuaCov text report plus <code>coverage/summary.json</code> from the tracked checker includes unexecuted introduced Anodyne modules and enforces the current milestone floors.</li>
+      <li><code class="status">[]</code> <code>make verify</code> — aggregates non-destructive local validation.</li>
+      <li><code class="status">[]</code> <code>make smoke</code> — safely attempts D-SMOKE-01 and emits PASS, FAIL, or <code>DEFERRED-ENVIRONMENT</code>.</li>
+      <li><code class="status">[]</code> <code>make deps-update</code> — tracked maintainer command available for a separate future task; this plan never invokes it after initial lock creation.</li>
+      <li><code class="status">[]</code> <code>git diff --check</code> — no whitespace errors.</li>
+    </ul>
+    <div class="loop">🔁 Apply D-DONE-01. Offline failures are rework/blockers; only unavailable safe Hammerspoon IPC may produce <code>IMPLEMENTED-NOT-NATIVE-CERTIFIED</code>.</div>
+  </section>
+
+  <section id="orchestration">
+    <h2>Subagent Dispatch and Review Protocol</h2>
+    <ol>
+      <li><strong>Primary agent prepares the packet.</strong> State milestone scope, allowed files, A-*/D-* IDs, base SHA, required commands, and explicit non-goals.</li>
+      <li><strong>One implementation worker executes.</strong> Writers are sequential on shared files. The worker returns the complete evidence packet below.</li>
+      <li><strong>Primary agent checks.</strong> Inspect the scoped diff, rerun the narrowest deterministic validation, and reject incomplete handoffs before review.</li>
+      <li><strong>Fresh reviewer R0 reviews read-only.</strong> It has not implemented or reviewed this milestone and independently derives evidence from the repository.</li>
+      <li><strong>Verdict drives the state machine.</strong> APPROVE/low-only APPROVE WITH NOTES advances. REWORK returns to the same implementer, then a new reviewer R1/R2/R3. Before repair three, dispatch a debugger.</li>
+      <li><strong>Adjudicate only objective disputes.</strong> Freeze edits, reduce the dispute to a test/trace/contract, and dispatch one fresh adjudicator. Its evidence-backed verdict controls; unresolved ambiguity is REWORK.</li>
+      <li><strong>Close or block.</strong> After approval, update statuses/metadata and create one local checkpoint commit. After R3 REWORK, record <code>BLOCKED-REVIEW</code> and stop without asking the owner.</li>
+    </ol>
+
+    <h3>Mandatory worker handoff</h3>
+    <pre><code>Milestone / base SHA / resulting SHA or working-tree state
+Files changed and why
+Behavior contract IDs exercised
+Exact validation commands and results
+Tests added; total passing count
+Per-module LuaCov result and delta
+Uncovered production lines with rationale
+Real-Hammerspoon evidence: PASS | FAIL | DEFERRED-ENVIRONMENT
+Behavior changes: none (mandatory for Milestones 1–7)
+Prior findings and repair evidence
+Unrelated preserved worktree changes
+Remaining Low notes and disposition</code></pre>
+
+    <h3>Reviewer verdict rules</h3>
+    <ul>
+      <li><strong>APPROVE:</strong> every mandatory non-environment command passes; evidence is complete; no Critical/High/Medium finding, behavior delta, scope drift, or coverage regression remains.</li>
+      <li><strong>APPROVE WITH NOTES:</strong> APPROVE conditions hold and only Low documentation/maintainability notes remain; record each note without creating a new decision gate.</li>
+      <li><strong>REWORK:</strong> any Critical/High/Medium finding, missing/pending evidence, failed deterministic command, unexplained behavior change, permissive fake, coverage gaming, or changed production path without meaningful tests.</li>
+      <li><strong>Native-certification flag:</strong> D-SMOKE-01 may record <code>DEFERRED-ENVIRONMENT</code> alongside APPROVE/APPROVE WITH NOTES. It is not a verdict, permits continued extraction/checkpointing, and prevents only the final <code>COMPLETE</code> label.</li>
+    </ul>
+    <div class="callout"><strong>Coverage is evidence, not proof.</strong> Reviewers must reject coverage gaming: broad exclusions, constant/string-only tests, truthiness-only assertions, regenerated snapshots, or high percentages that omit rollback, screen-change, stale-timer, invalid-window, and modifier paths.</div>
+  </section>
+
+  <section id="questionables">
+    <h2>Settled Decisions (No Execution-Time Questions)</h2>
+    <details open>
+      <summary>Does Busted need to load inside Hammerspoon?</summary>
+      <p class="qa-answer">No. Production Anodyne modules must load under Hammerspoon’s Lua 5.4, while Busted and LuaCov run under matching standalone Lua 5.4. Only small package/adapter smoke checks run inside the live Hammerspoon process.</p>
+    </details>
+    <details>
+      <summary>Should the old monolith reach a coverage target before extraction?</summary>
+      <p class="qa-answer">No percentage gate. Milestone 2 requires sensitive behavior contracts, especially failure paths. Coverage thresholds begin as deterministic modules are extracted.</p>
+    </details>
+    <details open>
+      <summary>Should Anodyne become a Spoon during the refactor?</summary>
+      <p class="qa-answer">No. Keep canonical source as normal Lua modules and preserve a shared, side-effect-free composition/lifecycle seam. Stop after Milestone 7. Spoon packaging, licensing, metadata, and publication are separate future work and are not raised during execution.</p>
+    </details>
+    <details>
+      <summary>Why use Hererocks instead of installing LuaRocks globally?</summary>
+      <p class="qa-answer">It creates an isolated Lua/LuaRocks environment inside <code>.lua/</code> and can select the exact Lua patch release that Hammerspoon embeds. Every command calls local binaries directly, so global Homebrew changes and user rocks cannot silently alter tests. The installer itself is also pinned and checksummed.</p>
+    </details>
+    <details>
+      <summary>Should the final global remain WindowManager?</summary>
+      <p class="qa-answer">No. The target is <code>_G.Anodyne</code>. Milestone 3 deterministically supports the legacy global during reload migration; Milestone 7 removes it and proves removal with tests and a static scan.</p>
+    </details>
+    <details>
+      <summary>Can implementation milestones run concurrently?</summary>
+      <p class="qa-answer">Not when they touch the same dependency chain. This repository is small and all agents share one worktree; sequential worker → reviewer gates provide clearer diffs and safer rollback. Read-only investigation or test triage may run concurrently.</p>
+    </details>
+    <details>
+      <summary>May agents run live Hammerspoon smoke tests automatically?</summary>
+      <p class="qa-answer">Yes, but only D-SMOKE-01 and only when a dedicated fixture supplies <code>ANODYNE_SMOKE_SAFE=1</code>: use already-available IPC, fixed preflighted temporary resources, guaranteed cleanup, and no ordinary-window or persistent configuration mutation. Do not launch Hammerspoon. A missing flag/safe IPC/conflict is recorded as a deferred certification flag, not asked about.</p>
+    </details>
+    <details open>
+      <summary>What happens when agents cannot pass a gate?</summary>
+      <p class="qa-answer">They execute the documented fallback and bounded repair policy. Exhaustion produces a named terminal/deferred state with evidence and a preserved worktree. They do not ask for a design decision or silently weaken the gate.</p>
+    </details>
+  </section>
+
+  <section id="notes">
+    <h2>Notes</h2>
+    <h3>Out of scope</h3>
+    <ul>
+      <li>Changing presets, keyboard shortcuts, menu text, modal timing, frame rules, or error messages during the refactor.</li>
+      <li>Refactoring or testing the unrelated vendored <code>WinWin.spoon</code>.</li>
+      <li>Publishing Anodyne as a public LuaRock. The development rockspec exists only to manage tests.</li>
+      <li>Building or publishing a Spoon, selecting a license, inventing public metadata, or submitting to the official repository.</li>
+      <li>Changing dependencies after the initial lock; <code>deps-update</code> is reserved for a separately requested maintenance task.</li>
+      <li>Using real windows as the main unit-test mechanism.</li>
+    </ul>
+    <h3>Primary risks</h3>
+    <ul>
+      <li><strong>Lifecycle:</strong> duplicate or leaked native resources on start/reload/partial failure.</li>
+      <li><strong>Transaction safety:</strong> losing authoritative readback, exact rollback, or selective history invalidation.</li>
+      <li><strong>Screen topology:</strong> confusing usable <code>frame()</code> with identity-sensitive <code>fullFrame()</code>.</li>
+      <li><strong>Modal safety:</strong> retargeting after entry or leaving the global event tap active.</li>
+      <li><strong>Fake drift:</strong> accepting signatures or ownership behavior that real Hammerspoon rejects.</li>
+    </ul>
+    <h3>Planning references</h3>
+    <p><a href="https://lunarmodules.github.io/busted/">Busted</a> · <a href="https://lunarmodules.github.io/luacov/">LuaCov</a> · <a href="https://github.com/luarocks/hererocks">Hererocks</a> · <a href="https://github.com/luarocks/luarocks/blob/main/docs/pinning_versions_with_a_lock_file.md">LuaRocks lock files</a> · <a href="https://github.com/luarocks/luarocks/blob/main/docs/rockspec_format.md">Rockspec format</a> · <a href="https://github.com/Hammerspoon/hammerspoon/blob/master/SPOONS.md">Hammerspoon Spoon guide</a> · <a href="https://www.hammerspoon.org/docs/hs.ipc.html">Hammerspoon IPC</a></p>
+  </section>
+
+  <section id="amendments">
+    <h2>Amendments</h2>
+    <p><strong>2026-07-18T11:02:25+02:00 — Toolchain and Spoon distribution.</strong> Added a module-first/Spoon-ready decision with an optional reviewed packaging milestone. Expanded Milestone 1 to pin and checksum a project-local Hererocks/Lua 5.4.7/LuaRocks toolchain, track dependency resolution, isolate generated files, and separate dependency restoration from deliberate updates.</p>
+    <p><strong>2026-07-18T11:16:21+02:00 — Autonomous decision gates.</strong> Converted the plan into a no-question execution contract. Added binding architecture, lifecycle, toolchain, lock, test, coverage, smoke, Git, review, repair, conflict, and completion gates with deterministic defaults and named terminal states. Fixed the facade/config/global contracts, pinned StyLua, bounded retries/timeouts/review loops, made safe smoke automatic-or-deferred, and removed Spoon packaging from the executable milestones.</p>
+  </section>
+</main>
+</body>
+</html>
