@@ -69,6 +69,7 @@ function Fake.new(options)
     now = 0,
     callLog = {},
     lifecycleFaults = {},
+    lifecycleReturns = {},
     invocationCounts = {},
   }
 
@@ -77,9 +78,14 @@ function Fake.new(options)
     runtime.invocationCounts[operation] = invocation
     table.insert(runtime.callLog, operation .. "#" .. invocation)
     local fault = runtime.lifecycleFaults[operation]
-    if fault and fault.invocation == invocation then
+    if fault and (fault.persistent or fault.invocation == invocation) then
       error(fault.message or ("injected " .. operation .. " failure"))
     end
+    local returned = runtime.lifecycleReturns[operation]
+    if returned and (returned.persistent or returned.invocation == invocation) then
+      return true, returned.value
+    end
+    return false
   end
 
   local screenMethods = {}
@@ -219,14 +225,6 @@ function Fake.new(options)
     self._state.active = false
     return self
   end
-  function timerMethods:delete(...)
-    noExtra("timer:delete", ...)
-    lifecycle("timer.delete")
-    live(self._state, "timer")
-    self._state.active = false
-    self._state.deleted = true
-  end
-
   local menuMethods = {}
   function menuMethods:setTitle(title, ...)
     noExtra("menubar:setTitle", ...)
@@ -303,9 +301,7 @@ function Fake.new(options)
     noExtra("modal:delete", ...)
     lifecycle("modal.delete")
     live(self._state, "modal")
-    if self._state.active then
-      self:exit()
-    end
+    self._state.active = false
     self._state.deleted = true
   end
 
@@ -349,14 +345,6 @@ function Fake.new(options)
     self._state.active = false
     return self
   end
-  function tapMethods:delete(...)
-    noExtra("eventtap:delete", ...)
-    lifecycle("eventtap.delete")
-    live(self._state, "eventtap")
-    self._state.active = false
-    self._state.deleted = true
-  end
-
   local canvasMethods = {}
   function canvasMethods:level(value, ...)
     noExtra("canvas:level", ...)
@@ -436,7 +424,10 @@ function Fake.new(options)
     if select("#", ...) > 1 then
       fail("window.filter.new takes at most one argument")
     end
-    lifecycle("filter.new")
+    local overridden, value = lifecycle("filter.new")
+    if overridden then
+      return value
+    end
     local global = ...
     if global ~= nil and global ~= true then
       fail("window.filter.new accepts only true or no argument")
@@ -467,7 +458,10 @@ function Fake.new(options)
   end
   function hs.timer.doAfter(delay, callback, ...)
     noExtra("timer.doAfter", ...)
-    lifecycle("timer.doAfter")
+    local overridden, value = lifecycle("timer.doAfter")
+    if overridden then
+      return value
+    end
     if type(delay) ~= "number" or delay < 0 or type(callback) ~= "function" then
       fail("timer.doAfter requires nonnegative delay and callback")
     end
@@ -481,7 +475,10 @@ function Fake.new(options)
     if select("#", ...) ~= 0 then
       fail("menubar.new takes no arguments")
     end
-    lifecycle("menubar.new")
+    local overridden, value = lifecycle("menubar.new")
+    if overridden then
+      return value
+    end
     local state = {}
     local menu = strictObject("menubar", menuMethods, state)
     rawset(menu, "_state", state)
@@ -490,7 +487,10 @@ function Fake.new(options)
   end
   function hs.hotkey.bind(modifiers, key, callback, ...)
     noExtra("hotkey.bind", ...)
-    lifecycle("hotkey.bind")
+    local overridden, value = lifecycle("hotkey.bind")
+    if overridden then
+      return value
+    end
     if type(modifiers) ~= "table" or type(key) ~= "string" or type(callback) ~= "function" then
       fail("hotkey.bind requires modifiers, key, callback")
     end
@@ -504,7 +504,10 @@ function Fake.new(options)
     if select("#", ...) ~= 0 then
       fail("hotkey.modal.new takes no arguments")
     end
-    lifecycle("modal.new")
+    local overridden, value = lifecycle("modal.new")
+    if overridden then
+      return value
+    end
     local state = { active = false }
     local modal = strictObject("modal", modalMethods, state)
     rawset(modal, "_state", state)
@@ -513,7 +516,10 @@ function Fake.new(options)
   end
   function hs.eventtap.new(events, callback, ...)
     noExtra("eventtap.new", ...)
-    lifecycle("eventtap.new")
+    local overridden, value = lifecycle("eventtap.new")
+    if overridden then
+      return value
+    end
     if type(events) ~= "table" or type(callback) ~= "function" then
       fail("eventtap.new requires events and callback")
     end
@@ -558,7 +564,10 @@ function Fake.new(options)
   end
   function hs.canvas.new(frame, ...)
     noExtra("canvas.new", ...)
-    lifecycle("canvas.new")
+    local overridden, value = lifecycle("canvas.new")
+    if overridden then
+      return value
+    end
     local state = { frame = copyFrame(frame), elements = {}, visible = false }
     local canvas = strictObject("canvas", canvasMethods, state, true)
     rawset(canvas, "_state", state)
@@ -644,8 +653,23 @@ function Fake.new(options)
     end
     runtime.lifecycleFaults[operation] = { invocation = invocation, message = message }
   end
+  function driver:setPersistentLifecycleFault(operation, message)
+    if type(operation) ~= "string" then
+      fail("driver:setPersistentLifecycleFault requires an operation")
+    end
+    runtime.lifecycleFaults[operation] = { persistent = true, message = message }
+  end
+  function driver:setLifecycleReturn(operation, invocation, value)
+    if type(operation) ~= "string" or type(invocation) ~= "number" or invocation < 1 then
+      fail("driver:setLifecycleReturn requires an operation and positive invocation")
+    end
+    runtime.lifecycleReturns[operation] = { invocation = invocation, value = value }
+  end
   function driver:clearLifecycleFaults()
     runtime.lifecycleFaults = {}
+  end
+  function driver:clearLifecycleReturns()
+    runtime.lifecycleReturns = {}
   end
   function driver:clearCallLog()
     runtime.callLog = {}
@@ -842,7 +866,7 @@ function Fake.new(options)
   function driver:load(path)
     _G.hs = hs
     dofile(path or os.getenv("ANODYNE_INIT_UNDER_TEST") or "init.lua")
-    return _G.WindowManager
+    return _G.Anodyne
   end
   function driver:shutdown()
     if _G.Anodyne and type(_G.Anodyne.stop) == "function" then

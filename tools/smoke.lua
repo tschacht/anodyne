@@ -82,10 +82,10 @@ local ok, result = xpcall(function()
     modalHotkey = { modifiers = modifiers, key = key },
   }
   active = facade.replace({ hs = hs, previous = {}, config = config })
-  _G.Anodyne, _G.WindowManager = active, active
+  _G.Anodyne, _G.WindowManager = active, nil
   local first = active
   active = facade.replace({ hs = hs, previous = { anodyne = first, legacy = first }, config = config })
-  _G.Anodyne, _G.WindowManager = active, active
+  _G.Anodyne, _G.WindowManager = active, nil
   local _, errors = active:stop()
   if errors or active:isRunning() then
     error("replacement instance did not stop cleanly")

@@ -102,6 +102,20 @@ describe("Anodyne controller", function()
     assert.are.equal(1, log.closes)
   end)
 
+  it("retains a timer and refuses replacement when native stop fails", function()
+    local retained = { name = "retained" }
+    owner.modalTimer = retained
+    ports.stopTimer = function(timer)
+      assert.are.equal(retained, timer)
+      error("injected timer stop failure")
+    end
+    assert.has_error(function()
+      controller:startModalTimer()
+    end, "injected timer stop failure")
+    assert.are.equal(retained, owner.modalTimer)
+    assert.are.equal(0, #timers)
+  end)
+
   it("implements exact event consumption without dispatch on keyUp or flags", function()
     assert.is_false(controller:handleEvent("keyDown", "a", {}))
     controller:enter({}, {}, {})

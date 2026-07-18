@@ -5,12 +5,12 @@ BUSTED := $(CURDIR)/.lua/bin/busted
 LUACOV := $(CURDIR)/.lua/bin/luacov
 STYLUA := $(CURDIR)/.tools/stylua
 TIMEOUT := $(CURDIR)/tools/run_with_timeout.py
-MILESTONE ?= 6
+MILESTONE ?= 7
 LOCAL_CONFIG := $(CURDIR)/.lua/etc/luarocks/config-5.4.lua
 LOCAL_HOME := $(CURDIR)/.lua/home
 LOCAL_ENV := HOME=$(LOCAL_HOME) LUAROCKS_CONFIG=$(LOCAL_CONFIG) LUA_PATH=';;' LUA_CPATH=';;'
 
-.PHONY: bootstrap toolchain-check test test-characterization test-core test-actions test-controller test-facade coverage format-check smoke-load verify deps-update
+.PHONY: bootstrap toolchain-check test test-characterization test-core test-actions test-controller test-adapter test-architecture test-facade coverage architecture format-check smoke smoke-load verify deps-update
 
 bootstrap:
 	@tools/bootstrap
@@ -45,6 +45,12 @@ test-actions: toolchain-check
 test-controller: toolchain-check
 	@. tools/test-minimums.env; $(LOCAL_ENV) $(TIMEOUT) --seconds 30 --minimum-examples "$$TEST_MINIMUM_CONTROLLER" -- $(BUSTED) --config-file=.busted spec/controller
 
+test-adapter: toolchain-check
+	@. tools/test-minimums.env; $(LOCAL_ENV) $(TIMEOUT) --seconds 30 --minimum-examples "$$TEST_MINIMUM_ADAPTER" -- $(BUSTED) --config-file=.busted spec/adapter
+
+test-architecture: toolchain-check
+	@. tools/test-minimums.env; $(LOCAL_ENV) $(TIMEOUT) --seconds 30 --minimum-examples "$$TEST_MINIMUM_ARCHITECTURE" -- $(BUSTED) --config-file=.busted spec/architecture
+
 test-facade: toolchain-check
 	@. tools/test-minimums.env; $(LOCAL_ENV) $(TIMEOUT) --seconds 30 --minimum-examples "$$TEST_MINIMUM_FACADE" -- $(BUSTED) --config-file=.busted spec/facade
 
@@ -56,12 +62,17 @@ coverage: toolchain-check
 	@rm -f coverage/luacov.stats.out
 
 format-check: toolchain-check
-	@$(STYLUA) --check init.lua Anodyne spec tools/check_coverage.lua tools/check_lock.lua tools/normalize_lock.lua tools/smoke.lua tools/smoke_prior.lua tools/smoke_status.lua
+	@$(STYLUA) --check init.lua Anodyne spec tools/check_architecture.lua tools/check_coverage.lua tools/check_lock.lua tools/normalize_lock.lua tools/smoke.lua tools/smoke_prior.lua tools/smoke_status.lua
+
+architecture: toolchain-check
+	@$(LOCAL_ENV) $(LUA) tools/check_architecture.lua "$(CURDIR)"
+
+smoke: smoke-load
 
 smoke-load:
 	@sh tools/smoke_load.sh "$(CURDIR)"
 
-verify: format-check test coverage
+verify: toolchain-check format-check test coverage architecture
 
 deps-update:
 	@printf '%s\n' 'dependency updates require a separate authorized network task' >&2

@@ -11,14 +11,22 @@ end
 
 function Controller:stopTimer(field)
   local timer = self.owner[field]
-  if timer then
-    pcall(self.ports.stopTimer, timer)
-    self.owner[field] = nil
+  if not timer then
+    return true
   end
+  local ok, stopError = pcall(self.ports.stopTimer, timer)
+  if ok then
+    self.owner[field] = nil
+    return true
+  end
+  return false, stopError
 end
 
 function Controller:startModalTimer()
-  self:stopTimer("modalTimer")
+  local stopped, stopError = self:stopTimer("modalTimer")
+  if not stopped then
+    error(stopError, 0)
+  end
   local timer
   timer = self.ports.schedule(self.config.modalDuration, function()
     if not self:isCurrent() or self.owner.modalTimer ~= timer or not self.state.active then
@@ -35,7 +43,10 @@ function Controller:render(status)
 end
 
 function Controller:transition(screen, status)
-  self:stopTimer("modalRefreshTimer")
+  local stopped, stopError = self:stopTimer("modalRefreshTimer")
+  if not stopped then
+    error(stopError, 0)
+  end
   if not self.metadata.screenTitles[screen] then
     self:render({ kind = "unknown-mode", screen = screen })
     return
@@ -53,7 +64,10 @@ function Controller:completeAction(success, failureMessage, successMessage, succ
     self:transition(successScreen, successMessage)
     return
   end
-  self:stopTimer("modalRefreshTimer")
+  local stopped, stopError = self:stopTimer("modalRefreshTimer")
+  if not stopped then
+    error(stopError, 0)
+  end
   local timer
   timer = self.ports.schedule(0.05, function()
     if not self:isCurrent() or self.owner.modalRefreshTimer ~= timer or not self.state.active then
@@ -116,7 +130,10 @@ function Controller:dispatch(intent)
 end
 
 function Controller:handleKey(key, flags)
-  self:stopTimer("modalRefreshTimer")
+  local stopped, stopError = self:stopTimer("modalRefreshTimer")
+  if not stopped then
+    error(stopError, 0)
+  end
   local intent, consumed = self.keymap:interpret(self.state.screen, key, flags)
   self:dispatch(intent)
   return consumed
@@ -157,10 +174,16 @@ function Controller:runMenu(intent)
     return
   end
   if self.state.active then
-    self:stopTimer("modalRefreshTimer")
+    local stopped, stopError = self:stopTimer("modalRefreshTimer")
+    if not stopped then
+      error(stopError, 0)
+    end
     self:startModalTimer()
   else
-    self:stopTimer("menuFailureTimer")
+    local stopped, stopError = self:stopTimer("menuFailureTimer")
+    if not stopped then
+      error(stopError, 0)
+    end
     self.ports.closeOverlay()
   end
   local success, failureMessage, successMessage = self:perform(intent)

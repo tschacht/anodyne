@@ -286,6 +286,57 @@ describe("Milestone 3 facade", function()
     end
   end)
 
+  it("rolls back a nil entry-hotkey acquisition and permits retry", function()
+    local instance = Anodyne.new({ hs = driver.hs })
+    driver:setLifecycleReturn("hotkey.bind", 1, nil)
+    local ok, message = pcall(function()
+      instance:start()
+    end)
+    assert.is_false(ok)
+    assert.matches("Failed to create/enable entry hotkey", message)
+    assert.is_false(instance:isRunning())
+    assert.is_nil(instance.entryHotkey)
+    assertNoResources(driver)
+    driver:clearLifecycleReturns()
+    assert.are.equal(instance, instance:start())
+    assert.is_true(instance:isRunning())
+    assert.is_nil(select(2, instance:stop()))
+    assertNoResources(driver)
+  end)
+
+  it("reports retained native stop handles and reaches zero after retry", function()
+    local instance = Anodyne.new({ hs = driver.hs }):start()
+    driver:triggerEntry()
+    local retained = instance.modalKeyGuard
+    driver:setPersistentLifecycleFault("eventtap.stop")
+    local _, errors = instance:stop()
+    assert.is_table(errors)
+    assert.matches("eventtap.stop", table.concat(errors, "\n"))
+    assert.are.equal(retained, instance.modalKeyGuard)
+    driver:clearLifecycleFaults()
+    assert.is_nil(select(2, instance:stop()))
+    assert.is_nil(instance.modalKeyGuard)
+    assertNoResources(driver)
+  end)
+
+  it("reloads after modal timer and eventtap use with stop-only cleanup", function()
+    local instance = Anodyne.new({ hs = driver.hs }):start()
+    driver:triggerEntry()
+    assert.are.equal(1, driver:activeCounts().timers)
+    assert.are.equal(1, driver:activeCounts().taps)
+    assert.is_nil(select(2, instance:stop()))
+    assert.is_nil(instance.modalTimer)
+    assert.is_nil(instance.modalKeyGuard)
+    assertNoResources(driver)
+    assert.are.equal(instance, instance:start())
+    driver:triggerEntry()
+    driver:advance(instance.config.modalDuration)
+    assert.is_nil(instance.modalTimer)
+    assert.is_nil(instance.modalKeyGuard)
+    assert.is_nil(select(2, instance:stop()))
+    assertNoResources(driver)
+  end)
+
   it("attempts all ordered teardown stages and recovers a faulted instance", function()
     local instance = Anodyne.new({ hs = driver.hs }):start()
     driver:triggerEntry()
@@ -303,7 +354,6 @@ describe("Milestone 3 facade", function()
     assert.matches("timer.stop", log)
     assert.matches("eventtap.stop", log)
     assert.matches("modal.delete", log)
-    assert.matches("timer.delete", log)
     assert.matches("canvas.delete", log)
     assert.matches("menubar.delete", log)
     assert.matches("filter.unsubscribeAll#2", log)
@@ -407,13 +457,13 @@ describe("Milestone 3 facade", function()
       end
       return value
     end
-    legacy.modalTimer = object("modalTimer", { "stop", "delete" })
-    legacy.modalRefreshTimer = object("modalRefreshTimer", { "stop", "delete" })
-    legacy.menuFailureTimer = object("menuFailureTimer", { "stop", "delete" })
-    legacy.modalKeyGuard = object("modalKeyGuard", { "stop", "delete" })
+    legacy.modalTimer = object("modalTimer", { "stop" })
+    legacy.modalRefreshTimer = object("modalRefreshTimer", { "stop" })
+    legacy.menuFailureTimer = object("menuFailureTimer", { "stop" })
+    legacy.modalKeyGuard = object("modalKeyGuard", { "stop" })
     legacy.entryHotkey = object("entryHotkey", { "delete" })
     legacy.windowMode = object("windowMode", { "delete" })
-    legacy.modalCanvas = object("modalCanvas", { "delete" })
+    legacy.modalCanvas = object("modalCanvas", { "hide", "delete" })
     legacy.menu = object("menu", { "delete" })
     legacy.windowFilter = object("windowFilter", { "unsubscribeAll" })
     legacy.historyWindowFilter = object("historyWindowFilter", { "unsubscribeAll" })
@@ -426,11 +476,8 @@ describe("Milestone 3 facade", function()
       "modalKeyGuard.stop",
       "entryHotkey.delete",
       "windowMode.delete",
-      "modalTimer.delete",
-      "modalRefreshTimer.delete",
-      "menuFailureTimer.delete",
+      "modalCanvas.hide",
       "modalCanvas.delete",
-      "modalKeyGuard.delete",
       "menu.delete",
       "windowFilter.unsubscribeAll",
       "historyWindowFilter.unsubscribeAll",
@@ -490,7 +537,7 @@ describe("Milestone 3 facade", function()
     }
     dofile("init.lua")
     assert.are.equal(nextInstance, _G.Anodyne)
-    assert.are.equal(nextInstance, _G.WindowManager)
+    assert.is_nil(_G.WindowManager)
     package.loaded.Anodyne = facade
   end)
 end)

@@ -55,7 +55,15 @@ describe("Milestone 2 characterization", function()
 
   describe("A-LIFE-01 lifecycle ownership", function()
     it("loads with exactly one menu, modal, entry hotkey, and two subscriptions", function()
+      assert.is_table(_G.Anodyne)
+      assert.is_nil(_G.WindowManager)
       assert.same({ timers = 0, menus = 1, hotkeys = 1, modals = 1, filters = 2, taps = 0, canvases = 0 }, driver:activeCounts())
+    end)
+
+    it("unloads every native resource without restoring the compatibility alias", function()
+      assert.is_nil(select(2, _G.Anodyne:stop()))
+      assert.is_nil(_G.WindowManager)
+      assert.same({ timers = 0, menus = 0, hotkeys = 0, modals = 0, filters = 0, taps = 0, canvases = 0 }, driver:activeCounts())
     end)
 
     it("cleans the first registration set before a second load", function()
@@ -66,7 +74,7 @@ describe("Milestone 2 characterization", function()
     it("reloads while modal without stale resources or callbacks crossing generations", function()
       driver:triggerEntry()
       driver:advance(4)
-      local manager = _G.WindowManager
+      local manager = _G.Anodyne
       local old = {
         timer = manager.modalTimer,
         tap = manager.modalKeyGuard,
@@ -79,6 +87,7 @@ describe("Milestone 2 characterization", function()
       }
 
       driver:load()
+      assert.is_nil(_G.WindowManager)
       assert.is_false(old.timer._state.active)
       assert.is_false(old.tap._state.active)
       assert.is_true(old.canvas._state.deleted)
@@ -97,10 +106,10 @@ describe("Milestone 2 characterization", function()
       assert.same({ timers = 0, menus = 1, hotkeys = 1, modals = 1, filters = 2, taps = 0, canvases = 0 }, driver:activeCounts())
 
       driver:triggerEntry()
-      local newTimer = _G.WindowManager.modalTimer
+      local newTimer = _G.Anodyne.modalTimer
       assert.is_not.equal(old.timer._state.callback, newTimer._state.callback)
       driver:advance(4.1)
-      assert.is_true(_G.WindowManager.modalState.active)
+      assert.is_true(_G.Anodyne.modalState.active)
       assert.is_true(newTimer._state.active)
     end)
 
@@ -771,9 +780,9 @@ describe("Milestone 2 characterization", function()
       driver:advance(7.9)
       driver:key("w")
       driver:advance(0.2)
-      assert.is_true(_G.WindowManager.modalState.active)
+      assert.is_true(_G.Anodyne.modalState.active)
       driver:advance(7.81)
-      assert.is_false(_G.WindowManager.modalState.active)
+      assert.is_false(_G.Anodyne.modalState.active)
     end)
 
     it("delays active action feedback by 0.05 seconds", function()
