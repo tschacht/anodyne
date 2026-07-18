@@ -29,9 +29,8 @@ if not preflightOk or conflict then
 end
 
 local priorAnodyne = rawget(_G, "Anodyne")
-local priorLegacy = rawget(_G, "WindowManager")
 local Prior = assert(loadfile(root .. "/tools/smoke_prior.lua"))()
-local prior = Prior.snapshot(priorAnodyne, priorLegacy)
+local prior = Prior.snapshot(priorAnodyne)
 if not prior then
   return deferred()
 end
@@ -57,8 +56,8 @@ local function restore()
   if not Prior.restore(prior) then
     return false
   end
-  _G.Anodyne, _G.WindowManager = priorAnodyne, priorLegacy
-  if rawget(_G, "Anodyne") ~= priorAnodyne or rawget(_G, "WindowManager") ~= priorLegacy then
+  _G.Anodyne = priorAnodyne
+  if rawget(_G, "Anodyne") ~= priorAnodyne then
     return false
   end
   restored = true
@@ -81,11 +80,11 @@ local ok, result = xpcall(function()
     menuTitle = "ANODYNE-SMOKE",
     modalHotkey = { modifiers = modifiers, key = key },
   }
-  active = facade.replace({ hs = hs, previous = {}, config = config })
-  _G.Anodyne, _G.WindowManager = active, nil
+  active = facade.replace({ hs = hs, config = config })
+  _G.Anodyne = active
   local first = active
-  active = facade.replace({ hs = hs, previous = { anodyne = first, legacy = first }, config = config })
-  _G.Anodyne, _G.WindowManager = active, nil
+  active = facade.replace({ hs = hs, previous = first, config = config })
+  _G.Anodyne = active
   local _, errors = active:stop()
   if errors or active:isRunning() then
     error("replacement instance did not stop cleanly")

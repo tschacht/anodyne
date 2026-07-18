@@ -42,7 +42,7 @@ describe("Milestone 2 characterization", function()
   local driver, window, screen
 
   before_each(function()
-    _G.Anodyne, _G.WindowManager, _G.hs = nil, nil, nil
+    _G.Anodyne, _G.hs = nil, nil
     driver = FakeHs.new()
     screen = driver.runtime.screens[1]
     window = driver.runtime.windows[1]
@@ -56,13 +56,11 @@ describe("Milestone 2 characterization", function()
   describe("A-LIFE-01 lifecycle ownership", function()
     it("loads with exactly one menu, modal, entry hotkey, and two subscriptions", function()
       assert.is_table(_G.Anodyne)
-      assert.is_nil(_G.WindowManager)
       assert.same({ timers = 0, menus = 1, hotkeys = 1, modals = 1, filters = 2, taps = 0, canvases = 0 }, driver:activeCounts())
     end)
 
-    it("unloads every native resource without restoring the compatibility alias", function()
+    it("unloads every native resource", function()
       assert.is_nil(select(2, _G.Anodyne:stop()))
-      assert.is_nil(_G.WindowManager)
       assert.same({ timers = 0, menus = 0, hotkeys = 0, modals = 0, filters = 0, taps = 0, canvases = 0 }, driver:activeCounts())
     end)
 
@@ -87,7 +85,6 @@ describe("Milestone 2 characterization", function()
       }
 
       driver:load()
-      assert.is_nil(_G.WindowManager)
       assert.is_false(old.timer._state.active)
       assert.is_false(old.tap._state.active)
       assert.is_true(old.canvas._state.deleted)

@@ -404,8 +404,4 @@ function Adapter:stop()
   return cleanup(self.owner, self.cleanupProgress)
 end
 
-function Adapter.cleanupLegacy(owner)
-  return cleanup(owner, {})
-end
-
 return Adapter

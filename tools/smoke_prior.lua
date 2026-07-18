@@ -1,11 +1,8 @@
 local Prior = {}
 
-function Prior.snapshot(anodyne, legacy)
-  if legacy ~= nil and legacy ~= anodyne then
-    return nil, "legacy global differs from modern global"
-  end
+function Prior.snapshot(anodyne)
   if anodyne == nil then
-    return { anodyne = nil, legacy = legacy, running = false }
+    return { anodyne = nil, running = false }
   end
   if type(anodyne.start) ~= "function" or type(anodyne.stop) ~= "function" or type(anodyne.isRunning) ~= "function" then
     return nil, "prior instance lifecycle is incomplete"
@@ -16,7 +13,7 @@ function Prior.snapshot(anodyne, legacy)
   if not ok or type(running) ~= "boolean" then
     return nil, "prior running state is unprovable"
   end
-  return { anodyne = anodyne, legacy = legacy, running = running }
+  return { anodyne = anodyne, running = running }
 end
 
 function Prior.stop(snapshot)

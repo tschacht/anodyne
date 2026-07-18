@@ -1,3 +1,3 @@
-local previous = { anodyne = rawget(_G, "Anodyne"), legacy = rawget(_G, "WindowManager") }
+local previous = rawget(_G, "Anodyne")
 local nextInstance = require("Anodyne").replace({ hs = hs, previous = previous })
-_G.Anodyne, _G.WindowManager = nextInstance, nil
+_G.Anodyne = nextInstance

@@ -30,7 +30,7 @@ describe("Milestone 3 smoke prior-state safety", function()
 
   it("captures, stops, and restores an exactly running prior instance", function()
     local instance, calls = prior(true)
-    local snapshot = assert(Prior.snapshot(instance, instance))
+    local snapshot = assert(Prior.snapshot(instance))
     assert.is_true(snapshot.running)
     assert.is_true(Prior.stop(snapshot))
     assert.are.equal(1, calls.stop)
@@ -41,7 +41,7 @@ describe("Milestone 3 smoke prior-state safety", function()
 
   it("preserves an exactly stopped prior instance without starting or stopping it", function()
     local instance, calls = prior(false)
-    local snapshot = assert(Prior.snapshot(instance, instance))
+    local snapshot = assert(Prior.snapshot(instance))
     assert.is_false(snapshot.running)
     assert.is_true(Prior.stop(snapshot))
     assert.is_true(Prior.restore(snapshot))
@@ -52,14 +52,14 @@ describe("Milestone 3 smoke prior-state safety", function()
 
   it("defers unprovable state before invoking any mutating lifecycle method", function()
     local nonboolean, nonbooleanCalls = prior(true, "yes")
-    assert.is_nil(Prior.snapshot(nonboolean, nonboolean))
+    assert.is_nil(Prior.snapshot(nonboolean))
     assert.are.equal(0, nonbooleanCalls.stop)
     assert.are.equal(0, nonbooleanCalls.start)
 
     local throwing, throwingCalls = prior(true, function()
       error("state failure")
     end)
-    assert.is_nil(Prior.snapshot(throwing, throwing))
+    assert.is_nil(Prior.snapshot(throwing))
     assert.are.equal(0, throwingCalls.stop)
     assert.are.equal(0, throwingCalls.start)
 
@@ -68,8 +68,7 @@ describe("Milestone 3 smoke prior-state safety", function()
         error("must not run")
       end,
     }
-    assert.is_nil(Prior.snapshot(incomplete, incomplete))
-    assert.is_nil(Prior.snapshot(nonboolean, {}))
+    assert.is_nil(Prior.snapshot(incomplete))
   end)
 
   it("rejects a post-mutation restoration defect", function()
@@ -84,7 +83,7 @@ describe("Milestone 3 smoke prior-state safety", function()
     function instance:start()
       return self
     end
-    local snapshot = assert(Prior.snapshot(instance, instance))
+    local snapshot = assert(Prior.snapshot(instance))
     assert.is_true(Prior.stop(snapshot))
     local ok, message = Prior.restore(snapshot)
     assert.is_false(ok)

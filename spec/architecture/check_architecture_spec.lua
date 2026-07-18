@@ -51,6 +51,21 @@ describe("architecture checker", function()
     assert.is_true(ok, table.concat(errors, "\n"))
   end)
 
+  it("rejects extra behavior in the root loader", function()
+    local root = fixture()
+    write(
+      root .. "/init.lua",
+      'local previous = rawget(_G, "Anodyne")\n'
+        .. 'local nextInstance = require("Anodyne").replace({ hs = hs, previous = previous })\n'
+        .. "_G.Anodyne = nextInstance\n"
+        .. "_G.UNRELATED = nil\n"
+    )
+    local ok, errors = Checker.check(root, { skipCoverageConfiguration = true })
+    remove(root)
+    assert.is_false(ok)
+    assert.is_true(contains(errors, "exact three%-statement"))
+  end)
+
   it("rejects native access outside the adapter", function()
     local root = fixture()
     write(root .. "/Anodyne/controller.lua", "return hs.timer.doAfter(1, function() end)\n")
@@ -76,13 +91,13 @@ describe("architecture checker", function()
     end
   end)
 
-  it("rejects global compatibility access in production modules", function()
+  it("rejects global access in production modules", function()
     local root = fixture()
-    write(root .. "/Anodyne/view.lua", "return _G.WindowManager\n")
+    write(root .. "/Anodyne/view.lua", "return _G.UNRELATED\n")
     local ok, errors = Checker.check(root, { skipRootMigration = true, skipCoverageConfiguration = true })
     remove(root)
     assert.is_false(ok)
-    assert.is_true(contains(errors, "transitional alias"))
+    assert.is_true(contains(errors, "must not access globals"))
   end)
 
   it("rejects production require cycles", function()

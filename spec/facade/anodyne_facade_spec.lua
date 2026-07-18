@@ -13,7 +13,7 @@ describe("Milestone 3 facade", function()
   local driver, Anodyne
 
   before_each(function()
-    _G.Anodyne, _G.WindowManager, _G.hs = nil, nil, nil
+    _G.Anodyne, _G.hs = nil, nil
     driver = FakeHs.new()
     Anodyne = freshFacade()
   end)
@@ -25,7 +25,7 @@ describe("Milestone 3 facade", function()
 
   it("requires inertly without reading hs or changing globals", function()
     local sentinel = {}
-    _G.WindowManager = sentinel
+    _G.UNRELATED = sentinel
     _G.hs = setmetatable({}, {
       __index = function()
         error("hs was touched")
@@ -34,8 +34,9 @@ describe("Milestone 3 facade", function()
     package.loaded.Anodyne = nil
     local facade = require("Anodyne")
     assert.is_function(facade.new)
-    assert.are.equal(sentinel, _G.WindowManager)
+    assert.are.equal(sentinel, _G.UNRELATED)
     assert.is_nil(_G.Anodyne)
+    _G.UNRELATED = nil
     assertNoResources(driver)
   end)
 
@@ -62,8 +63,11 @@ describe("Milestone 3 facade", function()
       Anodyne.replace({ hs = driver.hs, modules = {} })
     end, "unknown replace option: modules")
     assert.has_error(function()
-      Anodyne.replace({ hs = driver.hs, previous = { other = {} } })
-    end, "unknown replace.previous key: other")
+      Anodyne.replace({ hs = driver.hs, previous = {} })
+    end, "replace.previous.stop must be a function")
+    assert.has_error(function()
+      Anodyne.replace({ hs = driver.hs, previous = false })
+    end, "replace.previous must be a table")
   end)
 
   it("uses a private validated runtime composition seam", function()
@@ -419,102 +423,68 @@ describe("Milestone 3 facade", function()
     assert.is_false(instance.modalState.active)
   end)
 
-  it("deduplicates prior identities and tears modern down before legacy", function()
+  it("stops the previous instance before starting its replacement", function()
     local calls = {}
-    local shared = {
+    local previous = {
       stop = function(self)
-        table.insert(calls, "modern.stop")
+        table.insert(calls, "previous.stop")
         return self, nil
       end,
-      menu = {
-        delete = function()
-          table.insert(calls, "legacy.menu.delete")
-        end,
-      },
     }
     local replacement = Anodyne.replace({
       hs = driver.hs,
-      previous = { anodyne = shared, legacy = shared },
+      previous = previous,
     })
-    assert.same({ "modern.stop" }, calls)
+    assert.same({ "previous.stop" }, calls)
     assert.is_true(replacement:isRunning())
-
-    replacement:stop()
-    calls = {}
-    local modern = {
-      stop = function(self)
-        table.insert(calls, "modern.stop")
-        return self
-      end,
-    }
-    local legacy = {}
-    local function object(name, methods)
-      local value = {}
-      for _, method in ipairs(methods) do
-        value[method] = function()
-          table.insert(calls, name .. "." .. method)
-        end
-      end
-      return value
-    end
-    legacy.modalTimer = object("modalTimer", { "stop" })
-    legacy.modalRefreshTimer = object("modalRefreshTimer", { "stop" })
-    legacy.menuFailureTimer = object("menuFailureTimer", { "stop" })
-    legacy.modalKeyGuard = object("modalKeyGuard", { "stop" })
-    legacy.entryHotkey = object("entryHotkey", { "delete" })
-    legacy.windowMode = object("windowMode", { "delete" })
-    legacy.modalCanvas = object("modalCanvas", { "hide", "delete" })
-    legacy.menu = object("menu", { "delete" })
-    legacy.windowFilter = object("windowFilter", { "unsubscribeAll" })
-    legacy.historyWindowFilter = object("historyWindowFilter", { "unsubscribeAll" })
-    Anodyne.replace({ hs = driver.hs, previous = { anodyne = modern, legacy = legacy } })
-    assert.same({
-      "modern.stop",
-      "modalTimer.stop",
-      "modalRefreshTimer.stop",
-      "menuFailureTimer.stop",
-      "modalKeyGuard.stop",
-      "entryHotkey.delete",
-      "windowMode.delete",
-      "modalCanvas.hide",
-      "modalCanvas.delete",
-      "menu.delete",
-      "windowFilter.unsubscribeAll",
-      "historyWindowFilter.unsubscribeAll",
-    }, calls)
+    assert.is_nil(select(2, replacement:stop()))
   end)
 
   it("aggregates prior errors and constructs no replacement", function()
     local calls = {}
-    local modern = {
+    local previous = {
       stop = function(self)
-        table.insert(calls, "modern")
+        table.insert(calls, "previous")
         return self, { "returned one", "returned two" }
       end,
     }
-    local legacy = {
-      menu = {
-        delete = function()
-          table.insert(calls, "legacy")
-          error("legacy failure")
-        end,
-      },
-    }
     local ok, message = pcall(Anodyne.replace, {
       hs = driver.hs,
-      previous = { anodyne = modern, legacy = legacy },
+      previous = previous,
     })
     assert.is_false(ok)
     assert.matches("returned one", message)
     assert.matches("returned two", message)
-    assert.matches("legacy failure", message)
-    assert.same({ "modern", "legacy" }, calls)
+    assert.same({ "previous" }, calls)
+    assertNoResources(driver)
+  end)
+
+  it("normalizes thrown and scalar prior-stop errors without constructing a replacement", function()
+    local throwing = {
+      stop = function()
+        error("thrown stop failure")
+      end,
+    }
+    local ok, message = pcall(Anodyne.replace, { hs = driver.hs, previous = throwing })
+    assert.is_false(ok)
+    assert.matches("previous.stop", message)
+    assert.matches("thrown stop failure", message)
+    assertNoResources(driver)
+
+    local scalar = {
+      stop = function(self)
+        return self, "scalar stop failure"
+      end,
+    }
+    ok, message = pcall(Anodyne.replace, { hs = driver.hs, previous = scalar })
+    assert.is_false(ok)
+    assert.matches("previous.stop: scalar stop failure", message)
     assertNoResources(driver)
   end)
 
   it("assigns loader globals atomically only after replace succeeds", function()
-    local oldAnodyne, oldLegacy = {}, {}
-    _G.Anodyne, _G.WindowManager, _G.hs = oldAnodyne, oldLegacy, driver.hs
+    local oldAnodyne = {}
+    _G.Anodyne, _G.hs = oldAnodyne, driver.hs
     local facade = package.loaded.Anodyne
     package.loaded.Anodyne = {
       replace = function()
@@ -525,19 +495,16 @@ describe("Milestone 3 facade", function()
       dofile("init.lua")
     end, "replacement failed")
     assert.are.equal(oldAnodyne, _G.Anodyne)
-    assert.are.equal(oldLegacy, _G.WindowManager)
 
     local nextInstance = {}
     package.loaded.Anodyne = {
       replace = function(options)
-        assert.are.equal(oldAnodyne, options.previous.anodyne)
-        assert.are.equal(oldLegacy, options.previous.legacy)
+        assert.are.equal(oldAnodyne, options.previous)
         return nextInstance
       end,
     }
     dofile("init.lua")
     assert.are.equal(nextInstance, _G.Anodyne)
-    assert.is_nil(_G.WindowManager)
     package.loaded.Anodyne = facade
   end)
 end)

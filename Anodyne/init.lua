@@ -190,20 +190,13 @@ end
 
 local function validatePrevious(previous)
   if previous == nil then
-    return { anodyne = nil, legacy = nil }
+    return nil
   end
   if type(previous) ~= "table" then
     error("replace.previous must be a table", 3)
   end
-  for key in pairs(previous) do
-    if key ~= "anodyne" and key ~= "legacy" then
-      error("unknown replace.previous key: " .. tostring(key), 3)
-    end
-  end
-  for _, key in ipairs({ "anodyne", "legacy" }) do
-    if previous[key] ~= nil and type(previous[key]) ~= "table" then
-      error("replace.previous." .. key .. " must be a table", 3)
-    end
+  if type(previous.stop) ~= "function" then
+    error("replace.previous.stop must be a function", 3)
   end
   return previous
 end
@@ -225,26 +218,15 @@ function Anodyne.replace(options)
   validateOptions("replace", options, { hs = true, previous = true, config = true })
   local previous = validatePrevious(options.previous)
   local errors = {}
-  local seen = {}
 
-  local modern = previous.anodyne
-  if modern then
-    seen[modern] = true
+  if previous then
     local ok, _, returned = pcall(function()
-      return modern:stop()
+      return previous:stop()
     end)
     if not ok then
-      appendError(errors, "previous.anodyne.stop", _)
+      appendError(errors, "previous.stop", _)
     else
-      appendReturnedErrors(errors, "previous.anodyne.stop", returned)
-    end
-  end
-
-  local legacy = previous.legacy
-  if legacy and not seen[legacy] then
-    local legacyErrors = HammerspoonAdapter.cleanupLegacy(legacy)
-    for _, value in ipairs(legacyErrors or {}) do
-      appendError(errors, "previous.legacy", value)
+      appendReturnedErrors(errors, "previous.stop", returned)
     end
   end
 

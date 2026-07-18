@@ -180,7 +180,7 @@ describe("Hammerspoon adapter", function()
     end
   end)
 
-  it("rejects a nil menu acquisition and reports unusable cleanup handles", function()
+  it("rejects a nil menu acquisition", function()
     local config, metadata = Config.build()
     local hs = setmetatable({
       menubar = {
@@ -203,17 +203,6 @@ describe("Hammerspoon adapter", function()
     assert.has_error(function()
       adapter:start()
     end, "Failed to create menu bar item")
-
-    local missing = Adapter.cleanupLegacy({ menu = {} })
-    assert.matches("menu.delete: missing method", missing[1])
-    local throwing = Adapter.cleanupLegacy({
-      menu = setmetatable({}, {
-        __index = function()
-          error("injected member lookup failure")
-        end,
-      }),
-    })
-    assert.matches("injected member lookup failure", throwing[1])
   end)
 
   it("fails safely when any guarded native constructor returns nil", function()

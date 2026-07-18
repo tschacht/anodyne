@@ -873,34 +873,8 @@ function Fake.new(options)
       pcall(function()
         _G.Anodyne:stop()
       end)
-    elseif _G.WindowManager then
-      local manager = _G.WindowManager
-      for _, name in ipairs({ "modalTimer", "modalRefreshTimer", "menuFailureTimer", "modalKeyGuard" }) do
-        local object = rawget(manager, name)
-        if object and object.stop then
-          pcall(function()
-            object:stop()
-          end)
-        end
-      end
-      for _, name in ipairs({ "entryHotkey", "windowMode", "modalCanvas", "menu" }) do
-        local object = rawget(manager, name)
-        if object and object.delete then
-          pcall(function()
-            object:delete()
-          end)
-        end
-      end
-      for _, name in ipairs({ "windowFilter", "historyWindowFilter" }) do
-        local object = rawget(manager, name)
-        if object then
-          pcall(function()
-            object:unsubscribeAll()
-          end)
-        end
-      end
     end
-    _G.Anodyne, _G.WindowManager, _G.hs = nil, nil, nil
+    _G.Anodyne, _G.hs = nil, nil
   end
 
   return driver

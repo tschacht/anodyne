@@ -249,17 +249,25 @@ local function hasNativeHsIdentifier(source)
   end
 end
 
-local function checkRootMigration(root, errors)
+local function checkRootLoader(root, errors)
   local source = read(join(root, "init.lua"))
   if not source then
     add(errors, "missing root init.lua")
     return
   end
-  local previous = source:find('rawget%(_G, "Anodyne"%)', 1) and source:find('rawget%(_G, "WindowManager"%)', 1)
-  local replacement = source:find('require%("Anodyne"%).replace', 1)
-  local finalAssignment = source:find("_G%.Anodyne,%s*_G%.WindowManager%s*=%s*nextInstance,%s*nil", 1)
-  if not previous or not replacement or not finalAssignment or not (previous < replacement and replacement < finalAssignment) then
-    add(errors, "root init.lua must capture both prior globals, replace, then publish Anodyne and clear WindowManager")
+  local statements = {}
+  for line in source:gmatch("[^\r\n]+") do
+    local statement = line:match("^%s*(.-)%s*$")
+    if statement ~= "" then
+      statements[#statements + 1] = statement
+    end
+  end
+  local exact = #statements == 3
+    and statements[1] == 'local previous = rawget(_G, "Anodyne")'
+    and statements[2] == 'local nextInstance = require("Anodyne").replace({ hs = hs, previous = previous })'
+    and statements[3] == "_G.Anodyne = nextInstance"
+  if not exact then
+    add(errors, "root init.lua must contain only the exact three-statement Anodyne replacement loader")
   end
 end
 
@@ -325,7 +333,7 @@ function Checker.check(root, options)
   end
 
   if not options.skipRootMigration then
-    checkRootMigration(root, errors)
+    checkRootLoader(root, errors)
   end
   if not options.skipCoverageConfiguration then
     checkCoverageConfiguration(root, errors)
@@ -335,8 +343,8 @@ function Checker.check(root, options)
   for module, path in pairs(modules) do
     graph[module] = {}
     local source = sources[path]
-    if source:find("_G", 1, true) or source:find("WindowManager", 1, true) then
-      add(errors, path .. ": production modules must not access globals or the transitional alias")
+    if source:find("_G", 1, true) then
+      add(errors, path .. ": production modules must not access globals")
     end
     if path ~= "Anodyne/adapter/hammerspoon.lua" and hasNativeHsIdentifier(source) then
       add(errors, path .. ": native hs identifiers are restricted to Anodyne/adapter/hammerspoon.lua")
