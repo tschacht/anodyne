@@ -1,0 +1,237 @@
+#!/bin/sh
+set -eu
+
+fail() {
+  printf '%s\n' "BLOCKED-ENVIRONMENT: $*" >&2
+  exit 1
+}
+
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+VERSIONS="$ROOT/tools/versions.env"
+ROCK_ARTIFACTS="$ROOT/tools/luarocks-artifacts.env"
+ENV_ROOT="$ROOT/.lua"
+CACHE_ROOT="$ROOT/.tools/cache"
+DOWNLOAD_ROOT="$CACHE_ROOT/hererocks-downloads"
+ROCK_INPUT_ROOT="$CACHE_ROOT/luarocks-artifacts"
+ROCK_REPO_ROOT="$ROOT/.tools/luarocks-repo"
+LOCAL_HOME="$ENV_ROOT/home"
+LOCAL_CONFIG="$ENV_ROOT/etc/luarocks/config-5.4.lua"
+COMPLETION_MARKER="$ENV_ROOT/anodyne-environment.manifest"
+INITIALIZE_LOCK=0
+NEW_ENVIRONMENT=0
+
+case "${1-}" in
+  "") ;;
+  --initialize-lock) INITIALIZE_LOCK=1 ;;
+  *) fail "usage: tools/bootstrap [--initialize-lock]" ;;
+esac
+
+for command in python3 git curl cc make shasum; do
+  command -v "$command" >/dev/null 2>&1 || fail "missing prerequisite: $command"
+done
+
+# shellcheck disable=SC1090
+. "$VERSIONS"
+
+if [ -e "$ENV_ROOT" ]; then
+  python3 "$ROOT/tools/environment_manifest.py" validate "$ROOT" "$COMPLETION_MARKER" || \
+    fail ".lua provenance is missing or stale; quarantine .lua and rerun"
+else
+  NEW_ENVIRONMENT=1
+fi
+
+for value in \
+  "$HEREROCKS_REVISION" "$HEREROCKS_URL" "$HEREROCKS_SHA256" \
+  "$LUA_VERSION" "$LUA_URL" "$LUA_SHA256" \
+  "$LUAROCKS_VERSION" "$LUAROCKS_URL" "$LUAROCKS_SHA256" \
+  "$BUSTED_VERSION" "$BUSTED_URL" "$BUSTED_SHA256" \
+  "$LUACOV_VERSION" "$LUACOV_URL" "$LUACOV_SHA256" \
+  "$STYLUA_VERSION" "$STYLUA_URL" "$STYLUA_SHA256"; do
+  [ -n "$value" ] || fail "tools/versions.env contains an empty immutable pin"
+done
+
+case "$HEREROCKS_URL $LUA_URL $LUAROCKS_URL $BUSTED_URL $LUACOV_URL $STYLUA_URL" in
+  https://*\ https://*\ https://*\ https://*\ https://*\ https://*) ;;
+  *) fail "all artifact URLs must use HTTPS" ;;
+esac
+
+mkdir -p "$CACHE_ROOT" "$DOWNLOAD_ROOT" "$ROCK_INPUT_ROOT"
+
+fetch_verified() {
+  artifact=$1
+  url=$2
+  expected=$3
+  if [ ! -f "$artifact" ]; then
+    for delay in 1 3 9; do
+      if curl --fail --location --proto '=https' --tlsv1.2 --output "$artifact.part" "$url"; then
+        mv "$artifact.part" "$artifact"
+        break
+      fi
+      rm -f "$artifact.part"
+      sleep "$delay"
+    done
+  fi
+  [ -f "$artifact" ] || fail "three fetch attempts failed: $url"
+  actual=$(shasum -a 256 "$artifact" | awk '{print $1}')
+  [ "$actual" = "$expected" ] || fail "SHA-256 mismatch: $artifact"
+}
+
+HEREROCKS_ARTIFACT="$CACHE_ROOT/hererocks-$HEREROCKS_REVISION.py"
+LUA_ARTIFACT="$DOWNLOAD_ROOT/lua-$LUA_VERSION.tar.gz"
+LUAROCKS_ARTIFACT="$DOWNLOAD_ROOT/luarocks-$LUAROCKS_VERSION.tar.gz"
+STYLUA_ARTIFACT="$CACHE_ROOT/stylua-$STYLUA_VERSION.zip"
+
+fetch_verified "$HEREROCKS_ARTIFACT" "$HEREROCKS_URL" "$HEREROCKS_SHA256"
+fetch_verified "$LUA_ARTIFACT" "$LUA_URL" "$LUA_SHA256"
+fetch_verified "$LUAROCKS_ARTIFACT" "$LUAROCKS_URL" "$LUAROCKS_SHA256"
+fetch_verified "$STYLUA_ARTIFACT" "$STYLUA_URL" "$STYLUA_SHA256"
+
+[ -f "$ROCK_ARTIFACTS" ] || fail "missing tracked rock artifact manifest: $ROCK_ARTIFACTS"
+artifact_count=0
+seen_artifacts='|'
+while IFS='|' read -r rock_name rock_version artifact_type cache_filename artifact_url artifact_sha256; do
+  case "$rock_name" in
+    ""|'#'*) continue ;;
+  esac
+  [ -n "$rock_version" ] && [ -n "$cache_filename" ] && [ -n "$artifact_url" ] && [ -n "$artifact_sha256" ] || \
+    fail "incomplete rock artifact manifest record for $rock_name"
+  case "$artifact_type" in
+    src.rock|rockspec|source) ;;
+    *) fail "invalid artifact type for $rock_name $rock_version: $artifact_type" ;;
+  esac
+  case "$cache_filename" in
+    */*|*..*) fail "unsafe rock artifact cache filename: $cache_filename" ;;
+  esac
+  case "$artifact_url" in
+    https://*) ;;
+    *) fail "rock artifact URL must use HTTPS: $artifact_url" ;;
+  esac
+  case "$artifact_sha256" in
+    *[!0-9a-f]*|'') fail "invalid rock artifact SHA-256 for $rock_name $rock_version" ;;
+  esac
+  [ "${#artifact_sha256}" -eq 64 ] || fail "invalid rock artifact SHA-256 length for $rock_name $rock_version"
+  case "$seen_artifacts" in
+    *"|$cache_filename|"*) fail "duplicate rock artifact cache filename: $cache_filename" ;;
+  esac
+  seen_artifacts="$seen_artifacts$cache_filename|"
+  fetch_verified "$ROCK_INPUT_ROOT/$cache_filename" "$artifact_url" "$artifact_sha256"
+  artifact_count=$((artifact_count + 1))
+done < "$ROCK_ARTIFACTS"
+[ "$artifact_count" -eq 14 ] || fail "rock artifact manifest must contain exactly 14 records; found $artifact_count"
+
+if [ -e "$ENV_ROOT" ]; then
+  [ -x "$ENV_ROOT/bin/lua" ] && [ -x "$ENV_ROOT/bin/luarocks" ] || \
+    fail ".lua exists but is partial; quarantine it and rerun"
+else
+  # Hererocks embeds the installation prefix in shebangs and LuaRocks config,
+  # so the environment must be built at its final path rather than moved.
+  BUILD_HOME="$CACHE_ROOT/bootstrap-home"
+  mkdir -p "$BUILD_HOME"
+  HOME="$BUILD_HOME" python3 "$HEREROCKS_ARTIFACT" \
+    --downloads "$DOWNLOAD_ROOT" \
+    -l "$LUA_VERSION" -r "$LUAROCKS_VERSION" "$ENV_ROOT"
+  [ -x "$ENV_ROOT/bin/lua" ] && [ -x "$ENV_ROOT/bin/luarocks" ] || \
+    fail "Hererocks produced an incomplete .lua; quarantine it and rerun"
+fi
+
+mkdir -p "$LOCAL_HOME" "$(dirname "$LOCAL_CONFIG")"
+if [ "$NEW_ENVIRONMENT" -eq 0 ]; then
+  [ -f "$LOCAL_CONFIG" ] && grep -Fq "ANODYNE_PROJECT_TREE" "$LOCAL_CONFIG" || \
+    fail "completed .lua has invalid LuaRocks isolation; quarantine it and rerun"
+elif ! grep -Fq "ANODYNE_PROJECT_TREE" "$LOCAL_CONFIG"; then
+  {
+    printf '\n-- ANODYNE_PROJECT_TREE: generated project-local isolation\n'
+    printf 'rocks_trees = { [[%s]] }\n' "$ENV_ROOT"
+    printf 'local_by_default = false\n'
+  } >> "$LOCAL_CONFIG"
+fi
+
+actual_lua=$($ENV_ROOT/bin/lua -v 2>&1 | sed -n '1s/^Lua \([0-9][0-9.]*\).*/\1/p')
+actual_rocks=$(HOME="$LOCAL_HOME" LUAROCKS_CONFIG="$LOCAL_CONFIG" \
+  "$ENV_ROOT/bin/luarocks" --version | sed -n '1s/.* \([0-9][0-9.]*\).*/\1/p')
+[ "$actual_lua" = "$LUA_VERSION" ] || fail ".lua Lua mismatch: $actual_lua"
+[ "$actual_rocks" = "$LUAROCKS_VERSION" ] || fail ".lua LuaRocks mismatch: $actual_rocks"
+
+mkdir -p "$ROOT/.tools"
+python3 - "$STYLUA_ARTIFACT" "$ROOT/.tools/stylua" <<'PY'
+import os
+import shutil
+import sys
+import tempfile
+import zipfile
+
+source, destination = sys.argv[1:]
+with tempfile.TemporaryDirectory() as temporary:
+    with zipfile.ZipFile(source) as archive:
+        archive.extractall(temporary)
+    matches = []
+    for directory, _, files in os.walk(temporary):
+        for filename in files:
+            if filename == "stylua":
+                matches.append(os.path.join(directory, filename))
+    if len(matches) != 1:
+        raise SystemExit("BLOCKED-ENVIRONMENT: StyLua executable not unique")
+    shutil.copyfile(matches[0], destination)
+    os.chmod(destination, 0o755)
+PY
+
+HOME="$LOCAL_HOME" LUAROCKS_CONFIG="$LOCAL_CONFIG" LUA_PATH=';;' LUA_CPATH=';;' \
+  python3 "$ROOT/tools/build_local_rock_repo.py" build \
+    "$ROCK_ARTIFACTS" "$ROCK_INPUT_ROOT" "$ROCK_REPO_ROOT" \
+    "$ENV_ROOT/bin/luarocks" "$ENV_ROOT/bin/luarocks-admin"
+ROCK_REPO_URL="file://$ROCK_REPO_ROOT"
+
+cd "$ROOT"
+if [ "$INITIALIZE_LOCK" -eq 1 ]; then
+  [ ! -e "$ROOT/luarocks.lock" ] || fail "luarocks.lock already exists; refusing to rewrite it"
+  HOME="$LOCAL_HOME" LUAROCKS_CONFIG="$LOCAL_CONFIG" LUA_PATH=';;' LUA_CPATH=';;' \
+    "$ENV_ROOT/bin/luarocks" --tree "$ENV_ROOT" --only-server "$ROCK_REPO_URL" \
+      --only-sources "file://$ROCK_INPUT_ROOT" make --only-deps anodyne-test-tools-dev-0.rockspec
+  HOME="$LOCAL_HOME" LUAROCKS_CONFIG="$LOCAL_CONFIG" LUA_PATH=';;' LUA_CPATH=';;' \
+    "$ENV_ROOT/bin/luarocks" --tree "$ENV_ROOT" --only-server "$ROCK_REPO_URL" \
+      --only-sources "file://$ROCK_INPUT_ROOT" make --only-deps --pin anodyne-test-tools-dev-0.rockspec
+  [ -f "$ROOT/luarocks.lock" ] || fail "LuaRocks did not create luarocks.lock"
+  # LuaRocks 3.13 records the VM-provided Lua pseudo-rock, then cannot restore
+  # that same pin because provided runtimes are intentionally not installable.
+  # The exact runtime is independently pinned and checked above.
+  "$ENV_ROOT/bin/lua" tools/normalize_lock.lua luarocks.lock "${LUA_VERSION%.*}-1"
+else
+  [ -f "$ROOT/luarocks.lock" ] || fail "luarocks.lock missing; run the one-time --initialize-lock path"
+  lock_before=$(shasum -a 256 "$ROOT/luarocks.lock" | awk '{print $1}')
+  HOME="$LOCAL_HOME" LUAROCKS_CONFIG="$LOCAL_CONFIG" LUA_PATH=';;' LUA_CPATH=';;' \
+    "$ENV_ROOT/bin/luarocks" --tree "$ENV_ROOT" --only-server "$ROCK_REPO_URL" \
+      --only-sources "file://$ROCK_INPUT_ROOT" make --only-deps anodyne-test-tools-dev-0.rockspec
+  lock_after=$(shasum -a 256 "$ROOT/luarocks.lock" | awk '{print $1}')
+  [ "$lock_before" = "$lock_after" ] || fail "ordinary bootstrap mutated luarocks.lock"
+fi
+
+HOME="$LOCAL_HOME" LUAROCKS_CONFIG="$LOCAL_CONFIG" LUA_PATH=';;' LUA_CPATH=';;' \
+  "$ENV_ROOT/bin/luarocks" --tree "$ENV_ROOT" list --porcelain | \
+  HOME="$LOCAL_HOME" "$ENV_ROOT/bin/lua" tools/check_lock.lua luarocks.lock
+
+python3 "$ROOT/tools/build_local_rock_repo.py" check \
+  "$ROCK_ARTIFACTS" "$ROCK_INPUT_ROOT" "$ROCK_REPO_ROOT"
+[ -x "$ENV_ROOT/bin/lua" ] && [ -x "$ENV_ROOT/bin/luarocks" ] && \
+  [ -x "$ENV_ROOT/bin/busted" ] && [ -x "$ENV_ROOT/bin/luacov" ] && \
+  [ -x "$ROOT/.tools/stylua" ] || fail "completed toolchain is missing an expected executable"
+"$ENV_ROOT/bin/lua" -v 2>&1 | grep -Eq '^Lua 5\.4\.7([^0-9]|$)' || fail "Lua version mismatch"
+HOME="$LOCAL_HOME" LUAROCKS_CONFIG="$LOCAL_CONFIG" LUA_PATH=';;' LUA_CPATH=';;' \
+  "$ENV_ROOT/bin/luarocks" --version | grep -Eq '3\.13\.0([^0-9]|$)' || fail "LuaRocks version mismatch"
+HOME="$LOCAL_HOME" LUAROCKS_CONFIG="$LOCAL_CONFIG" LUA_PATH=';;' LUA_CPATH=';;' \
+  "$ENV_ROOT/bin/busted" --version | grep -Eq '2\.3\.0([^0-9]|$)' || fail "Busted version mismatch"
+HOME="$LOCAL_HOME" LUAROCKS_CONFIG="$LOCAL_CONFIG" LUA_PATH=';;' LUA_CPATH=';;' \
+  "$ENV_ROOT/bin/lua" -e 'io.write(assert(require("luacov.runner").version), "\n")' | \
+  grep -Eq '^0\.17\.0$' || fail "LuaCov version mismatch"
+"$ROOT/.tools/stylua" --version | grep -Eq '2\.5\.2([^0-9]|$)' || fail "StyLua version mismatch"
+rocks_trees=$(HOME="$LOCAL_HOME" LUAROCKS_CONFIG="$LOCAL_CONFIG" LUA_PATH=';;' LUA_CPATH=';;' \
+  "$ENV_ROOT/bin/luarocks" config rocks_trees)
+tree_paths=$(printf '%s\n' "$rocks_trees" | sed -n 's/^[[:space:]]*"\(.*\)"[,]*$/\1/p')
+[ "$tree_paths" = "$ENV_ROOT" ] || fail "LuaRocks must expose only the project-local tree"
+HOME="$LOCAL_HOME" LUAROCKS_CONFIG="$LOCAL_CONFIG" LUA_PATH=';;' LUA_CPATH=';;' \
+  "$ENV_ROOT/bin/luarocks" config lua_version | grep -qx '5.4' || fail "LuaRocks Lua version mismatch"
+
+if [ "$NEW_ENVIRONMENT" -eq 1 ]; then
+  python3 "$ROOT/tools/environment_manifest.py" write "$ROOT" "$COMPLETION_MARKER"
+fi
+python3 "$ROOT/tools/environment_manifest.py" validate "$ROOT" "$COMPLETION_MARKER" || \
+  fail "new environment provenance validation failed; quarantine .lua and rerun"

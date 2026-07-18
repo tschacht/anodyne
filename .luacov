@@ -1,0 +1,14 @@
+return {
+  statsfile = "coverage/luacov.stats.out",
+  reportfile = "coverage/luacov.report.out",
+  includeuntestedfiles = true,
+  -- LuaCov strips the .lua suffix before matching these patterns.
+  include = { "^init$", "^Anodyne/.*$" },
+  exclude = {
+    "^spec/",
+    "^tools/",
+    "^Spoons/",
+    "^%.lua/",
+    "^%.tools/",
+  },
+}

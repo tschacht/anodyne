@@ -81,10 +81,10 @@
       <summary>Metadata</summary>
       <dl>
         <dt>created</dt><dd>2026-07-18T10:46:12+02:00</dd>
-        <dt>modified</dt><dd>2026-07-18T10:46:12+02:00; 2026-07-18T11:02:25+02:00; 2026-07-18T11:16:21+02:00</dd>
-        <dt>commits</dt><dd>4f97972666c39c6df5f55df84ad24f20cbe338e5</dd>
-        <dt>agent name</dt><dd>Codex /root; Codex /root; Codex /root</dd>
-        <dt>session id</dt><dd>019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22</dd>
+        <dt>modified</dt><dd>2026-07-18T10:46:12+02:00; 2026-07-18T11:02:25+02:00; 2026-07-18T11:16:21+02:00; 2026-07-18T11:44:26+02:00; 2026-07-18T13:16:59+02:00</dd>
+        <dt>commits</dt><dd>4f97972666c39c6df5f55df84ad24f20cbe338e5; 72ed77a</dd>
+        <dt>agent name</dt><dd>Codex /root; Codex /root; Codex /root; Codex /root; Codex /root</dd>
+        <dt>session id</dt><dd>019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22</dd>
         <dt>back refs</dt><dd><code>init.lua</code>, current <code>master</code>, architecture/test/review specialist reports</dd>
         <dt>forward refs</dt><dd>Anodyne mandatory implementation milestones 1–7; public distribution requires a separate future plan</dd>
       </dl>
@@ -251,36 +251,36 @@ _G.WindowManager = nil</code></pre>
     <p>Status markers: <code>[]</code> idle · <code>[wip]</code> in progress · <code>[x]</code> complete · <code>[d]</code> deferred environment certification · <code>[f]</code> terminal blocker.</p>
 
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone 1: Toolchain and Behavior Inventory</h3>
+      <h3><code class="status">[x]</code> Milestone 1: Toolchain and Behavior Inventory</h3>
       <p>Establish reproducible Lua 5.4 development tooling and freeze the named compatibility contracts before touching runtime behavior.</p>
       <h4>1.1 Implementation packet</h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> Apply D-GIT-01: record base SHA/status, create the local execution branch, classify every pre-existing change as plan-owned/unrelated/overlapping, commit the plan preflight, and stop with <code>BLOCKED-WORKTREE</code> if an unowned change overlaps a milestone-owned path.</li>
-        <li><code class="status">[]</code> Apply D-TOOL-01/D-TOOL-02 and record exact immutable source URLs, revisions, and SHA-256 values in <code>tools/versions.env</code>: Hammerspoon-matching Lua (observed <strong>5.4.7</strong>), LuaRocks <strong>3.13.0</strong>, resolved Busted <strong>2.3.x</strong>, LuaCov <strong>0.17.x</strong>, and StyLua <strong>2.5.2</strong>.</li>
-        <li><code class="status">[]</code> Add an idempotent <code>tools/bootstrap</code> that preflights Python 3, Git/download support, and Apple <code>cc</code>; verifies the pinned Hererocks artifact checksum; creates the ignored <code>.lua/</code> environment; and fails clearly instead of reusing a mismatched or partial environment.</li>
-        <li><code class="status">[]</code> Apply D-LOCK-01. Begin with <code>anodyne-dev-0.rockspec</code>, <code>rockspec_format = "3.0"</code>, Lua 5.4 constraints, and Busted/LuaCov in <code>test_dependencies</code>. From an empty tree, prove the lock restores their complete graph; if that proof fails, automatically replace it with the dedicated non-publishable test-tools rockspec fallback.</li>
-        <li><code class="status">[]</code> Generate the initial lock exactly once through the networked bootstrap path. Thereafter ordinary <code>bootstrap</code> consumes it without rewriting it; <code>make deps-update</code> exists only for a separate future dependency-update task and is not called by this plan.</li>
-        <li><code class="status">[]</code> Add <code>make toolchain-check</code>, <code>make test</code>, <code>make coverage</code>, and <code>make format-check</code>. Every target invokes project-local binaries directly, verifies the active LuaRocks tree/config cannot see user/system rocks, and never depends on shell activation or ambient <code>PATH</code>.</li>
-        <li><code class="status">[]</code> Implement <code>tools/run_with_timeout.py</code>, initialize reviewer-approved <code>tools/test-minimums.env</code>, and add milestone-aware raw coverage enforcement from D-TEST-01/D-COV-01. <code>make verify</code> is offline and never bootstraps, updates dependencies, contacts Hammerspoon, or reads smoke status.</li>
-        <li><code class="status">[]</code> Keep <code>.lua/</code>, <code>.tools/</code> or bootstrap cache, <code>coverage/</code>, and LuaCov data ignored. Keep <code>tools/versions.env</code>, bootstrap script, rockspec, lockfile, configs, and Makefile tracked.</li>
-        <li><code class="status">[]</code> Configure LuaCov with <code>includeuntestedfiles = true</code>, include project production Lua, and exclude only specs, vendored Spoon code, generated dependencies, and the final loader.</li>
-        <li><code class="status">[]</code> Encode A-LIFE-01 through A-UI-01 in a behavior inventory used by test names and reviewer handoffs.</li>
+        <li><code class="status">[x]</code> Apply D-GIT-01: record base SHA/status, create the local execution branch, classify every pre-existing change as plan-owned/unrelated/overlapping, commit the plan preflight, and stop with <code>BLOCKED-WORKTREE</code> if an unowned change overlaps a milestone-owned path.</li>
+        <li><code class="status">[x]</code> Apply D-TOOL-01/D-TOOL-02 and record exact immutable source URLs, revisions, and SHA-256 values in <code>tools/versions.env</code>: Hammerspoon-matching Lua (observed <strong>5.4.7</strong>), LuaRocks <strong>3.13.0</strong>, resolved Busted <strong>2.3.x</strong>, LuaCov <strong>0.17.x</strong>, and StyLua <strong>2.5.2</strong>.</li>
+        <li><code class="status">[x]</code> Add an idempotent <code>tools/bootstrap</code> that preflights Python 3, Git/download support, and Apple <code>cc</code>; verifies the pinned Hererocks artifact checksum; creates the ignored <code>.lua/</code> environment; and fails clearly instead of reusing a mismatched or partial environment.</li>
+        <li><code class="status">[x]</code> Apply D-LOCK-01. Begin with <code>anodyne-dev-0.rockspec</code>, <code>rockspec_format = "3.0"</code>, Lua 5.4 constraints, and Busted/LuaCov in <code>test_dependencies</code>. From an empty tree, prove the lock restores their complete graph; if that proof fails, automatically replace it with the dedicated non-publishable test-tools rockspec fallback.</li>
+        <li><code class="status">[x]</code> Generate the initial lock exactly once through the networked bootstrap path. Thereafter ordinary <code>bootstrap</code> consumes it without rewriting it; <code>make deps-update</code> exists only for a separate future dependency-update task and is not called by this plan.</li>
+        <li><code class="status">[x]</code> Add <code>make toolchain-check</code>, <code>make test</code>, <code>make coverage</code>, and <code>make format-check</code>. Every target invokes project-local binaries directly, verifies the active LuaRocks tree/config cannot see user/system rocks, and never depends on shell activation or ambient <code>PATH</code>.</li>
+        <li><code class="status">[x]</code> Implement <code>tools/run_with_timeout.py</code>, initialize reviewer-approved <code>tools/test-minimums.env</code>, and add milestone-aware raw coverage enforcement from D-TEST-01/D-COV-01. <code>make verify</code> is offline and never bootstraps, updates dependencies, contacts Hammerspoon, or reads smoke status.</li>
+        <li><code class="status">[x]</code> Keep <code>.lua/</code>, <code>.tools/</code> or bootstrap cache, <code>coverage/</code>, and LuaCov data ignored. Keep <code>tools/versions.env</code>, bootstrap script, rockspec, lockfile, configs, and Makefile tracked.</li>
+        <li><code class="status">[x]</code> Configure LuaCov with <code>includeuntestedfiles = true</code>, include project production Lua, and exclude only specs, vendored Spoon code, generated dependencies, and the final loader.</li>
+        <li><code class="status">[x]</code> Encode A-LIFE-01 through A-UI-01 in a behavior inventory used by test names and reviewer handoffs.</li>
       </ul>
       <div class="callout"><strong>Why not plain Homebrew?</strong> On this machine the current unversioned Homebrew <code>lua</code> is 5.5, while Hammerspoon embeds Lua 5.4. A direct <code>brew install luarocks</code> would couple the test runner to the wrong interpreter family. Existing Python 3, Git, and Apple <code>cc</code> are prerequisites only; missing prerequisites at execution map to <code>BLOCKED-ENVIRONMENT</code> rather than an installation question.</div>
       <h4>1.2 Independent reviewer gate</h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> Reviewer confirms no production behavior or source changed, dependencies are development-only, every production file will appear in coverage, and commands work from a clean shell without global Lua/LuaRocks.</li>
-        <li><code class="status">[]</code> Reviewer quarantines or bypasses <code>.lua/</code> without destructive deletion, performs the scoped D-NET-01 bootstrap, then confirms <code>toolchain-check</code> reports only project-local executables/config and exact versions. After bootstrap, tests must pass with network unavailable.</li>
-        <li><code class="status">[]</code> Reviewer confirms <code>test</code> and <code>coverage</code> never invoke bootstrap or modify the rockspec/lock; only <code>deps-update</code> may regenerate <code>luarocks.lock</code>.</li>
-        <li><code class="status">[]</code> Reviewer compares <code>luarocks.lock</code> with <code>./.lua/bin/luarocks list --porcelain</code> and confirms all direct/transitive test tools are locked. Hammerspoon startup must not add <code>.lua</code> to <code>package.path</code>/<code>package.cpath</code>, and no standalone native rock may be loaded into Hammerspoon.</li>
+        <li><code class="status">[x]</code> Reviewer confirms no production behavior or source changed, dependencies are development-only, every production file will appear in coverage, and commands work from a clean shell without global Lua/LuaRocks.</li>
+        <li><code class="status">[x]</code> Reviewer quarantines or bypasses <code>.lua/</code> without destructive deletion, performs the scoped D-NET-01 bootstrap, then confirms <code>toolchain-check</code> reports only project-local executables/config and exact versions. After bootstrap, tests must pass with network unavailable.</li>
+        <li><code class="status">[x]</code> Reviewer confirms <code>test</code> and <code>coverage</code> never invoke bootstrap or modify the rockspec/lock; only <code>deps-update</code> may regenerate <code>luarocks.lock</code>.</li>
+        <li><code class="status">[x]</code> Reviewer compares <code>luarocks.lock</code> with <code>./.lua/bin/luarocks list --porcelain</code> and confirms all direct/transitive test tools are locked. Hammerspoon startup must not add <code>.lua</code> to <code>package.path</code>/<code>package.cpath</code>, and no standalone native rock may be loaded into Hammerspoon.</li>
       </ul>
       <h4>1.3 Testing Strategy</h4>
       <p>This is a tooling gate; coverage is informational and no percentage is enforced.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>make toolchain-check</code> — verifies exact versions, executable locations, and required commands.</li>
-        <li><code class="status">[]</code> <code>make test</code> — runner starts successfully with an empty or bootstrap spec and performs no network activity.</li>
-        <li><code class="status">[]</code> <code>make coverage</code> — produces a readable report and counts unexecuted production sources.</li>
-        <li><code class="status">[]</code> <code>git diff --check</code> — no whitespace damage.</li>
+        <li><code class="status">[x]</code> <code>make toolchain-check</code> — verifies exact versions, executable locations, and required commands.</li>
+        <li><code class="status">[x]</code> <code>make test</code> — runner starts successfully with an empty or bootstrap spec and performs no network activity.</li>
+        <li><code class="status">[x]</code> <code>make coverage</code> — produces a readable report and counts unexecuted production sources.</li>
+        <li><code class="status">[x]</code> <code>git diff --check</code> — no whitespace damage.</li>
       </ul>
       <div class="loop">🔁 Advance only under D-REVIEW-01. Exhaust D-REPAIR-01 on rework; otherwise record the named terminal blocker without asking the owner.</div>
     </div>
@@ -558,6 +558,8 @@ Remaining Low notes and disposition</code></pre>
     <h2>Amendments</h2>
     <p><strong>2026-07-18T11:02:25+02:00 — Toolchain and Spoon distribution.</strong> Added a module-first/Spoon-ready decision with an optional reviewed packaging milestone. Expanded Milestone 1 to pin and checksum a project-local Hererocks/Lua 5.4.7/LuaRocks toolchain, track dependency resolution, isolate generated files, and separate dependency restoration from deliberate updates.</p>
     <p><strong>2026-07-18T11:16:21+02:00 — Autonomous decision gates.</strong> Converted the plan into a no-question execution contract. Added binding architecture, lifecycle, toolchain, lock, test, coverage, smoke, Git, review, repair, conflict, and completion gates with deterministic defaults and named terminal states. Fixed the facade/config/global contracts, pinned StyLua, bounded retries/timeouts/review loops, made safe smoke automatic-or-deferred, and removed Spoon packaging from the executable milestones.</p>
+    <p><strong>2026-07-18T11:44:26+02:00 — Execution started.</strong> Activated the persistent Codex goal, pinned implementation base <code>4f97972666c39c6df5f55df84ad24f20cbe338e5</code>, recognized <code>72ed77a</code> as the plan-preflight commit, created <code>codex/anodyne-refactor</code>, classified the worktree as plan-owned and non-overlapping, and marked Milestone 1 plus its repository preflight task in progress.</p>
+    <p><strong>2026-07-18T13:16:59+02:00 — Milestone 1 approved.</strong> Marked every Milestone 1 implementation, review, and validation item complete after final R3 approval. The project-local toolchain pins Lua 5.4.7, LuaRocks 3.13.0, Busted 2.3.0-1, LuaCov 0.17.0-1, StyLua 2.5.2, and every locked transitive artifact by SHA-256; a guarded local LuaRocks repository proves offline restoration. R0–R2 rework added complete artifact verification, atomic environment provenance, missing-source coverage rejection, and tracked fixtures; R3 approved with no findings. Final evidence: 11/11 examples, <code>init.lua</code> counted at 0/709, lock SHA <code>e5c7dc0ece7d1122b6e5c1d99939771b454162a0df146adcb7b716ee70cf99c6</code>, marker SHA <code>d240522b7314c9416d21d29aad2ac8ebeaa8ef298b4ca034dce2de8d468e33c8</code>, and proxy-blocked clean bootstrap/verify success.</p>
   </section>
 </main>
 </body>

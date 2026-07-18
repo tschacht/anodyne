@@ -1,0 +1,7 @@
+.lua/
+.tools/
+/coverage/
+luacov.stats.out
+luacov.report.out
+__pycache__/
+*.pyc
