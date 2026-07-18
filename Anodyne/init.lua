@@ -1,123 +1,7 @@
 local Anodyne = {}
 
-local DEFAULT_CONFIG = {
-  menuTitle = "WI",
-  menuFailureDuration = 2,
-  modalDuration = 8,
-  symbols = {
-    left = "←",
-    up = "↑",
-    right = "→",
-    down = "↓",
-    shift = "shift",
-  },
-  minimumWidth = 500,
-  minimumHeight = 500,
-  modalHotkey = {
-    modifiers = { "ctrl", "alt", "cmd" },
-    key = "m",
-  },
-  aspectPresets = {
-    { label = "16:9", width = 16, height = 9 },
-    { label = "4:3", width = 4, height = 3 },
-    { label = "3:2", width = 3, height = 2 },
-    { label = "2:1", width = 2, height = 1 },
-    { label = "3:1", width = 3, height = 1 },
-  },
-  widthPresets = { 1400, 1600, 1800, 2000, 2200, 2400, 2600 },
-  heightPresets = { 1000, 1200, 1400, 1500 },
-  growStep = 50,
-  moveStep = 50,
-  undoDepth = 3,
-}
-
-local function isList(value)
-  local count = 0
-  for key in pairs(value) do
-    if type(key) ~= "number" or key < 1 or key ~= math.floor(key) then
-      return false
-    end
-    count = count + 1
-  end
-  return count == #value
-end
-
-local mergeConfig
-
-local function validateList(value, expected, path)
-  if not isList(value) then
-    error("invalid config type for " .. path .. ": expected list", 4)
-  end
-  local exemplar = expected[1]
-  for index, child in ipairs(value) do
-    if exemplar ~= nil and type(child) ~= type(exemplar) then
-      error("invalid config type for " .. path .. "[" .. index .. "]: expected " .. type(exemplar), 4)
-    end
-    if type(exemplar) == "table" and not isList(exemplar) then
-      mergeConfig(exemplar, child, path .. "[" .. index .. "]")
-    end
-  end
-end
-
-local function copy(value)
-  if type(value) ~= "table" then
-    return value
-  end
-  local result = {}
-  for key, child in pairs(value) do
-    result[key] = copy(child)
-  end
-  return result
-end
-
-mergeConfig = function(defaults, overrides, path)
-  local result = copy(defaults)
-  if overrides == nil then
-    return result
-  end
-  for key, value in pairs(overrides) do
-    local expected = defaults[key]
-    local name = path == "" and tostring(key) or (path .. "." .. tostring(key))
-    if expected == nil then
-      error("unknown config key: " .. name, 3)
-    end
-    if type(value) ~= type(expected) then
-      error("invalid config type for " .. name .. ": expected " .. type(expected), 3)
-    end
-    if type(expected) == "table" and not isList(expected) then
-      result[key] = mergeConfig(expected, value, name)
-    else
-      if type(expected) == "table" then
-        validateList(value, expected, name)
-      end
-      result[key] = copy(value)
-    end
-  end
-  return result
-end
-
-local function freeze(value)
-  if type(value) ~= "table" then
-    return value
-  end
-  local backing = {}
-  for key, child in pairs(value) do
-    backing[key] = freeze(child)
-  end
-  return setmetatable({}, {
-    __index = backing,
-    __newindex = function()
-      error("configuration is immutable", 2)
-    end,
-    __len = function()
-      return #backing
-    end,
-    __pairs = function()
-      return next, backing, nil
-    end,
-    __metatable = false,
-  })
-end
+local DefaultConfig = require("Anodyne.config")
+local DefaultGeometry = require("Anodyne.core.geometry")
 
 local function validateOptions(kind, options, allowed)
   if type(options) ~= "table" then
@@ -136,126 +20,23 @@ local function validateOptions(kind, options, allowed)
   end
 end
 
-local function startRuntime(WindowManager, hs, CONFIG, generation)
+local function startRuntime(WindowManager, hs, CONFIG, generation, geometry, metadata)
   local function currentGeneration()
     return generation.current()
   end
 
-  local undoDepth = tonumber(CONFIG.undoDepth)
-  if not undoDepth or undoDepth < 1 or undoDepth ~= math.floor(undoDepth) then
-    error("CONFIG.undoDepth must be a positive integer")
-  end
+  local undoDepth = CONFIG.undoDepth
 
-  local MODE_SELECTORS = {
-    { key = "a", screen = "aspect", label = "Aspect" },
-    { key = "w", screen = "width", label = "Width" },
-    { key = "h", screen = "height", label = "Height" },
-    { key = "m", screen = "move", label = "Move" },
-    { key = "r", screen = "resize", label = "Resize" },
-  }
-
-  local MODE_BY_KEY = {}
-  for _, selector in ipairs(MODE_SELECTORS) do
-    MODE_BY_KEY[selector.key] = selector.screen
-  end
-
-  local MOVE_STEP_ACTIONS = {
-    { key = "left", direction = "left", label = "Move Left", symbol = CONFIG.symbols.left },
-    { key = "right", direction = "right", label = "Move Right", symbol = CONFIG.symbols.right },
-    { key = "up", direction = "up", label = "Move Up", symbol = CONFIG.symbols.up },
-    { key = "down", direction = "down", label = "Move Down", symbol = CONFIG.symbols.down },
-  }
-
-  local CORNER_ACTIONS = {
-    {
-      key = "left",
-      shifted = true,
-      screen = "move",
-      corner = "topleft",
-      label = "Top Left",
-      shortcut = CONFIG.symbols.shift .. " + " .. CONFIG.symbols.left,
-    },
-    { key = "c", screen = "move", corner = "centertop", label = "Center Top", shortcut = "C" },
-    {
-      key = "right",
-      shifted = true,
-      screen = "move",
-      corner = "topright",
-      label = "Top Right",
-      shortcut = CONFIG.symbols.shift .. " + " .. CONFIG.symbols.right,
-    },
-    {
-      key = "left",
-      screen = "move_bottom",
-      corner = "bottomleft",
-      label = "Bottom Left",
-      shortcut = CONFIG.symbols.left,
-    },
-    { key = "c", screen = "move_bottom", corner = "centerbottom", label = "Center Bottom", shortcut = "C" },
-    {
-      key = "right",
-      screen = "move_bottom",
-      corner = "bottomright",
-      label = "Bottom Right",
-      shortcut = CONFIG.symbols.right,
-    },
-  }
-
-  local CORNER_LABEL_BY_NAME = {}
-  for _, action in ipairs(CORNER_ACTIONS) do
-    CORNER_LABEL_BY_NAME[action.corner] = action.label
-  end
-
-  local RESIZE_ACTIONS = {
-    {
-      key = "right",
-      label = "Grow Width",
-      prompt = "grow width",
-      shortcut = CONFIG.symbols.right,
-      deltaWidth = CONFIG.growStep,
-      deltaHeight = 0,
-    },
-    {
-      key = "down",
-      label = "Grow Height",
-      prompt = "grow height",
-      shortcut = CONFIG.symbols.down,
-      deltaWidth = 0,
-      deltaHeight = CONFIG.growStep,
-    },
-    {
-      key = "left",
-      label = "Shrink Width",
-      prompt = "shrink width",
-      shortcut = CONFIG.symbols.left,
-      deltaWidth = -CONFIG.growStep,
-      deltaHeight = 0,
-    },
-    {
-      key = "up",
-      label = "Shrink Height",
-      prompt = "shrink height",
-      shortcut = CONFIG.symbols.up,
-      deltaWidth = 0,
-      deltaHeight = -CONFIG.growStep,
-    },
-    {
-      key = "g",
-      label = "Grow Width + Height",
-      prompt = "grow width + height",
-      shortcut = "G",
-      deltaWidth = CONFIG.growStep,
-      deltaHeight = CONFIG.growStep,
-    },
-    {
-      key = "s",
-      label = "Shrink Width + Height",
-      prompt = "shrink width + height",
-      shortcut = "S",
-      deltaWidth = -CONFIG.growStep,
-      deltaHeight = -CONFIG.growStep,
-    },
-  }
+  local round = geometry.round
+  local clamp = geometry.clamp
+  local copyFrame = geometry.copyFrame
+  local framesEqual = geometry.framesEqual
+  local MODE_SELECTORS = metadata.modeSelectors
+  local MODE_BY_KEY = metadata.modeByKey
+  local MOVE_STEP_ACTIONS = metadata.moveStepActions
+  local CORNER_ACTIONS = metadata.cornerActions
+  local CORNER_LABEL_BY_NAME = metadata.cornerLabelByName
+  local RESIZE_ACTIONS = metadata.resizeActions
 
   local windowMode
   WindowManager.modalState = {}
@@ -427,26 +208,6 @@ local function startRuntime(WindowManager, hs, CONFIG, generation)
     return win
   end
 
-  local function round(value)
-    return math.floor(value + 0.5)
-  end
-
-  local function clamp(value, minValue, maxValue)
-    if maxValue < minValue then
-      return minValue
-    end
-
-    return math.max(minValue, math.min(value, maxValue))
-  end
-
-  local function copyFrame(frame)
-    return { x = frame.x, y = frame.y, w = frame.w, h = frame.h }
-  end
-
-  local function framesEqual(first, second)
-    return round(first.x) == round(second.x) and round(first.y) == round(second.y) and round(first.w) == round(second.w) and round(first.h) == round(second.h)
-  end
-
   local function screenSnapshot(screen)
     local identityOk, identity = pcall(function()
       return screen:getUUID() or tostring(screen:id())
@@ -503,26 +264,6 @@ local function startRuntime(WindowManager, hs, CONFIG, generation)
     end
 
     frameHistory[windowId] = history
-  end
-
-  local function clampFrameToScreen(frame, screenFrame, options)
-    local screenWidth = round(screenFrame.w)
-    local screenHeight = round(screenFrame.h)
-    local requestedMinimumWidth = options and options.allowBelowMinimum and 1 or CONFIG.minimumWidth
-    local requestedMinimumHeight = options and options.allowBelowMinimum and 1 or CONFIG.minimumHeight
-    local minimumWidth = math.min(requestedMinimumWidth, screenWidth)
-    local minimumHeight = math.min(requestedMinimumHeight, screenHeight)
-    local width = clamp(round(frame.w), minimumWidth, screenWidth)
-    local height = clamp(round(frame.h), minimumHeight, screenHeight)
-    local maxX = round(screenFrame.x + screenFrame.w - width)
-    local maxY = round(screenFrame.y + screenFrame.h - height)
-
-    return {
-      x = clamp(round(frame.x), round(screenFrame.x), maxX),
-      y = clamp(round(frame.y), round(screenFrame.y), maxY),
-      w = width,
-      h = height,
-    }
   end
 
   local function actionFailure(message)
@@ -597,7 +338,7 @@ local function startRuntime(WindowManager, hs, CONFIG, generation)
       if not screenFrameOk or not screenFrame then
         return actionFailure("The window screen could not be verified")
       end
-      targetFrame = clampFrameToScreen(frame, screenFrame, options)
+      targetFrame = geometry.clampFrameToScreen(frame, screenFrame, CONFIG.minimumWidth, CONFIG.minimumHeight, options and options.allowBelowMinimum)
     end
     local actualFrame = currentFrame
     local changed = false
@@ -723,24 +464,8 @@ local function startRuntime(WindowManager, hs, CONFIG, generation)
 
     local currentFrame = win:frame()
     local screenFrame = win:screen():frame()
-    local ratio = preset.width / preset.height
-    local minimumWidthForRatio = math.max(CONFIG.minimumWidth, CONFIG.minimumHeight * ratio)
-    local maximumWidthForRatio = math.min(screenFrame.w, screenFrame.h * ratio)
-    local targetWidth
-
-    if maximumWidthForRatio < minimumWidthForRatio then
-      targetWidth = maximumWidthForRatio
-    else
-      targetWidth = clamp(currentFrame.w, minimumWidthForRatio, maximumWidthForRatio)
-    end
-    local targetHeight = targetWidth / ratio
-
-    return applyFrame(win, {
-      x = currentFrame.x,
-      y = currentFrame.y,
-      w = targetWidth,
-      h = targetHeight,
-    }, "Aspect " .. preset.label, { showSize = true, allowBelowMinimum = true })
+    local target = geometry.aspectTarget(currentFrame, screenFrame, preset, CONFIG.minimumWidth, CONFIG.minimumHeight)
+    return applyFrame(win, target, "Aspect " .. preset.label, { showSize = true, allowBelowMinimum = true })
   end
 
   local function applyWidthPreset(width)
@@ -783,32 +508,8 @@ local function startRuntime(WindowManager, hs, CONFIG, generation)
 
     local currentFrame = win:frame()
     local screenFrame = win:screen():frame()
-    local targetFrame = {
-      x = currentFrame.x,
-      y = currentFrame.y,
-      w = currentFrame.w,
-      h = currentFrame.h,
-    }
-
-    if corner == "topleft" then
-      targetFrame.x = screenFrame.x
-      targetFrame.y = screenFrame.y
-    elseif corner == "centertop" then
-      targetFrame.x = screenFrame.x + (screenFrame.w - currentFrame.w) / 2
-      targetFrame.y = screenFrame.y
-    elseif corner == "topright" then
-      targetFrame.x = screenFrame.x + screenFrame.w - currentFrame.w
-      targetFrame.y = screenFrame.y
-    elseif corner == "bottomleft" then
-      targetFrame.x = screenFrame.x
-      targetFrame.y = screenFrame.y + screenFrame.h - currentFrame.h
-    elseif corner == "centerbottom" then
-      targetFrame.x = screenFrame.x + (screenFrame.w - currentFrame.w) / 2
-      targetFrame.y = screenFrame.y + screenFrame.h - currentFrame.h
-    elseif corner == "bottomright" then
-      targetFrame.x = screenFrame.x + screenFrame.w - currentFrame.w
-      targetFrame.y = screenFrame.y + screenFrame.h - currentFrame.h
-    else
+    local targetFrame = geometry.cornerTarget(currentFrame, screenFrame, corner)
+    if not targetFrame then
       return actionFailure("Unknown corner: " .. tostring(corner))
     end
 
@@ -823,12 +524,7 @@ local function startRuntime(WindowManager, hs, CONFIG, generation)
 
     local currentFrame = win:frame()
 
-    return applyFrame(win, {
-      x = currentFrame.x,
-      y = currentFrame.y,
-      w = currentFrame.w + deltaWidth,
-      h = currentFrame.h + deltaHeight,
-    }, label, { showSize = true })
+    return applyFrame(win, geometry.resizeTarget(currentFrame, deltaWidth, deltaHeight), label, { showSize = true })
   end
 
   local function shrinkWindow(deltaWidth, deltaHeight, label)
@@ -839,12 +535,7 @@ local function startRuntime(WindowManager, hs, CONFIG, generation)
 
     local currentFrame = win:frame()
 
-    return applyFrame(win, {
-      x = currentFrame.x,
-      y = currentFrame.y,
-      w = currentFrame.w - deltaWidth,
-      h = currentFrame.h - deltaHeight,
-    }, label, { showSize = true })
+    return applyFrame(win, geometry.resizeTarget(currentFrame, -deltaWidth, -deltaHeight), label, { showSize = true })
   end
 
   local function stopModalTimer()
@@ -921,18 +612,6 @@ local function startRuntime(WindowManager, hs, CONFIG, generation)
     return table.concat(labels, "\n")
   end
 
-  local function snapPositionForDirection(origin, current, step, direction)
-    local relative = current - origin
-
-    if direction == "left" or direction == "up" then
-      return origin + (math.ceil(relative / step) - 1) * step
-    elseif direction == "right" or direction == "down" then
-      return origin + (math.floor(relative / step) + 1) * step
-    end
-
-    return current
-  end
-
   local function moveByStep(direction)
     local win, failureMessage = getFocusedWindow()
     if not win then
@@ -941,33 +620,15 @@ local function startRuntime(WindowManager, hs, CONFIG, generation)
 
     local currentFrame = win:frame()
     local screenFrame = win:screen():frame()
-    local targetFrame = {
-      x = currentFrame.x,
-      y = currentFrame.y,
-      w = currentFrame.w,
-      h = currentFrame.h,
-    }
-
-    if direction == "left" or direction == "right" then
-      targetFrame.x = snapPositionForDirection(screenFrame.x, currentFrame.x, CONFIG.moveStep, direction)
-    elseif direction == "up" or direction == "down" then
-      targetFrame.y = snapPositionForDirection(screenFrame.y, currentFrame.y, CONFIG.moveStep, direction)
-    else
+    local targetFrame = geometry.stepTarget(currentFrame, screenFrame, CONFIG.moveStep, direction)
+    if not targetFrame then
       return actionFailure("Unknown move direction: " .. tostring(direction))
     end
 
     return applyFrame(win, targetFrame, string.format("Move %s %d px", direction, CONFIG.moveStep))
   end
 
-  local SCREEN_TITLES = {
-    home = "Window mode",
-    aspect = "Aspect preset",
-    width = "Width preset",
-    height = "Height preset",
-    move = "Move",
-    move_bottom = "Move bottom positions",
-    resize = "Resize",
-  }
+  local SCREEN_TITLES = metadata.screenTitles
 
   local function appendLines(target, source)
     for _, line in ipairs(source) do
@@ -1658,7 +1319,7 @@ function Instance:start()
     current = function()
       return data.generation == token
     end,
-  })
+  }, data.geometry, data.metadata)
   if ok then
     data.state = "running"
     return self
@@ -1694,9 +1355,11 @@ function Anodyne.new(options)
     error("new.modules must be a table", 2)
   end
   local runtimeFactory = startRuntime
+  local configModule = DefaultConfig
+  local geometryModule = DefaultGeometry
   if options.modules then
     for key in pairs(options.modules) do
-      if key ~= "runtimeFactory" then
+      if key ~= "runtimeFactory" and key ~= "config" and key ~= "geometry" then
         error("unknown new.modules key: " .. tostring(key), 2)
       end
     end
@@ -1704,16 +1367,63 @@ function Anodyne.new(options)
       error("new.modules.runtimeFactory must be a function", 2)
     end
     runtimeFactory = options.modules.runtimeFactory or runtimeFactory
+    if options.modules.config ~= nil then
+      configModule = options.modules.config
+    end
+    if options.modules.geometry ~= nil then
+      geometryModule = options.modules.geometry
+    end
   end
-  local merged = mergeConfig(DEFAULT_CONFIG, options.config, "")
-  local undoDepth = merged.undoDepth
-  if undoDepth < 1 or undoDepth ~= math.floor(undoDepth) then
-    error("CONFIG.undoDepth must be a positive integer", 2)
+  if type(configModule) ~= "table" then
+    error("new.modules.config must be a table", 2)
   end
-  local instance = setmetatable({ config = freeze(merged) }, Instance)
+  if type(configModule.build) ~= "function" then
+    error("new.modules.config.build must be a function", 2)
+  end
+  for key in pairs(configModule) do
+    if key ~= "build" then
+      error("unknown new.modules.config key: " .. tostring(key), 2)
+    end
+  end
+  local geometryFunctions = {
+    "round",
+    "clamp",
+    "copyFrame",
+    "framesEqual",
+    "clampFrameToScreen",
+    "aspectTarget",
+    "cornerTarget",
+    "resizeTarget",
+    "snapPosition",
+    "stepTarget",
+  }
+  if type(geometryModule) ~= "table" then
+    error("new.modules.geometry must be a table", 2)
+  end
+  local geometry = {}
+  local expectedGeometry = {}
+  for _, name in ipairs(geometryFunctions) do
+    expectedGeometry[name] = true
+    if type(geometryModule[name]) ~= "function" then
+      error("new.modules.geometry." .. name .. " must be a function", 2)
+    end
+    geometry[name] = geometryModule[name]
+  end
+  for key in pairs(geometryModule) do
+    if not expectedGeometry[key] then
+      error("unknown new.modules.geometry key: " .. tostring(key), 2)
+    end
+  end
+  local config, metadata = configModule.build(options.config)
+  if type(config) ~= "table" or type(metadata) ~= "table" then
+    error("new.modules.config.build must return config and metadata tables", 2)
+  end
+  local instance = setmetatable({ config = config }, Instance)
   private[instance] = {
     hs = options.hs,
     config = instance.config,
+    geometry = geometry,
+    metadata = metadata,
     runtimeFactory = runtimeFactory,
     state = "stopped",
     generation = 0,

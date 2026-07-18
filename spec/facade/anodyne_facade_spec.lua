@@ -108,6 +108,78 @@ describe("Milestone 3 facade", function()
     assertNoResources(driver)
   end)
 
+  it("validates exact config and geometry composition contracts", function()
+    assert.has_error(function()
+      Anodyne.new({ hs = driver.hs, modules = { config = false } })
+    end, "new.modules.config must be a table")
+    assert.has_error(function()
+      Anodyne.new({ hs = driver.hs, modules = { config = {} } })
+    end, "new.modules.config.build must be a function")
+    assert.has_error(function()
+      Anodyne.new({ hs = driver.hs, modules = { config = { build = function() end, extra = true } } })
+    end, "unknown new.modules.config key: extra")
+    assert.has_error(function()
+      Anodyne.new({ hs = driver.hs, modules = { geometry = false } })
+    end, "new.modules.geometry must be a table")
+    assert.has_error(function()
+      Anodyne.new({ hs = driver.hs, modules = { geometry = {} } })
+    end, "new.modules.geometry.round must be a function")
+
+    local geometry = require("Anodyne.core.geometry")
+    local extraGeometry = {}
+    for key, value in pairs(geometry) do
+      extraGeometry[key] = value
+    end
+    extraGeometry.extra = function() end
+    assert.has_error(function()
+      Anodyne.new({ hs = driver.hs, modules = { geometry = extraGeometry } })
+    end, "unknown new.modules.geometry key: extra")
+  end)
+
+  it("keeps injected config metadata and geometry private and unaliased from module tables", function()
+    local defaultConfig = require("Anodyne.config")
+    local defaultGeometry = require("Anodyne.core.geometry")
+    local configModule = { build = defaultConfig.build }
+    local geometryModule = {}
+    for key, value in pairs(defaultGeometry) do
+      geometryModule[key] = value
+    end
+    local observed = {}
+    local instance = Anodyne.new({
+      hs = driver.hs,
+      modules = {
+        config = configModule,
+        geometry = geometryModule,
+        runtimeFactory = function(_, _, _, _, geometry, metadata)
+          observed.geometry = geometry
+          observed.metadata = metadata
+        end,
+      },
+    })
+    geometryModule.round = function()
+      return 999
+    end
+    configModule.build = function()
+      error("caller mutation leaked")
+    end
+    instance:start()
+    assert.are.equal(2, observed.geometry.round(1.5))
+    assert.are.equal("aspect", observed.metadata.modeByKey.a)
+    assert.is_nil(rawget(instance, "geometry"))
+    assert.is_nil(rawget(instance, "metadata"))
+    assert.is_nil(rawget(instance, "configModule"))
+  end)
+
+  it("rejects malformed config module results", function()
+    assert.has_error(function()
+      Anodyne.new({ hs = driver.hs, modules = { config = {
+        build = function()
+          return {}, nil
+        end,
+      } } })
+    end, "new.modules.config.build must return config and metadata tables")
+  end)
+
   it("deep-merges maps, replaces lists, does not alias, and freezes config", function()
     local override = {
       symbols = { left = "L" },
@@ -134,6 +206,36 @@ describe("Milestone 3 facade", function()
     assert.has_error(function()
       Anodyne.new({ hs = driver.hs, config = { widthPresets = { "bad" } } })
     end, "invalid config type for widthPresets[1]: expected number")
+  end)
+
+  it("preserves baseline construction for empty lists and partial aspect entries", function()
+    local empty = Anodyne.new({
+      hs = driver.hs,
+      config = {
+        widthPresets = {},
+        heightPresets = {},
+        aspectPresets = {},
+        modalHotkey = { modifiers = {} },
+      },
+    }):start()
+    assert.are.equal(0, #empty.config.widthPresets)
+    assert.are.equal(0, #empty.config.heightPresets)
+    assert.are.equal(0, #empty.config.aspectPresets)
+    assert.are.equal(0, #empty.config.modalHotkey.modifiers)
+    assert.is_nil(select(2, empty:stop()))
+
+    local partial = Anodyne.new({
+      hs = driver.hs,
+      config = { aspectPresets = { { label = "partial", width = 1 } } },
+    }):start()
+    driver:triggerEntry()
+    driver:key("a")
+    local ok, message = pcall(function()
+      driver:key("1")
+    end)
+    assert.is_false(ok)
+    assert.matches("attempt to perform arithmetic on a nil value %(field 'height'%)", message)
+    assert.is_nil(select(2, partial:stop()))
   end)
 
   it("constructs stopped and supports idempotent start and stop-start", function()
