@@ -2,6 +2,8 @@ local Anodyne = {}
 
 local DefaultConfig = require("Anodyne.config")
 local DefaultGeometry = require("Anodyne.core.geometry")
+local History = require("Anodyne.core.history")
+local WindowActions = require("Anodyne.window_actions")
 
 local function validateOptions(kind, options, allowed)
   if type(options) ~= "table" then
@@ -25,12 +27,8 @@ local function startRuntime(WindowManager, hs, CONFIG, generation, geometry, met
     return generation.current()
   end
 
-  local undoDepth = CONFIG.undoDepth
-
   local round = geometry.round
-  local clamp = geometry.clamp
   local copyFrame = geometry.copyFrame
-  local framesEqual = geometry.framesEqual
   local MODE_SELECTORS = metadata.modeSelectors
   local MODE_BY_KEY = metadata.modeByKey
   local MOVE_STEP_ACTIONS = metadata.moveStepActions
@@ -48,6 +46,12 @@ local function startRuntime(WindowManager, hs, CONFIG, generation, geometry, met
   modalState.sessionInitialScreen = nil
   WindowManager.frameHistory = {}
   local frameHistory = WindowManager.frameHistory
+  local history = History.new({
+    entries = frameHistory,
+    depth = CONFIG.undoDepth,
+    copyFrame = geometry.copyFrame,
+    framesEqual = geometry.framesEqual,
+  })
 
   WindowManager.menu = hs.menubar.new()
   local menu = WindowManager.menu
@@ -156,386 +160,76 @@ local function startRuntime(WindowManager, hs, CONFIG, generation, geometry, met
     WindowManager.menuFailureTimer = timer
   end
 
-  local function getValidWindow(candidate)
-    if not candidate then
-      return nil
-    end
-
-    local ok, windowId = pcall(function()
-      return candidate:id()
-    end)
-    if not ok or not windowId then
-      return nil
-    end
-
-    local screenOk, screen = pcall(function()
-      return candidate:screen()
-    end)
-    if not screenOk or not screen then
-      return nil
-    end
-
-    return candidate, screen
-  end
-
-  local function getFocusedWindow()
-    if modalState.active then
-      local modalWindow = getValidWindow(modalState.targetWindow)
-      if modalWindow then
-        return modalWindow
-      end
-
-      return nil, "Modal target window is no longer available"
-    end
-
-    local win = getValidWindow(hs.window.focusedWindow())
-    if win then
-      WindowManager.lastFocusedWindow = win
-      return win
-    end
-
-    win = getValidWindow(WindowManager.lastFocusedWindow)
-    if win then
-      return win
-    end
-
-    win = getValidWindow(hs.window.frontmostWindow())
-    if not win then
-      return nil, "No focused window"
-    end
-
-    WindowManager.lastFocusedWindow = win
-    return win
-  end
-
-  local function screenSnapshot(screen)
-    local identityOk, identity = pcall(function()
+  local ports = {
+    focusedWindow = function()
+      return hs.window.focusedWindow()
+    end,
+    frontmostWindow = function()
+      return hs.window.frontmostWindow()
+    end,
+    allScreens = function()
+      return hs.screen.allScreens()
+    end,
+    windowId = function(window)
+      return window:id()
+    end,
+    windowScreen = function(window)
+      return window:screen()
+    end,
+    windowFrame = function(window)
+      return window:frame()
+    end,
+    setWindowFrame = function(window, frame)
+      window:setFrame(frame, 0)
+    end,
+    screenIdentity = function(screen)
       return screen:getUUID() or tostring(screen:id())
-    end)
-    local frameOk, frame = pcall(function()
+    end,
+    screenFullFrame = function(screen)
       return screen:fullFrame()
-    end)
-    if not identityOk or not identity or not frameOk or not frame then
-      return nil
-    end
-
-    return { identity = identity, frame = copyFrame(frame) }
+    end,
+    screenFrame = function(screen)
+      return screen:frame()
+    end,
+  }
+  local actions = WindowActions.new({
+    owner = WindowManager,
+    modalState = modalState,
+    config = CONFIG,
+    geometry = geometry,
+    history = history,
+    ports = ports,
+    cornerLabels = CORNER_LABEL_BY_NAME,
+  })
+  local function windowScreenSnapshot(window)
+    return actions:windowScreenSnapshot(window)
   end
-
-  local function windowScreenSnapshot(win)
-    local ok, screen = pcall(function()
-      return win:screen()
-    end)
-    if not ok or not screen then
-      return nil
-    end
-    return screenSnapshot(screen)
-  end
-
   local function screenSnapshotIsCurrent(snapshot)
-    if not snapshot then
-      return false
-    end
-
-    for _, screen in ipairs(hs.screen.allScreens()) do
-      local currentSnapshot = screenSnapshot(screen)
-      if currentSnapshot and currentSnapshot.identity == snapshot.identity and framesEqual(currentSnapshot.frame, snapshot.frame) then
-        return true
-      end
-    end
-    return false
+    return actions:screenSnapshotIsCurrent(snapshot)
   end
-
-  local function recordFrameHistory(windowId, beforeFrame, afterFrame, beforeScreen)
-    local history = frameHistory[windowId] or {}
-
-    if #history > 0 and not framesEqual(history[#history].after, beforeFrame) then
-      history = {}
-    end
-
-    table.insert(history, {
-      before = copyFrame(beforeFrame),
-      after = copyFrame(afterFrame),
-      beforeScreen = beforeScreen,
-    })
-
-    while #history > undoDepth do
-      table.remove(history, 1)
-    end
-
-    frameHistory[windowId] = history
-  end
-
-  local function actionFailure(message)
-    return false, message
-  end
-
-  local function setFrameAndRead(win, frame)
-    local setOk = pcall(function()
-      -- An authoritative readback is required for transactional undo history.
-      win:setFrame(frame, 0)
-    end)
-    if not setOk then
-      return nil, "The window could not be changed", false
-    end
-
-    local frameOk, actualFrame = pcall(function()
-      return win:frame()
-    end)
-    if not frameOk or not actualFrame then
-      return nil, "The window frame could not be verified", true
-    end
-
-    return copyFrame(actualFrame), nil, false
-  end
-
-  local function setFrameExactly(win, targetFrame, currentFrame, frameDescription)
-    local actualFrame, failureMessage, historyInvalidated = setFrameAndRead(win, targetFrame)
-    if not actualFrame then
-      return nil, failureMessage, historyInvalidated
-    end
-    if framesEqual(currentFrame, actualFrame) then
-      return nil, "The window did not accept " .. frameDescription, false
-    end
-    if framesEqual(actualFrame, targetFrame) then
-      return actualFrame, nil, false
-    end
-
-    local rollbackFrame = setFrameAndRead(win, currentFrame)
-    if not rollbackFrame or not framesEqual(rollbackFrame, currentFrame) then
-      return nil, "The window changed but could not restore " .. frameDescription .. " exactly", true
-    end
-    return nil, "The window could not restore " .. frameDescription .. " exactly", false
-  end
-
-  local function applyFrame(win, frame, label, options)
-    local idOk, windowId = pcall(function()
-      return win:id()
-    end)
-    if not idOk or not windowId then
-      return actionFailure("The target window is no longer available")
-    end
-
-    local currentScreen = windowScreenSnapshot(win)
-    if not currentScreen then
-      return actionFailure("The window screen could not be verified")
-    end
-
-    local frameOk, currentFrame = pcall(function()
-      return win:frame()
-    end)
-    if not frameOk or not currentFrame then
-      return actionFailure("The target window is no longer available")
-    end
-
-    local targetFrame
-    if options and options.clampToScreen == false then
-      targetFrame = copyFrame(frame)
-    else
-      local screenFrameOk, screenFrame = pcall(function()
-        return win:screen():frame()
-      end)
-      if not screenFrameOk or not screenFrame then
-        return actionFailure("The window screen could not be verified")
-      end
-      targetFrame = geometry.clampFrameToScreen(frame, screenFrame, CONFIG.minimumWidth, CONFIG.minimumHeight, options and options.allowBelowMinimum)
-    end
-    local actualFrame = currentFrame
-    local changed = false
-
-    if not framesEqual(currentFrame, targetFrame) then
-      local failureMessage
-      local historyInvalidated = false
-      if options and options.requireExact then
-        actualFrame, failureMessage, historyInvalidated = setFrameExactly(win, targetFrame, currentFrame, options.frameDescription or "the requested frame")
-      else
-        actualFrame, failureMessage, historyInvalidated = setFrameAndRead(win, targetFrame)
-      end
-      if historyInvalidated then
-        frameHistory[windowId] = nil
-      end
-      if not actualFrame then
-        return actionFailure(failureMessage)
-      end
-      if framesEqual(currentFrame, actualFrame) then
-        return actionFailure("The window did not accept that change")
-      end
-
-      recordFrameHistory(windowId, currentFrame, actualFrame, currentScreen)
-      changed = true
-    end
-
-    local statusMessage
-    if options and options.showSize then
-      statusMessage = string.format("%s (%d x %d)", label, round(actualFrame.w), round(actualFrame.h))
-    else
-      statusMessage = label
-    end
-    if not changed then
-      statusMessage = "No change — " .. statusMessage
-    end
-
-    return true, nil, statusMessage
-  end
-
   local function resetSessionFrame()
-    if not modalState.active or not modalState.sessionInitialFrame or not modalState.sessionInitialScreen then
-      return actionFailure("No active window session to reset")
-    end
-    if not screenSnapshotIsCurrent(modalState.sessionInitialScreen) then
-      return actionFailure("The screen configuration changed; session reset is unavailable")
-    end
-
-    local win, failureMessage = getFocusedWindow()
-    if not win then
-      return actionFailure(failureMessage)
-    end
-
-    return applyFrame(win, copyFrame(modalState.sessionInitialFrame), "Reset session", {
-      showSize = true,
-      clampToScreen = false,
-      requireExact = true,
-      frameDescription = "the session frame",
-    })
+    return actions:resetSessionFrame()
   end
-
   local function undoLastFrame()
-    local win, focusFailureMessage = getFocusedWindow()
-    if not win then
-      return actionFailure(focusFailureMessage)
-    end
-
-    local idOk, windowId = pcall(function()
-      return win:id()
-    end)
-    if not idOk or not windowId then
-      return actionFailure("The target window is no longer available")
-    end
-
-    local history = frameHistory[windowId]
-    if not history or #history == 0 then
-      return actionFailure("Nothing to undo for this window")
-    end
-
-    local entry = history[#history]
-    local frameOk, currentFrame = pcall(function()
-      return win:frame()
-    end)
-    if not frameOk or not currentFrame then
-      frameHistory[windowId] = nil
-      return actionFailure("The target window is no longer available")
-    end
-    if not framesEqual(currentFrame, entry.after) then
-      frameHistory[windowId] = nil
-      return actionFailure("Undo history was reset because the window changed outside WI")
-    end
-
-    if not screenSnapshotIsCurrent(entry.beforeScreen) then
-      return actionFailure("The screen configuration changed; the previous frame is unavailable")
-    end
-
-    local restoredFrame = copyFrame(entry.before)
-    if framesEqual(currentFrame, restoredFrame) then
-      frameHistory[windowId] = nil
-      return actionFailure("The previous window position is no longer available")
-    end
-
-    local actualFrame, failureMessage, historyInvalidated = setFrameExactly(win, restoredFrame, currentFrame, "the previous frame")
-    if historyInvalidated then
-      frameHistory[windowId] = nil
-    end
-    if not actualFrame then
-      return actionFailure(failureMessage)
-    end
-
-    table.remove(history)
-    if #history == 0 or not framesEqual(history[#history].after, actualFrame) then
-      frameHistory[windowId] = nil
-    end
-
-    return true, nil, string.format("Undid last action (%d x %d)", round(actualFrame.w), round(actualFrame.h))
+    return actions:undoLastFrame()
   end
-
   local function applyAspectPreset(preset)
-    local win, failureMessage = getFocusedWindow()
-    if not win then
-      return actionFailure(failureMessage)
-    end
-
-    local currentFrame = win:frame()
-    local screenFrame = win:screen():frame()
-    local target = geometry.aspectTarget(currentFrame, screenFrame, preset, CONFIG.minimumWidth, CONFIG.minimumHeight)
-    return applyFrame(win, target, "Aspect " .. preset.label, { showSize = true, allowBelowMinimum = true })
+    return actions:applyAspectPreset(preset)
   end
-
   local function applyWidthPreset(width)
-    local win, failureMessage = getFocusedWindow()
-    if not win then
-      return actionFailure(failureMessage)
-    end
-
-    local currentFrame = win:frame()
-
-    return applyFrame(win, {
-      x = currentFrame.x,
-      y = currentFrame.y,
-      w = width,
-      h = currentFrame.h,
-    }, string.format("Width %d px", width), { showSize = true })
+    return actions:applyWidthPreset(width)
   end
-
   local function applyHeightPreset(height)
-    local win, failureMessage = getFocusedWindow()
-    if not win then
-      return actionFailure(failureMessage)
-    end
-
-    local currentFrame = win:frame()
-
-    return applyFrame(win, {
-      x = currentFrame.x,
-      y = currentFrame.y,
-      w = currentFrame.w,
-      h = height,
-    }, string.format("Height %d px", height), { showSize = true })
+    return actions:applyHeightPreset(height)
   end
-
   local function moveToCorner(corner)
-    local win, failureMessage = getFocusedWindow()
-    if not win then
-      return actionFailure(failureMessage)
-    end
-
-    local currentFrame = win:frame()
-    local screenFrame = win:screen():frame()
-    local targetFrame = geometry.cornerTarget(currentFrame, screenFrame, corner)
-    if not targetFrame then
-      return actionFailure("Unknown corner: " .. tostring(corner))
-    end
-
-    return applyFrame(win, targetFrame, "Move to " .. string.lower(CORNER_LABEL_BY_NAME[corner] or corner))
+    return actions:moveToCorner(corner)
   end
-
   local function growWindow(deltaWidth, deltaHeight, label)
-    local win, failureMessage = getFocusedWindow()
-    if not win then
-      return actionFailure(failureMessage)
-    end
-
-    local currentFrame = win:frame()
-
-    return applyFrame(win, geometry.resizeTarget(currentFrame, deltaWidth, deltaHeight), label, { showSize = true })
+    return actions:resize(deltaWidth, deltaHeight, label)
   end
-
   local function shrinkWindow(deltaWidth, deltaHeight, label)
-    local win, failureMessage = getFocusedWindow()
-    if not win then
-      return actionFailure(failureMessage)
-    end
-
-    local currentFrame = win:frame()
-
-    return applyFrame(win, geometry.resizeTarget(currentFrame, -deltaWidth, -deltaHeight), label, { showSize = true })
+    return actions:resize(-deltaWidth, -deltaHeight, label)
   end
 
   local function stopModalTimer()
@@ -569,27 +263,7 @@ local function startRuntime(WindowManager, hs, CONFIG, generation, geometry, met
   end
 
   local function getModalHomeWindow()
-    if modalState.active then
-      return getValidWindow(modalState.targetWindow)
-    end
-
-    local win = getValidWindow(hs.window.focusedWindow())
-    if win then
-      WindowManager.lastFocusedWindow = win
-      return win
-    end
-
-    win = getValidWindow(WindowManager.lastFocusedWindow)
-    if win then
-      return win
-    end
-
-    win = getValidWindow(hs.window.frontmostWindow())
-    if win then
-      WindowManager.lastFocusedWindow = win
-    end
-
-    return win
+    return actions:getModalHomeWindow()
   end
 
   local function formatCurrentWindowSize()
@@ -613,19 +287,7 @@ local function startRuntime(WindowManager, hs, CONFIG, generation, geometry, met
   end
 
   local function moveByStep(direction)
-    local win, failureMessage = getFocusedWindow()
-    if not win then
-      return actionFailure(failureMessage)
-    end
-
-    local currentFrame = win:frame()
-    local screenFrame = win:screen():frame()
-    local targetFrame = geometry.stepTarget(currentFrame, screenFrame, CONFIG.moveStep, direction)
-    if not targetFrame then
-      return actionFailure("Unknown move direction: " .. tostring(direction))
-    end
-
-    return applyFrame(win, targetFrame, string.format("Move %s %d px", direction, CONFIG.moveStep))
+    return actions:moveByStep(direction)
   end
 
   local SCREEN_TITLES = metadata.screenTitles
@@ -1156,22 +818,14 @@ local function startRuntime(WindowManager, hs, CONFIG, generation, geometry, met
     if not currentGeneration() then
       return
     end
-    local validWindow = getValidWindow(win)
-    if validWindow then
-      WindowManager.lastFocusedWindow = validWindow
-    end
+    actions:rememberFocused(win)
   end)
 
   historyWindowFilter:subscribe(hs.window.filter.windowDestroyed, function(win)
     if not currentGeneration() then
       return
     end
-    local ok, windowId = pcall(function()
-      return win:id()
-    end)
-    if ok and windowId then
-      frameHistory[windowId] = nil
-    end
+    actions:forgetWindow(win)
   end)
 
   WindowManager.windowMode = hs.hotkey.modal.new()

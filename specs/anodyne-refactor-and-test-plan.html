@@ -81,10 +81,10 @@
       <summary>Metadata</summary>
       <dl>
         <dt>created</dt><dd>2026-07-18T10:46:12+02:00</dd>
-        <dt>modified</dt><dd>2026-07-18T10:46:12+02:00; 2026-07-18T11:02:25+02:00; 2026-07-18T11:16:21+02:00; 2026-07-18T11:44:26+02:00; 2026-07-18T13:16:59+02:00; 2026-07-18T13:22:24+02:00; 2026-07-18T14:19:08+02:00; 2026-07-18T14:29:19+02:00; 2026-07-18T14:44:56+02:00; 2026-07-18T14:46:42+02:00; 2026-07-18T15:35:21+02:00; 2026-07-18T15:37:33+02:00; 2026-07-18T16:05:46+02:00</dd>
-        <dt>commits</dt><dd>4f97972666c39c6df5f55df84ad24f20cbe338e5; 72ed77a; c6d12e7; f5611204a56692db159829d4721c8548a7ffe6c1; 18b45f99a3bae592be842127208455a7ee4d9220</dd>
-        <dt>agent name</dt><dd>Codex /root; Codex /root; Codex /root; Codex /root; Codex /root; Codex /root; Codex /root; Codex /root; Codex /root; Codex /root; Codex /root; Codex /root; Codex /root</dd>
-        <dt>session id</dt><dd>019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22</dd>
+        <dt>modified</dt><dd>2026-07-18T10:46:12+02:00; 2026-07-18T11:02:25+02:00; 2026-07-18T11:16:21+02:00; 2026-07-18T11:44:26+02:00; 2026-07-18T13:16:59+02:00; 2026-07-18T13:22:24+02:00; 2026-07-18T14:19:08+02:00; 2026-07-18T14:29:19+02:00; 2026-07-18T14:44:56+02:00; 2026-07-18T14:46:42+02:00; 2026-07-18T15:35:21+02:00; 2026-07-18T15:37:33+02:00; 2026-07-18T16:05:46+02:00; 2026-07-18T16:09:12+02:00; 2026-07-18T16:25:39+02:00</dd>
+        <dt>commits</dt><dd>4f97972666c39c6df5f55df84ad24f20cbe338e5; 72ed77a; c6d12e7; f5611204a56692db159829d4721c8548a7ffe6c1; 18b45f99a3bae592be842127208455a7ee4d9220; 8be3b0b</dd>
+        <dt>agent name</dt><dd>Codex /root; Codex /root; Codex /root; Codex /root; Codex /root; Codex /root; Codex /root; Codex /root; Codex /root; Codex /root; Codex /root; Codex /root; Codex /root; Codex /root; Codex /root</dd>
+        <dt>session id</dt><dd>019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22</dd>
         <dt>back refs</dt><dd><code>init.lua</code>, current <code>master</code>, architecture/test/review specialist reports</dd>
         <dt>forward refs</dt><dd>Anodyne mandatory implementation milestones 1–7; public distribution requires a separate future plan</dd>
       </dl>
@@ -369,25 +369,25 @@ _G.Anodyne, _G.WindowManager = nextInstance, nextInstance</code></pre>
     </div>
 
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone 5: Transactional Actions and History</h3>
+      <h3><code class="status">[x]</code> Milestone 5: Transactional Actions and History</h3>
       <p>Extract the highest-risk correctness layer: authoritative frame mutation, screen snapshots, rollback, undo, and session reset.</p>
       <h4>5.1 Extraction packet</h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> Extract per-window copied/bounded history transitions to <code>Anodyne/core/history.lua</code>.</li>
-        <li><code class="status">[]</code> Extract focus resolution, screen snapshots, apply/readback, exact rollback, undo/reset, and concrete frame actions to <code>Anodyne/window_actions.lua</code> using narrow injected window/screen ports.</li>
-        <li><code class="status">[]</code> Preserve actual readback as history <code>after</code>; no-op/rejected actions create no entry; external changes and failed restoration invalidate only required history.</li>
-        <li><code class="status">[]</code> Exercise every fake fault mode and window-destruction cleanup.</li>
+        <li><code class="status">[x]</code> Extract per-window copied/bounded history transitions to <code>Anodyne/core/history.lua</code>.</li>
+        <li><code class="status">[x]</code> Extract focus resolution, screen snapshots, apply/readback, exact rollback, undo/reset, and concrete frame actions to <code>Anodyne/window_actions.lua</code> using narrow injected window/screen ports.</li>
+        <li><code class="status">[x]</code> Preserve actual readback as history <code>after</code>; no-op/rejected actions create no entry; external changes and failed restoration invalidate only required history.</li>
+        <li><code class="status">[x]</code> Exercise every fake fault mode and window-destruction cleanup.</li>
       </ul>
       <h4>5.2 Independent reviewer gate</h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> Reviewer treats any rollback, screen identity/full-frame, modal target, or selective invalidation regression as high severity and rework.</li>
+        <li><code class="status">[x]</code> Reviewer treats any rollback, screen identity/full-frame, modal target, or selective invalidation regression as high severity and rework.</li>
       </ul>
       <h4>5.3 Testing Strategy</h4>
       <p>Require at least 95% for <code>Anodyne/core/history.lua</code> and 90% for <code>Anodyne/window_actions.lua</code>, with named success and failure scenarios independent of line coverage.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>make test-actions</code> — all transactional outcomes and history invariants pass.</li>
-        <li><code class="status">[]</code> <code>make test</code> — characterization and unit suites pass together.</li>
-        <li><code class="status">[]</code> <code>make coverage</code> — required module floors and uncovered-line review pass.</li>
+        <li><code class="status">[x]</code> <code>make test-actions</code> — 27 transactional/history examples pass.</li>
+        <li><code class="status">[x]</code> <code>make test</code> — all 155 characterization and unit examples pass together.</li>
+        <li><code class="status">[x]</code> <code>make coverage</code> — history is 34/34 (100%) and window actions is 214/221 (96.83%); reviewer inspected all seven uncovered lines.</li>
       </ul>
       <div class="loop">🔁 A success-path-only suite is automatic rework.</div>
     </div>
@@ -568,6 +568,8 @@ Remaining Low notes and disposition</code></pre>
     <p><strong>2026-07-18T15:35:21+02:00 — Milestone 3 approved.</strong> Mechanically relocated the monolith behind an inert Anodyne facade and exact three-line transitional loader. Lifecycle tests cover every startup stage, aggregate cleanup, retained failed handles, faulted retry, stale generations, modern/legacy deduplication, atomic globals, immutable configuration, and the private runtime-factory seam. R0 repair activated the composition seam, preserved prior running/stopped smoke state, and added combined startup/cleanup failure evidence; R1 repair atomically armed post-preflight smoke failures so timeouts cannot masquerade as deferrals. R2 approved with no findings. Final evidence: 21/21 facade, 61/61 characterization, 93/93 full/coverage, <code>Anodyne/init.lua</code> 972/1097 (88.61%), clean format/diff, and native smoke <code>DEFERRED-ENVIRONMENT</code>.</p>
     <p><strong>2026-07-18T15:37:33+02:00 — Milestone 4 started.</strong> Recorded approved Milestone 3 checkpoint <code>18b45f9</code> and marked pure configuration/geometry extraction in progress. This milestone introduces the first 95% module floors and does not move history, transactional actions, key routing, presentation, controller, or native adapter ownership.</p>
     <p><strong>2026-07-18T16:05:46+02:00 — Milestone 4 approved.</strong> Extracted immutable per-instance configuration/action metadata and pure geometry with independently derived boundary tables. R0 repair removed accidental behavior hardening for empty lists and partial aspect entries and made config the sole undo-depth/default/metadata owner; R1 approved with no findings. Final evidence: 31/31 core, 61/61 characterization, 25/25 facade, 128/128 full/coverage; config 144/144 and geometry 75/75 (100% each), aggregate Anodyne 1015/1117 (90.87%), mutation red/green, clean format/diff, and native smoke still <code>DEFERRED-ENVIRONMENT</code>.</p>
+    <p><strong>2026-07-18T16:09:12+02:00 — Milestone 5 started.</strong> Recorded approved Milestone 4 checkpoint <code>8be3b0b</code> and marked transactional actions/history extraction in progress. This packet is limited to copied bounded history, authoritative mutation/readback, rollback, undo/reset, and narrow window/screen ports; key routing, presentation, controller orchestration, and the native adapter remain for later milestones.</p>
+    <p><strong>2026-07-18T16:25:39+02:00 — Milestone 5 approved.</strong> Extracted copied bounded per-window history and focus/snapshot/apply-readback/exact-rollback/undo/reset/concrete actions behind narrow ports. The fresh R0 reviewer found no Medium+ issues after direct comparison with <code>8be3b0b</code>, confirmed every fake window fault and destruction cleanup path, and classified the seven uncovered lines as one LuaCov multiline artifact plus duplicate defensive exits with shared behavior already covered. Final evidence: 27/27 actions, 37/37 core, 25/25 facade, 61/61 characterization, 155/155 full/coverage; history 34/34 (100%), window actions 214/221 (96.83%), aggregate Anodyne 1104/1175 (93.96%), mutation red/green, clean format/diff, and native smoke <code>DEFERRED-ENVIRONMENT</code>.</p>
   </section>
 </main>
 </body>
