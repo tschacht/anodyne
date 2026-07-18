@@ -1,0 +1,394 @@
+local FakeHs = require("spec.support.fake_hs")
+
+local function freshFacade()
+  package.loaded.Anodyne = nil
+  return require("Anodyne")
+end
+
+local function assertNoResources(driver)
+  assert.same({ timers = 0, menus = 0, hotkeys = 0, modals = 0, filters = 0, taps = 0, canvases = 0 }, driver:activeCounts())
+end
+
+describe("Milestone 3 facade", function()
+  local driver, Anodyne
+
+  before_each(function()
+    _G.Anodyne, _G.WindowManager, _G.hs = nil, nil, nil
+    driver = FakeHs.new()
+    Anodyne = freshFacade()
+  end)
+
+  after_each(function()
+    driver:shutdown()
+    package.loaded.Anodyne = nil
+  end)
+
+  it("requires inertly without reading hs or changing globals", function()
+    local sentinel = {}
+    _G.WindowManager = sentinel
+    _G.hs = setmetatable({}, {
+      __index = function()
+        error("hs was touched")
+      end,
+    })
+    package.loaded.Anodyne = nil
+    local facade = require("Anodyne")
+    assert.is_function(facade.new)
+    assert.are.equal(sentinel, _G.WindowManager)
+    assert.is_nil(_G.Anodyne)
+    assertNoResources(driver)
+  end)
+
+  it("validates exact facade option keys and types", function()
+    assert.has_error(function()
+      Anodyne.new()
+    end, "new options must be a table")
+    assert.has_error(function()
+      Anodyne.new({ hs = driver.hs, extra = true })
+    end, "unknown new option: extra")
+    assert.has_error(function()
+      Anodyne.new({ hs = false })
+    end, "new.hs must be a table")
+    assert.has_error(function()
+      Anodyne.new({ hs = driver.hs, modules = false })
+    end, "new.modules must be a table")
+    assert.has_error(function()
+      Anodyne.new({ hs = driver.hs, modules = { other = function() end } })
+    end, "unknown new.modules key: other")
+    assert.has_error(function()
+      Anodyne.new({ hs = driver.hs, modules = { runtimeFactory = true } })
+    end, "new.modules.runtimeFactory must be a function")
+    assert.has_error(function()
+      Anodyne.replace({ hs = driver.hs, modules = {} })
+    end, "unknown replace option: modules")
+    assert.has_error(function()
+      Anodyne.replace({ hs = driver.hs, previous = { other = {} } })
+    end, "unknown replace.previous key: other")
+  end)
+
+  it("uses a private validated runtime composition seam", function()
+    local observed = {}
+    local factory = function(instance, hs, config, generation)
+      observed.instance = instance
+      observed.hs = hs
+      observed.config = config
+      observed.current = generation.current()
+      instance.menu = hs.menubar.new()
+      instance.menu:setTitle(config.menuTitle)
+    end
+    local modules = { runtimeFactory = factory }
+    local instance = Anodyne.new({ hs = driver.hs, modules = modules })
+    modules.runtimeFactory = function()
+      error("mutated composition seam")
+    end
+    assert.is_nil(rawget(instance, "runtimeFactory"))
+    assertNoResources(driver)
+    instance:start()
+    assert.are.equal(instance, observed.instance)
+    assert.are.equal(driver.hs, observed.hs)
+    assert.are.equal(instance.config, observed.config)
+    assert.is_true(observed.current)
+    assert.same({ timers = 0, menus = 1, hotkeys = 0, modals = 0, filters = 0, taps = 0, canvases = 0 }, driver:activeCounts())
+    assert.is_nil(select(2, instance:stop()))
+    assertNoResources(driver)
+
+    local failing = Anodyne.new({
+      hs = driver.hs,
+      modules = {
+        runtimeFactory = function(candidate, hs)
+          candidate.menu = hs.menubar.new()
+          error("seam startup failure")
+        end,
+      },
+    })
+    assert.has_error(function()
+      failing:start()
+    end)
+    assert.is_false(failing:isRunning())
+    assertNoResources(driver)
+  end)
+
+  it("deep-merges maps, replaces lists, does not alias, and freezes config", function()
+    local override = {
+      symbols = { left = "L" },
+      widthPresets = { 1111, 1222 },
+      modalHotkey = { modifiers = { "alt" } },
+    }
+    local first = Anodyne.new({ hs = driver.hs, config = override, modules = { runtimeFactory = function() end } })
+    local second = Anodyne.new({ hs = driver.hs })
+    override.symbols.left = "changed"
+    override.widthPresets[1] = 9
+    assert.are.equal("L", first.config.symbols.left)
+    assert.are.equal("↑", first.config.symbols.up)
+    assert.same({ 1111, 1222 }, { first.config.widthPresets[1], first.config.widthPresets[2] })
+    assert.are.equal(1400, second.config.widthPresets[1])
+    assert.has_error(function()
+      first.config.menuTitle = "bad"
+    end, "configuration is immutable")
+    assert.has_error(function()
+      first.config.symbols.left = "bad"
+    end, "configuration is immutable")
+    assert.has_error(function()
+      Anodyne.new({ hs = driver.hs, config = { unknown = true } })
+    end, "unknown config key: unknown")
+    assert.has_error(function()
+      Anodyne.new({ hs = driver.hs, config = { widthPresets = { "bad" } } })
+    end, "invalid config type for widthPresets[1]: expected number")
+  end)
+
+  it("constructs stopped and supports idempotent start and stop-start", function()
+    local instance = Anodyne.new({ hs = driver.hs })
+    assert.is_false(instance:isRunning())
+    assert.are.equal(instance, instance:start())
+    assert.are.equal(instance, instance:start())
+    assert.is_true(instance:isRunning())
+    assert.same({ timers = 0, menus = 1, hotkeys = 1, modals = 1, filters = 2, taps = 0, canvases = 0 }, driver:activeCounts())
+    local stopped, errors = instance:stop()
+    assert.are.equal(instance, stopped)
+    assert.is_nil(errors)
+    assert.is_false(instance:isRunning())
+    assert.are.equal(instance, instance:stop())
+    assertNoResources(driver)
+    instance:start()
+    assert.is_true(instance:isRunning())
+  end)
+
+  it("cleans every partial startup failure and permits direct retry", function()
+    local stages = {
+      { "menubar.new", 1 },
+      { "filter.new", 1 },
+      { "filter.new", 2 },
+      { "window.frontmostWindow", 1 },
+      { "menubar.setTitle", 1 },
+      { "menubar.setTooltip", 1 },
+      { "menubar.setMenu", 1 },
+      { "filter.subscribe", 1 },
+      { "filter.subscribe", 2 },
+      { "modal.new", 1 },
+      { "hotkey.bind", 1 },
+    }
+    for _, stage in ipairs(stages) do
+      local candidate = FakeHs.new()
+      candidate:setLifecycleFault(stage[1], stage[2])
+      local instance = Anodyne.new({ hs = candidate.hs })
+      assert.has_error(function()
+        instance:start()
+      end)
+      assert.is_false(instance:isRunning(), stage[1] .. " should be stopped")
+      assertNoResources(candidate)
+      candidate:clearLifecycleFaults()
+      assert.are.equal(instance, instance:start())
+      assert.is_true(instance:isRunning())
+      assert.is_nil(select(2, instance:stop()))
+      assertNoResources(candidate)
+    end
+  end)
+
+  it("attempts all ordered teardown stages and recovers a faulted instance", function()
+    local instance = Anodyne.new({ hs = driver.hs }):start()
+    driver:triggerEntry()
+    driver:clearCallLog()
+    driver:setLifecycleFault("hotkey.delete", 1)
+    driver:setLifecycleFault("filter.unsubscribeAll", 1)
+    local _, errors = instance:stop()
+    assert.is_table(errors)
+    assert.are.equal(2, #errors)
+    assert.is_true(instance:isRunning())
+    assert.has_error(function()
+      instance:start()
+    end, "Anodyne instance is faulted; call stop() until cleanup succeeds")
+    local log = table.concat(driver:callLog(), ",")
+    assert.matches("timer.stop", log)
+    assert.matches("eventtap.stop", log)
+    assert.matches("modal.delete", log)
+    assert.matches("timer.delete", log)
+    assert.matches("canvas.delete", log)
+    assert.matches("menubar.delete", log)
+    assert.matches("filter.unsubscribeAll#2", log)
+    driver:clearLifecycleFaults()
+    local _, retryErrors = instance:stop()
+    assert.is_nil(retryErrors)
+    assert.is_false(instance:isRunning())
+    assertNoResources(driver)
+    instance:start()
+    assert.is_true(instance:isRunning())
+  end)
+
+  it("recovers when delete succeeds after an earlier stop failure", function()
+    local instance = Anodyne.new({ hs = driver.hs }):start()
+    driver:triggerEntry()
+    driver:setLifecycleFault("timer.stop", 1)
+    local _, errors = instance:stop()
+    assert.is_table(errors)
+    assert.is_true(instance:isRunning())
+    driver:clearLifecycleFaults()
+    assert.is_nil(select(2, instance:stop()))
+    assert.is_false(instance:isRunning())
+    assertNoResources(driver)
+  end)
+
+  it("aggregates startup and rollback failures while retaining failed handles", function()
+    local instance = Anodyne.new({ hs = driver.hs })
+    driver:setLifecycleFault("hotkey.bind", 1, "injected startup acquisition failure")
+    driver:setLifecycleFault("menubar.delete", 1, "injected rollback cleanup failure")
+    local ok, message = pcall(function()
+      instance:start()
+    end)
+    assert.is_false(ok)
+    assert.matches("injected startup acquisition failure", message)
+    assert.matches("injected rollback cleanup failure", message)
+    assert.is_true(instance:isRunning())
+    local menuAcquisitions = driver.runtime.invocationCounts["menubar.new"]
+    assert.has_error(function()
+      instance:start()
+    end, "Anodyne instance is faulted; call stop() until cleanup succeeds")
+    assert.are.equal(menuAcquisitions, driver.runtime.invocationCounts["menubar.new"])
+    driver:clearLifecycleFaults()
+    assert.is_nil(select(2, instance:stop()))
+    assert.is_false(instance:isRunning())
+    assertNoResources(driver)
+    instance:start()
+    assert.is_true(instance:isRunning())
+    assert.is_nil(select(2, instance:stop()))
+    assertNoResources(driver)
+  end)
+
+  it("invalidates callbacks captured from an older generation", function()
+    local instance = Anodyne.new({ hs = driver.hs }):start()
+    local oldFocus = instance.windowFilter._state.callbacks.windowFocused
+    local oldEntry = instance.entryHotkey._state.callback
+    local other = driver:addWindow({ id = 42 })
+    instance:stop()
+    instance:start()
+    local remembered = instance.lastFocusedWindow
+    oldFocus(other)
+    oldEntry()
+    assert.are.equal(remembered, instance.lastFocusedWindow)
+    assert.is_false(instance.modalState.active)
+  end)
+
+  it("deduplicates prior identities and tears modern down before legacy", function()
+    local calls = {}
+    local shared = {
+      stop = function(self)
+        table.insert(calls, "modern.stop")
+        return self, nil
+      end,
+      menu = {
+        delete = function()
+          table.insert(calls, "legacy.menu.delete")
+        end,
+      },
+    }
+    local replacement = Anodyne.replace({
+      hs = driver.hs,
+      previous = { anodyne = shared, legacy = shared },
+    })
+    assert.same({ "modern.stop" }, calls)
+    assert.is_true(replacement:isRunning())
+
+    replacement:stop()
+    calls = {}
+    local modern = {
+      stop = function(self)
+        table.insert(calls, "modern.stop")
+        return self
+      end,
+    }
+    local legacy = {}
+    local function object(name, methods)
+      local value = {}
+      for _, method in ipairs(methods) do
+        value[method] = function()
+          table.insert(calls, name .. "." .. method)
+        end
+      end
+      return value
+    end
+    legacy.modalTimer = object("modalTimer", { "stop", "delete" })
+    legacy.modalRefreshTimer = object("modalRefreshTimer", { "stop", "delete" })
+    legacy.menuFailureTimer = object("menuFailureTimer", { "stop", "delete" })
+    legacy.modalKeyGuard = object("modalKeyGuard", { "stop", "delete" })
+    legacy.entryHotkey = object("entryHotkey", { "delete" })
+    legacy.windowMode = object("windowMode", { "delete" })
+    legacy.modalCanvas = object("modalCanvas", { "delete" })
+    legacy.menu = object("menu", { "delete" })
+    legacy.windowFilter = object("windowFilter", { "unsubscribeAll" })
+    legacy.historyWindowFilter = object("historyWindowFilter", { "unsubscribeAll" })
+    Anodyne.replace({ hs = driver.hs, previous = { anodyne = modern, legacy = legacy } })
+    assert.same({
+      "modern.stop",
+      "modalTimer.stop",
+      "modalRefreshTimer.stop",
+      "menuFailureTimer.stop",
+      "modalKeyGuard.stop",
+      "entryHotkey.delete",
+      "windowMode.delete",
+      "modalTimer.delete",
+      "modalRefreshTimer.delete",
+      "menuFailureTimer.delete",
+      "modalCanvas.delete",
+      "modalKeyGuard.delete",
+      "menu.delete",
+      "windowFilter.unsubscribeAll",
+      "historyWindowFilter.unsubscribeAll",
+    }, calls)
+  end)
+
+  it("aggregates prior errors and constructs no replacement", function()
+    local calls = {}
+    local modern = {
+      stop = function(self)
+        table.insert(calls, "modern")
+        return self, { "returned one", "returned two" }
+      end,
+    }
+    local legacy = {
+      menu = {
+        delete = function()
+          table.insert(calls, "legacy")
+          error("legacy failure")
+        end,
+      },
+    }
+    local ok, message = pcall(Anodyne.replace, {
+      hs = driver.hs,
+      previous = { anodyne = modern, legacy = legacy },
+    })
+    assert.is_false(ok)
+    assert.matches("returned one", message)
+    assert.matches("returned two", message)
+    assert.matches("legacy failure", message)
+    assert.same({ "modern", "legacy" }, calls)
+    assertNoResources(driver)
+  end)
+
+  it("assigns loader globals atomically only after replace succeeds", function()
+    local oldAnodyne, oldLegacy = {}, {}
+    _G.Anodyne, _G.WindowManager, _G.hs = oldAnodyne, oldLegacy, driver.hs
+    local facade = package.loaded.Anodyne
+    package.loaded.Anodyne = {
+      replace = function()
+        error("replacement failed")
+      end,
+    }
+    assert.has_error(function()
+      dofile("init.lua")
+    end, "replacement failed")
+    assert.are.equal(oldAnodyne, _G.Anodyne)
+    assert.are.equal(oldLegacy, _G.WindowManager)
+
+    local nextInstance = {}
+    package.loaded.Anodyne = {
+      replace = function(options)
+        assert.are.equal(oldAnodyne, options.previous.anodyne)
+        assert.are.equal(oldLegacy, options.previous.legacy)
+        return nextInstance
+      end,
+    }
+    dofile("init.lua")
+    assert.are.equal(nextInstance, _G.Anodyne)
+    assert.are.equal(nextInstance, _G.WindowManager)
+    package.loaded.Anodyne = facade
+  end)
+end)

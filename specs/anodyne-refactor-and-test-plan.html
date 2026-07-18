@@ -81,10 +81,10 @@
       <summary>Metadata</summary>
       <dl>
         <dt>created</dt><dd>2026-07-18T10:46:12+02:00</dd>
-        <dt>modified</dt><dd>2026-07-18T10:46:12+02:00; 2026-07-18T11:02:25+02:00; 2026-07-18T11:16:21+02:00; 2026-07-18T11:44:26+02:00; 2026-07-18T13:16:59+02:00; 2026-07-18T13:22:24+02:00; 2026-07-18T14:19:08+02:00; 2026-07-18T14:29:19+02:00; 2026-07-18T14:44:56+02:00</dd>
-        <dt>commits</dt><dd>4f97972666c39c6df5f55df84ad24f20cbe338e5; 72ed77a; c6d12e7</dd>
-        <dt>agent name</dt><dd>Codex /root; Codex /root; Codex /root; Codex /root; Codex /root; Codex /root; Codex /root; Codex /root; Codex /root</dd>
-        <dt>session id</dt><dd>019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22</dd>
+        <dt>modified</dt><dd>2026-07-18T10:46:12+02:00; 2026-07-18T11:02:25+02:00; 2026-07-18T11:16:21+02:00; 2026-07-18T11:44:26+02:00; 2026-07-18T13:16:59+02:00; 2026-07-18T13:22:24+02:00; 2026-07-18T14:19:08+02:00; 2026-07-18T14:29:19+02:00; 2026-07-18T14:44:56+02:00; 2026-07-18T14:46:42+02:00; 2026-07-18T15:35:21+02:00</dd>
+        <dt>commits</dt><dd>4f97972666c39c6df5f55df84ad24f20cbe338e5; 72ed77a; c6d12e7; f5611204a56692db159829d4721c8548a7ffe6c1</dd>
+        <dt>agent name</dt><dd>Codex /root; Codex /root; Codex /root; Codex /root; Codex /root; Codex /root; Codex /root; Codex /root; Codex /root; Codex /root; Codex /root</dd>
+        <dt>session id</dt><dd>019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22</dd>
         <dt>back refs</dt><dd><code>init.lua</code>, current <code>master</code>, architecture/test/review specialist reports</dd>
         <dt>forward refs</dt><dd>Anodyne mandatory implementation milestones 1–7; public distribution requires a separate future plan</dd>
       </dl>
@@ -317,18 +317,18 @@ _G.WindowManager = nil</code></pre>
     </div>
 
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone 3: Anodyne Facade and Thin Loader</h3>
+      <h3><code class="status">[x]</code> Milestone 3: Anodyne Facade and Thin Loader</h3>
       <p>Mechanically relocate the implementation behind an explicit lifecycle without improving or reorganizing its domain logic.</p>
       <h4>3.1 Relocation packet</h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> Implement the exact D-API-01 facade and D-LIFE-01 failure policy. Validate <code>new</code>/<code>replace</code> option keys; keep <code>modules</code> an internal composition seam.</li>
-        <li><code class="status">[]</code> Move current logic mechanically behind the facade; preserve defaults, strings, ordering, timing, callbacks, and cleanup order.</li>
-        <li><code class="status">[]</code> Reduce root <code>init.lua</code> to the Milestone 3 transitional loader shown below. Apply D-GLOBAL-01 deterministically: recognize both prior globals, deduplicate cleanup, retain the temporary alias through migration, and schedule mandatory removal in Milestone 7.</li>
-        <li><code class="status">[]</code> Make <code>start → start</code>, <code>start → stop → start</code>, repeated <code>stop</code>, aggregate teardown error, and every partial startup failure safe.</li>
+        <li><code class="status">[x]</code> Implement the exact D-API-01 facade and D-LIFE-01 failure policy. Validate <code>new</code>/<code>replace</code> option keys; keep <code>modules</code> an internal composition seam.</li>
+        <li><code class="status">[x]</code> Move current logic mechanically behind the facade; preserve defaults, strings, ordering, timing, callbacks, and cleanup order.</li>
+        <li><code class="status">[x]</code> Reduce root <code>init.lua</code> to the Milestone 3 transitional loader shown below. Apply D-GLOBAL-01 deterministically: recognize both prior globals, deduplicate cleanup, retain the temporary alias through migration, and schedule mandatory removal in Milestone 7.</li>
+        <li><code class="status">[x]</code> Make <code>start → start</code>, <code>start → stop → start</code>, repeated <code>stop</code>, aggregate teardown error, and every partial startup failure safe.</li>
       </ul>
       <h4>3.2 Independent reviewer gate</h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> Reviewer performs base/head behavior comparison, checks case-sensitive <code>require("Anodyne")</code>, verifies cleanup-before-replacement, and rejects any mixed behavior cleanup.</li>
+        <li><code class="status">[x]</code> Reviewer performs base/head behavior comparison, checks case-sensitive <code>require("Anodyne")</code>, verifies cleanup-before-replacement, and rejects any mixed behavior cleanup. R2 approved with no Medium+ findings.</li>
       </ul>
       <pre><code>-- Milestone 3 transitional root init.lua
 local previous = { anodyne = rawget(_G, "Anodyne"), legacy = rawget(_G, "WindowManager") }
@@ -337,9 +337,9 @@ _G.Anodyne, _G.WindowManager = nextInstance, nextInstance</code></pre>
       <h4>3.3 Testing Strategy</h4>
       <p>Run the entire characterization suite unchanged, then apply D-SMOKE-01. Native smoke unavailability does not halt pure extraction, but it records <code>[d]</code> and prevents a final <code>COMPLETE</code> state.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>make test</code> — behavior parity after relocation.</li>
-        <li><code class="status">[]</code> <code>make smoke-load</code> — automatically attempt bounded load/start/stop/reload compatibility without launching Hammerspoon or touching an ordinary window.</li>
-        <li><code class="status">[]</code> <code>make coverage</code> — relocated implementation remains counted.</li>
+        <li><code class="status">[x]</code> <code>make test</code> — 93 examples pass with 61/61 base/head characterization parity.</li>
+        <li><code class="status">[d]</code> <code>make smoke-load</code> — safely recorded <code>DEFERRED-ENVIRONMENT</code>; offline armed-failure/restoration classification tests pass.</li>
+        <li><code class="status">[x]</code> <code>make coverage</code> — relocated <code>Anodyne/init.lua</code> is counted at 972/1097 executable lines (88.61%).</li>
       </ul>
       <div class="loop">🔁 Under D-SCOPE-01, any changed message, timing, key, menu position, action result, or resource count is REWORK. Preserve suspected bugs and continue without asking.</div>
     </div>
@@ -564,6 +564,8 @@ Remaining Low notes and disposition</code></pre>
     <p><strong>2026-07-18T14:19:08+02:00 — Milestone 2 blocked after R3.</strong> Recorded terminal state <code>BLOCKED-REVIEW</code> under D-REPAIR-01 and stopped before Milestone 3. The implementation produced a strict deterministic fake, 59 characterization examples, 70 total passing examples, mutation-sensitive failures, clean formatting/diff checks, and an <code>init.lua</code> baseline of 778/887 executable lines (87.71%) without changing production. R0–R2 repairs closed eventtap fidelity, active-reload ownership, screen identity, exact UI contracts, chronological/nested timers, copied history, strict keycodes, and deleted-canvas liveness; a debugger preceded the third repair. Final R3 rejected the still-missing successful unchanged-screen session-reset characterization. Per the bounded repair contract, no fourth repair, M2 checkpoint, or M3 implementation was attempted; the complete uncommitted M2 worktree is preserved for recovery.</p>
     <p><strong>2026-07-18T14:29:19+02:00 — Owner reopened execution.</strong> The owner confirmed that the remaining R3 finding is a test-safety-net gap rather than a production defect and explicitly instructed execution to continue through the complete plan. Reopened Milestone 2, activated a new persistent goal, and amended D-REPAIR-01 so distinct actionable findings continue through debugger-assisted repair/review; only a genuine repeated-root or irreconcilable impasse may produce <code>BLOCKED-REVIEW</code>. The prior blocker entry remains as immutable execution history.</p>
     <p><strong>2026-07-18T14:44:56+02:00 — Milestone 2 approved after reopening.</strong> Added the successful unchanged-screen session-reset characterization requested by R3, then debugger-assisted repair hardened the fake observer so hidden/deleted canvases cannot satisfy UI assertions. Mutation copies proved both reset restoration and visible delayed feedback turn the suite red when broken. A fresh reviewer approved with no Medium+ findings. Final evidence: 61/61 characterization examples, 72/72 full and coverage examples, <code>init.lua</code> 787/891 executable lines (88.33%), clean formatting/diff checks, and unchanged production source.</p>
+    <p><strong>2026-07-18T14:46:42+02:00 — Milestone 3 started.</strong> Recorded approved Milestone 2 checkpoint <code>f561120</code> and marked the inert facade/lifecycle plus mechanical thin-loader relocation in progress. Milestone 3 remains strictly pre-extraction: no geometry, history, keymap, view, controller, action, or adapter decomposition begins here.</p>
+    <p><strong>2026-07-18T15:35:21+02:00 — Milestone 3 approved.</strong> Mechanically relocated the monolith behind an inert Anodyne facade and exact three-line transitional loader. Lifecycle tests cover every startup stage, aggregate cleanup, retained failed handles, faulted retry, stale generations, modern/legacy deduplication, atomic globals, immutable configuration, and the private runtime-factory seam. R0 repair activated the composition seam, preserved prior running/stopped smoke state, and added combined startup/cleanup failure evidence; R1 repair atomically armed post-preflight smoke failures so timeouts cannot masquerade as deferrals. R2 approved with no findings. Final evidence: 21/21 facade, 61/61 characterization, 93/93 full/coverage, <code>Anodyne/init.lua</code> 972/1097 (88.61%), clean format/diff, and native smoke <code>DEFERRED-ENVIRONMENT</code>.</p>
   </section>
 </main>
 </body>

@@ -67,7 +67,20 @@ function Fake.new(options)
     screens = {},
     windows = {},
     now = 0,
+    callLog = {},
+    lifecycleFaults = {},
+    invocationCounts = {},
   }
+
+  local function lifecycle(operation)
+    local invocation = (runtime.invocationCounts[operation] or 0) + 1
+    runtime.invocationCounts[operation] = invocation
+    table.insert(runtime.callLog, operation .. "#" .. invocation)
+    local fault = runtime.lifecycleFaults[operation]
+    if fault and fault.invocation == invocation then
+      error(fault.message or ("injected " .. operation .. " failure"))
+    end
+  end
 
   local screenMethods = {}
   function screenMethods:id(...)
@@ -201,12 +214,14 @@ function Fake.new(options)
   local timerMethods = {}
   function timerMethods:stop(...)
     noExtra("timer:stop", ...)
+    lifecycle("timer.stop")
     live(self._state, "timer")
     self._state.active = false
     return self
   end
   function timerMethods:delete(...)
     noExtra("timer:delete", ...)
+    lifecycle("timer.delete")
     live(self._state, "timer")
     self._state.active = false
     self._state.deleted = true
@@ -215,6 +230,7 @@ function Fake.new(options)
   local menuMethods = {}
   function menuMethods:setTitle(title, ...)
     noExtra("menubar:setTitle", ...)
+    lifecycle("menubar.setTitle")
     live(self._state, "menubar")
     if type(title) ~= "string" then
       fail("menubar title must be a string")
@@ -224,6 +240,7 @@ function Fake.new(options)
   end
   function menuMethods:setTooltip(value, ...)
     noExtra("menubar:setTooltip", ...)
+    lifecycle("menubar.setTooltip")
     live(self._state, "menubar")
     if type(value) ~= "string" then
       fail("menubar tooltip must be a string")
@@ -233,6 +250,7 @@ function Fake.new(options)
   end
   function menuMethods:setMenu(value, ...)
     noExtra("menubar:setMenu", ...)
+    lifecycle("menubar.setMenu")
     live(self._state, "menubar")
     if type(value) ~= "function" and type(value) ~= "table" then
       fail("menubar menu must be a function or table")
@@ -242,6 +260,7 @@ function Fake.new(options)
   end
   function menuMethods:delete(...)
     noExtra("menubar:delete", ...)
+    lifecycle("menubar.delete")
     live(self._state, "menubar")
     self._state.deleted = true
   end
@@ -249,6 +268,7 @@ function Fake.new(options)
   local hotkeyMethods = {}
   function hotkeyMethods:delete(...)
     noExtra("hotkey:delete", ...)
+    lifecycle("hotkey.delete")
     live(self._state, "hotkey")
     self._state.deleted = true
     self._state.active = false
@@ -257,6 +277,7 @@ function Fake.new(options)
   local modalMethods = {}
   function modalMethods:enter(...)
     noExtra("modal:enter", ...)
+    lifecycle("modal.enter")
     live(self._state, "modal")
     if self._state.active then
       fail("modal entered twice")
@@ -268,6 +289,7 @@ function Fake.new(options)
   end
   function modalMethods:exit(...)
     noExtra("modal:exit", ...)
+    lifecycle("modal.exit")
     live(self._state, "modal")
     if not self._state.active then
       return
@@ -279,6 +301,7 @@ function Fake.new(options)
   end
   function modalMethods:delete(...)
     noExtra("modal:delete", ...)
+    lifecycle("modal.delete")
     live(self._state, "modal")
     if self._state.active then
       self:exit()
@@ -289,6 +312,7 @@ function Fake.new(options)
   local filterMethods = {}
   function filterMethods:subscribe(event, callback, ...)
     noExtra("filter:subscribe", ...)
+    lifecycle("filter.subscribe")
     live(self._state, "filter")
     if type(event) ~= "string" or type(callback) ~= "function" then
       fail("filter subscription requires event and callback")
@@ -301,6 +325,7 @@ function Fake.new(options)
   end
   function filterMethods:unsubscribeAll(...)
     noExtra("filter:unsubscribeAll", ...)
+    lifecycle("filter.unsubscribeAll")
     live(self._state, "filter")
     self._state.callbacks = {}
     return self
@@ -309,6 +334,7 @@ function Fake.new(options)
   local tapMethods = {}
   function tapMethods:start(...)
     noExtra("eventtap:start", ...)
+    lifecycle("eventtap.start")
     live(self._state, "eventtap")
     if self._state.active then
       fail("eventtap started twice")
@@ -318,12 +344,14 @@ function Fake.new(options)
   end
   function tapMethods:stop(...)
     noExtra("eventtap:stop", ...)
+    lifecycle("eventtap.stop")
     live(self._state, "eventtap")
     self._state.active = false
     return self
   end
   function tapMethods:delete(...)
     noExtra("eventtap:delete", ...)
+    lifecycle("eventtap.delete")
     live(self._state, "eventtap")
     self._state.active = false
     self._state.deleted = true
@@ -332,6 +360,7 @@ function Fake.new(options)
   local canvasMethods = {}
   function canvasMethods:level(value, ...)
     noExtra("canvas:level", ...)
+    lifecycle("canvas.level")
     if value ~= "overlay" then
       fail("canvas level is invalid")
     end
@@ -341,6 +370,7 @@ function Fake.new(options)
   end
   function canvasMethods:behavior(value, ...)
     noExtra("canvas:behavior", ...)
+    lifecycle("canvas.behavior")
     if value ~= "canJoinAllSpaces" then
       fail("canvas behavior is invalid")
     end
@@ -350,18 +380,21 @@ function Fake.new(options)
   end
   function canvasMethods:show(...)
     noExtra("canvas:show", ...)
+    lifecycle("canvas.show")
     live(self._state, "canvas")
     self._state.visible = true
     return self
   end
   function canvasMethods:hide(...)
     noExtra("canvas:hide", ...)
+    lifecycle("canvas.hide")
     live(self._state, "canvas")
     self._state.visible = false
     return self
   end
   function canvasMethods:delete(...)
     noExtra("canvas:delete", ...)
+    lifecycle("canvas.delete")
     live(self._state, "canvas")
     self._state.visible = false
     self._state.deleted = true
@@ -396,12 +429,14 @@ function Fake.new(options)
     if select("#", ...) ~= 0 then
       fail("window.frontmostWindow takes no arguments")
     end
+    lifecycle("window.frontmostWindow")
     return runtime.frontmost
   end
   function hs.window.filter.new(...)
     if select("#", ...) > 1 then
       fail("window.filter.new takes at most one argument")
     end
+    lifecycle("filter.new")
     local global = ...
     if global ~= nil and global ~= true then
       fail("window.filter.new accepts only true or no argument")
@@ -432,6 +467,7 @@ function Fake.new(options)
   end
   function hs.timer.doAfter(delay, callback, ...)
     noExtra("timer.doAfter", ...)
+    lifecycle("timer.doAfter")
     if type(delay) ~= "number" or delay < 0 or type(callback) ~= "function" then
       fail("timer.doAfter requires nonnegative delay and callback")
     end
@@ -445,6 +481,7 @@ function Fake.new(options)
     if select("#", ...) ~= 0 then
       fail("menubar.new takes no arguments")
     end
+    lifecycle("menubar.new")
     local state = {}
     local menu = strictObject("menubar", menuMethods, state)
     rawset(menu, "_state", state)
@@ -453,6 +490,7 @@ function Fake.new(options)
   end
   function hs.hotkey.bind(modifiers, key, callback, ...)
     noExtra("hotkey.bind", ...)
+    lifecycle("hotkey.bind")
     if type(modifiers) ~= "table" or type(key) ~= "string" or type(callback) ~= "function" then
       fail("hotkey.bind requires modifiers, key, callback")
     end
@@ -466,6 +504,7 @@ function Fake.new(options)
     if select("#", ...) ~= 0 then
       fail("hotkey.modal.new takes no arguments")
     end
+    lifecycle("modal.new")
     local state = { active = false }
     local modal = strictObject("modal", modalMethods, state)
     rawset(modal, "_state", state)
@@ -474,6 +513,7 @@ function Fake.new(options)
   end
   function hs.eventtap.new(events, callback, ...)
     noExtra("eventtap.new", ...)
+    lifecycle("eventtap.new")
     if type(events) ~= "table" or type(callback) ~= "function" then
       fail("eventtap.new requires events and callback")
     end
@@ -518,6 +558,7 @@ function Fake.new(options)
   end
   function hs.canvas.new(frame, ...)
     noExtra("canvas.new", ...)
+    lifecycle("canvas.new")
     local state = { frame = copyFrame(frame), elements = {}, visible = false }
     local canvas = strictObject("canvas", canvasMethods, state, true)
     rawset(canvas, "_state", state)
@@ -596,6 +637,25 @@ function Fake.new(options)
   function driver:clearFaults(object)
     object._state.faults = {}
     object._state.writeCount = 0
+  end
+  function driver:setLifecycleFault(operation, invocation, message)
+    if type(operation) ~= "string" or type(invocation) ~= "number" or invocation < 1 then
+      fail("driver:setLifecycleFault requires an operation and positive invocation")
+    end
+    runtime.lifecycleFaults[operation] = { invocation = invocation, message = message }
+  end
+  function driver:clearLifecycleFaults()
+    runtime.lifecycleFaults = {}
+  end
+  function driver:clearCallLog()
+    runtime.callLog = {}
+  end
+  function driver:callLog()
+    local result = {}
+    for index, value in ipairs(runtime.callLog) do
+      result[index] = value
+    end
+    return result
   end
   function driver:removeScreen(screen)
     screen._state.removed = true
@@ -780,7 +840,11 @@ function Fake.new(options)
     return _G.WindowManager
   end
   function driver:shutdown()
-    if _G.WindowManager then
+    if _G.Anodyne and type(_G.Anodyne.stop) == "function" then
+      pcall(function()
+        _G.Anodyne:stop()
+      end)
+    elseif _G.WindowManager then
       local manager = _G.WindowManager
       for _, name in ipairs({ "modalTimer", "modalRefreshTimer", "menuFailureTimer", "modalKeyGuard" }) do
         local object = rawget(manager, name)
@@ -807,7 +871,7 @@ function Fake.new(options)
         end
       end
     end
-    _G.WindowManager, _G.hs = nil, nil
+    _G.Anodyne, _G.WindowManager, _G.hs = nil, nil, nil
   end
 
   return driver

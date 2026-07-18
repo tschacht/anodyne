@@ -42,7 +42,7 @@ describe("Milestone 2 characterization", function()
   local driver, window, screen
 
   before_each(function()
-    _G.WindowManager, _G.hs = nil, nil
+    _G.Anodyne, _G.WindowManager, _G.hs = nil, nil, nil
     driver = FakeHs.new()
     screen = driver.runtime.screens[1]
     window = driver.runtime.windows[1]

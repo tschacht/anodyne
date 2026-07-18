@@ -5,12 +5,12 @@ BUSTED := $(CURDIR)/.lua/bin/busted
 LUACOV := $(CURDIR)/.lua/bin/luacov
 STYLUA := $(CURDIR)/.tools/stylua
 TIMEOUT := $(CURDIR)/tools/run_with_timeout.py
-MILESTONE ?= 2
+MILESTONE ?= 3
 LOCAL_CONFIG := $(CURDIR)/.lua/etc/luarocks/config-5.4.lua
 LOCAL_HOME := $(CURDIR)/.lua/home
 LOCAL_ENV := HOME=$(LOCAL_HOME) LUAROCKS_CONFIG=$(LOCAL_CONFIG) LUA_PATH=';;' LUA_CPATH=';;'
 
-.PHONY: bootstrap toolchain-check test test-characterization coverage format-check verify deps-update
+.PHONY: bootstrap toolchain-check test test-characterization test-facade coverage format-check smoke-load verify deps-update
 
 bootstrap:
 	@tools/bootstrap
@@ -36,6 +36,9 @@ test: toolchain-check
 test-characterization: toolchain-check
 	@. tools/test-minimums.env; $(LOCAL_ENV) $(TIMEOUT) --seconds 30 --minimum-examples "$$TEST_MINIMUM_CHARACTERIZATION" -- $(BUSTED) --config-file=.busted spec/characterization
 
+test-facade: toolchain-check
+	@. tools/test-minimums.env; $(LOCAL_ENV) $(TIMEOUT) --seconds 30 --minimum-examples "$$TEST_MINIMUM_FACADE" -- $(BUSTED) --config-file=.busted spec/facade
+
 coverage: toolchain-check
 	@mkdir -p coverage
 	@. tools/test-minimums.env; $(LOCAL_ENV) $(TIMEOUT) --seconds 90 --minimum-examples "$$TEST_MINIMUM_FULL" -- $(BUSTED) --config-file=.busted --coverage
@@ -44,7 +47,10 @@ coverage: toolchain-check
 	@rm -f coverage/luacov.stats.out
 
 format-check: toolchain-check
-	@$(STYLUA) --check init.lua spec tools/check_coverage.lua tools/check_lock.lua tools/normalize_lock.lua
+	@$(STYLUA) --check init.lua Anodyne spec tools/check_coverage.lua tools/check_lock.lua tools/normalize_lock.lua tools/smoke.lua tools/smoke_prior.lua tools/smoke_status.lua
+
+smoke-load:
+	@sh tools/smoke_load.sh "$(CURDIR)"
 
 verify: format-check test coverage
 

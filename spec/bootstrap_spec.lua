@@ -12,10 +12,10 @@ end)
 
 describe("Milestone 1 coverage checker", function()
   it("fails when an on-disk Anodyne source is omitted from the LuaCov report", function()
-    local summary = "/tmp/anodyne-checker-fixture-summary.json"
-    local output = "/tmp/anodyne-checker-fixture-output.txt"
-    os.remove(summary)
-    os.remove(output)
+    local temporary = os.tmpname()
+    os.remove(temporary)
+    local summary = temporary .. "-summary.json"
+    local output = temporary .. "-output.txt"
     local command = table.concat({
       ".lua/bin/lua tools/check_coverage.lua",
       "--milestone 1",
@@ -37,9 +37,11 @@ describe("Milestone 1 coverage checker", function()
 end)
 
 describe("Milestone 1 environment provenance", function()
-  local output = "/tmp/anodyne-environment-marker-test-output.txt"
-  local missing = "/tmp/anodyne-environment-marker-missing.manifest"
-  local mismatch = "/tmp/anodyne-environment-marker-mismatch.manifest"
+  local temporary = os.tmpname()
+  os.remove(temporary)
+  local output = temporary .. "-output.txt"
+  local missing = temporary .. "-missing.manifest"
+  local mismatch = temporary .. "-mismatch.manifest"
 
   local function validate(marker)
     os.remove(output)
