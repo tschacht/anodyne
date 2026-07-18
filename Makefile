@@ -5,12 +5,12 @@ BUSTED := $(CURDIR)/.lua/bin/busted
 LUACOV := $(CURDIR)/.lua/bin/luacov
 STYLUA := $(CURDIR)/.tools/stylua
 TIMEOUT := $(CURDIR)/tools/run_with_timeout.py
-MILESTONE ?= 1
+MILESTONE ?= 2
 LOCAL_CONFIG := $(CURDIR)/.lua/etc/luarocks/config-5.4.lua
 LOCAL_HOME := $(CURDIR)/.lua/home
 LOCAL_ENV := HOME=$(LOCAL_HOME) LUAROCKS_CONFIG=$(LOCAL_CONFIG) LUA_PATH=';;' LUA_CPATH=';;'
 
-.PHONY: bootstrap toolchain-check test coverage format-check verify deps-update
+.PHONY: bootstrap toolchain-check test test-characterization coverage format-check verify deps-update
 
 bootstrap:
 	@tools/bootstrap
@@ -32,6 +32,9 @@ toolchain-check:
 
 test: toolchain-check
 	@. tools/test-minimums.env; $(LOCAL_ENV) $(TIMEOUT) --seconds 90 --minimum-examples "$$TEST_MINIMUM_FULL" -- $(BUSTED) --config-file=.busted
+
+test-characterization: toolchain-check
+	@. tools/test-minimums.env; $(LOCAL_ENV) $(TIMEOUT) --seconds 30 --minimum-examples "$$TEST_MINIMUM_CHARACTERIZATION" -- $(BUSTED) --config-file=.busted spec/characterization
 
 coverage: toolchain-check
 	@mkdir -p coverage

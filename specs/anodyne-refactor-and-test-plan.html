@@ -81,10 +81,10 @@
       <summary>Metadata</summary>
       <dl>
         <dt>created</dt><dd>2026-07-18T10:46:12+02:00</dd>
-        <dt>modified</dt><dd>2026-07-18T10:46:12+02:00; 2026-07-18T11:02:25+02:00; 2026-07-18T11:16:21+02:00; 2026-07-18T11:44:26+02:00; 2026-07-18T13:16:59+02:00</dd>
-        <dt>commits</dt><dd>4f97972666c39c6df5f55df84ad24f20cbe338e5; 72ed77a</dd>
-        <dt>agent name</dt><dd>Codex /root; Codex /root; Codex /root; Codex /root; Codex /root</dd>
-        <dt>session id</dt><dd>019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22</dd>
+        <dt>modified</dt><dd>2026-07-18T10:46:12+02:00; 2026-07-18T11:02:25+02:00; 2026-07-18T11:16:21+02:00; 2026-07-18T11:44:26+02:00; 2026-07-18T13:16:59+02:00; 2026-07-18T13:22:24+02:00; 2026-07-18T14:19:08+02:00; 2026-07-18T14:29:19+02:00; 2026-07-18T14:44:56+02:00</dd>
+        <dt>commits</dt><dd>4f97972666c39c6df5f55df84ad24f20cbe338e5; 72ed77a; c6d12e7</dd>
+        <dt>agent name</dt><dd>Codex /root; Codex /root; Codex /root; Codex /root; Codex /root; Codex /root; Codex /root; Codex /root; Codex /root</dd>
+        <dt>session id</dt><dd>019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22; 019f7447-c8f8-7752-8f94-9f8041c71d22</dd>
         <dt>back refs</dt><dd><code>init.lua</code>, current <code>master</code>, architecture/test/review specialist reports</dd>
         <dt>forward refs</dt><dd>Anodyne mandatory implementation milestones 1–7; public distribution requires a separate future plan</dd>
       </dl>
@@ -216,7 +216,7 @@ _G.WindowManager = nil</code></pre>
       <tbody>
         <tr><td class="contract">D-GIT-01</td><td>Execution begins.</td><td>Pin the base SHA. Reuse <code>codex/anodyne-refactor</code> only if its tip equals that base and it has no unrelated execution state; otherwise create the smallest available numeric suffix. Preserve unrelated changes and never stash/reset them. Commit the plan preflight, then one local checkpoint per approved milestone. Do not push or open a PR.</td><td>Overlapping unowned changes yield <code>BLOCKED-WORKTREE</code>. Unrelated changes are excluded from commits and listed in every handoff.</td></tr>
         <tr><td class="contract">D-REVIEW-01</td><td>An implementation packet finishes.</td><td>The primary reruns narrow validation, then spawns a read-only reviewer who neither implemented nor previously reviewed that milestone. APPROVE advances; low documentation/maintainability notes may be recorded and advance; Critical/High/Medium or missing mandatory offline evidence is REWORK. D-SMOKE-01 deferral is a certification flag accompanying an otherwise normal offline verdict, not a reviewer verdict.</td><td>Implementer summaries are not evidence; the reviewer derives results from the repository.</td></tr>
-        <tr><td class="contract">D-REPAIR-01</td><td>A reviewer returns REWORK.</td><td>Return findings to the same implementer. Use a new reviewer after each repair. Allow three repair/re-review cycles; before the third, dispatch a debugger. A disputed finding gets one fresh adjudicator whose evidence-backed verdict controls.</td><td>REWORK after the third repair, or the same root blocker surviving three attempts, yields <code>BLOCKED-REVIEW</code>.</td></tr>
+        <tr><td class="contract">D-REPAIR-01</td><td>A reviewer returns REWORK.</td><td>Return findings to the same implementer and use a new reviewer after each repair. Before the third repair, and before every later repair, dispatch a debugger. A disputed finding gets one fresh adjudicator whose evidence-backed verdict controls. The owner’s 2026-07-18 continuation supersedes the former unconditional R3 stop: distinct actionable findings continue through repair and review without owner input.</td><td><code>BLOCKED-REVIEW</code> now requires a genuine impasse: the same root blocker survives three repair attempts, an adjudicated requirement is irreconcilable, or no safe in-scope repair remains. A new independently discovered gap is not itself terminal.</td></tr>
         <tr><td class="contract">D-CONFLICT-01</td><td>Requirements, tests, and implementation disagree.</td><td>Precedence is: safety and explicit owner requirements → observed current behavior → approved A-* contracts → architecture plan → implementer preference. Preserve suspected bugs during refactor.</td><td>Unresolved ambiguity defaults to REWORK; irreconcilable conflict after adjudication is <code>BLOCKED-CONTRACT</code>.</td></tr>
         <tr><td class="contract">D-DONE-01</td><td>Milestone 7 review finishes.</td><td>Approve and checkpoint each milestone on mandatory offline evidence even when smoke status is deferred. <code>COMPLETE</code> requires Milestones 1–7 offline-approved, final safe smoke PASS, intended commits present, and no overlapping/unintended changes. If smoke alone remains deferred, mark Milestone 7 <code>[x]</code>, mark its native-certification line <code>[d]</code>, create the checkpoint, and report <code>IMPLEMENTED-NOT-NATIVE-CERTIFIED</code>.</td><td>Any other failed mandatory gate uses its named blocker state. Preserve the worktree and record exact recovery evidence.</td></tr>
       </tbody>
@@ -286,32 +286,32 @@ _G.WindowManager = nil</code></pre>
     </div>
 
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone 2: Strict Fake and Characterization Safety Net</h3>
+      <h3><code class="status">[x]</code> Milestone 2: Strict Fake and Characterization Safety Net</h3>
       <p>Test the monolith through observable registrations and callbacks before changing its architecture. Do not export private functions for tests.</p>
       <h4>2.1 Fake runtime packet</h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> Implement a strict <code>fake_hs</code> covering only used APIs: windows, screens, deterministic timers, menubar, modal hotkey, regular hotkey, filters, eventtap/events/keycodes, canvas indexing, and <code>fnutils.split</code>.</li>
-        <li><code class="status">[]</code> Reject unknown methods, wrong colon/dot usage, invalid arguments, use-after-delete, and double registration where real ownership forbids it.</li>
-        <li><code class="status">[]</code> Capture callbacks and expose deterministic test drivers from the fake, not from production code.</li>
-        <li><code class="status">[]</code> Add fault modes: thrown set, readback throw, ignored write, coerced write with successful rollback, failed rollback, invalid id/screen/frame, removed screen, changed full frame.</li>
+        <li><code class="status">[x]</code> Implement a strict <code>fake_hs</code> covering only used APIs: windows, screens, deterministic timers, menubar, modal hotkey, regular hotkey, filters, eventtap/events/keycodes, canvas indexing, and <code>fnutils.split</code>.</li>
+        <li><code class="status">[x]</code> Reject unknown methods, wrong colon/dot usage, invalid arguments, use-after-delete, and double registration where real ownership forbids it.</li>
+        <li><code class="status">[x]</code> Capture callbacks and expose deterministic test drivers from the fake, not from production code.</li>
+        <li><code class="status">[x]</code> Add fault modes: thrown set, readback throw, ignored write, coerced write with successful rollback, failed rollback, invalid id/screen/frame, removed screen, changed full frame.</li>
       </ul>
       <h4>2.2 Characterization packet</h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> Cover load-twice cleanup, one active registration set, menu construction, entry/exit resource ownership, and destroyed-window cleanup.</li>
-        <li><code class="status">[]</code> Cover focused/remembered/frontmost fallback and modal target pinning.</li>
-        <li><code class="status">[]</code> Cover representative presets, corners, movement, resize, no-op, undo/reset, screen change, rollback, timer replacement, key routing, and inside/outside-modal feedback.</li>
-        <li><code class="status">[]</code> Demonstrate test sensitivity by temporarily mutating a copied formula or expected registration and showing a characterization failure; do not commit the mutation.</li>
+        <li><code class="status">[x]</code> Cover load-twice cleanup, one active registration set, menu construction, entry/exit resource ownership, and destroyed-window cleanup.</li>
+        <li><code class="status">[x]</code> Cover focused/remembered/frontmost fallback and modal target pinning.</li>
+        <li><code class="status">[x]</code> Cover representative presets, corners, movement, resize, no-op, undo/reset, screen change, rollback, timer replacement, key routing, and inside/outside-modal feedback, including successful unchanged-screen session reset.</li>
+        <li><code class="status">[x]</code> Demonstrate test sensitivity by temporarily mutating a copied formula or expected registration and showing a characterization failure; do not commit the mutation.</li>
       </ul>
       <h4>2.3 Independent reviewer gate</h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> Reviewer rejects permissive fakes, “does not throw” assertions, implementation-copied expectations, auto-regenerated snapshots, or missing safety/failure scenarios.</li>
+        <li><code class="status">[x]</code> Reviewer rejects permissive fakes, “does not throw” assertions, implementation-copied expectations, auto-regenerated snapshots, or missing safety/failure scenarios. Final reopened review approved with no Medium+ findings.</li>
       </ul>
       <h4>2.4 Testing Strategy</h4>
       <p>Implement at least 20 behavior-oriented examples and the complete A-* scenario matrix. The scenario matrix, not the count, is the gate; coverage has no percentage floor yet.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>make test-characterization</code> — all named contracts pass against the current monolith.</li>
-        <li><code class="status">[]</code> <code>make coverage</code> — establishes the baseline report.</li>
-        <li><code class="status">[]</code> <code>make format-check</code> — specs and support code conform.</li>
+        <li><code class="status">[x]</code> <code>make test-characterization</code> — 61 examples pass against the current monolith.</li>
+        <li><code class="status">[x]</code> <code>make coverage</code> — 72 total examples pass; <code>init.lua</code> baseline is 787/891 executable lines (88.33%).</li>
+        <li><code class="status">[x]</code> <code>make format-check</code> — specs and support code conform.</li>
       </ul>
       <div class="loop">🔁 Apply D-REVIEW-01/D-REPAIR-01 until fake fidelity and behavior sensitivity are approved or a terminal reviewer blocker is recorded.</div>
     </div>
@@ -468,7 +468,7 @@ _G.Anodyne, _G.WindowManager = nextInstance, nextInstance</code></pre>
       <li><strong>Fresh reviewer R0 reviews read-only.</strong> It has not implemented or reviewed this milestone and independently derives evidence from the repository.</li>
       <li><strong>Verdict drives the state machine.</strong> APPROVE/low-only APPROVE WITH NOTES advances. REWORK returns to the same implementer, then a new reviewer R1/R2/R3. Before repair three, dispatch a debugger.</li>
       <li><strong>Adjudicate only objective disputes.</strong> Freeze edits, reduce the dispute to a test/trace/contract, and dispatch one fresh adjudicator. Its evidence-backed verdict controls; unresolved ambiguity is REWORK.</li>
-      <li><strong>Close or block.</strong> After approval, update statuses/metadata and create one local checkpoint commit. After R3 REWORK, record <code>BLOCKED-REVIEW</code> and stop without asking the owner.</li>
+      <li><strong>Close or block.</strong> After approval, update statuses/metadata and create one local checkpoint commit. Continue repairing distinct actionable findings; record <code>BLOCKED-REVIEW</code> only at the genuine-impasse conditions in the amended D-REPAIR-01.</li>
     </ol>
 
     <h3>Mandatory worker handoff</h3>
@@ -560,6 +560,10 @@ Remaining Low notes and disposition</code></pre>
     <p><strong>2026-07-18T11:16:21+02:00 — Autonomous decision gates.</strong> Converted the plan into a no-question execution contract. Added binding architecture, lifecycle, toolchain, lock, test, coverage, smoke, Git, review, repair, conflict, and completion gates with deterministic defaults and named terminal states. Fixed the facade/config/global contracts, pinned StyLua, bounded retries/timeouts/review loops, made safe smoke automatic-or-deferred, and removed Spoon packaging from the executable milestones.</p>
     <p><strong>2026-07-18T11:44:26+02:00 — Execution started.</strong> Activated the persistent Codex goal, pinned implementation base <code>4f97972666c39c6df5f55df84ad24f20cbe338e5</code>, recognized <code>72ed77a</code> as the plan-preflight commit, created <code>codex/anodyne-refactor</code>, classified the worktree as plan-owned and non-overlapping, and marked Milestone 1 plus its repository preflight task in progress.</p>
     <p><strong>2026-07-18T13:16:59+02:00 — Milestone 1 approved.</strong> Marked every Milestone 1 implementation, review, and validation item complete after final R3 approval. The project-local toolchain pins Lua 5.4.7, LuaRocks 3.13.0, Busted 2.3.0-1, LuaCov 0.17.0-1, StyLua 2.5.2, and every locked transitive artifact by SHA-256; a guarded local LuaRocks repository proves offline restoration. R0–R2 rework added complete artifact verification, atomic environment provenance, missing-source coverage rejection, and tracked fixtures; R3 approved with no findings. Final evidence: 11/11 examples, <code>init.lua</code> counted at 0/709, lock SHA <code>e5c7dc0ece7d1122b6e5c1d99939771b454162a0df146adcb7b716ee70cf99c6</code>, marker SHA <code>d240522b7314c9416d21d29aad2ac8ebeaa8ef298b4ca034dce2de8d468e33c8</code>, and proxy-blocked clean bootstrap/verify success.</p>
+    <p><strong>2026-07-18T13:22:24+02:00 — Milestone 2 started.</strong> Recorded approved Milestone 1 checkpoint <code>c6d12e7</code> and marked the strict fake/characterization milestone plus its first implementation task in progress.</p>
+    <p><strong>2026-07-18T14:19:08+02:00 — Milestone 2 blocked after R3.</strong> Recorded terminal state <code>BLOCKED-REVIEW</code> under D-REPAIR-01 and stopped before Milestone 3. The implementation produced a strict deterministic fake, 59 characterization examples, 70 total passing examples, mutation-sensitive failures, clean formatting/diff checks, and an <code>init.lua</code> baseline of 778/887 executable lines (87.71%) without changing production. R0–R2 repairs closed eventtap fidelity, active-reload ownership, screen identity, exact UI contracts, chronological/nested timers, copied history, strict keycodes, and deleted-canvas liveness; a debugger preceded the third repair. Final R3 rejected the still-missing successful unchanged-screen session-reset characterization. Per the bounded repair contract, no fourth repair, M2 checkpoint, or M3 implementation was attempted; the complete uncommitted M2 worktree is preserved for recovery.</p>
+    <p><strong>2026-07-18T14:29:19+02:00 — Owner reopened execution.</strong> The owner confirmed that the remaining R3 finding is a test-safety-net gap rather than a production defect and explicitly instructed execution to continue through the complete plan. Reopened Milestone 2, activated a new persistent goal, and amended D-REPAIR-01 so distinct actionable findings continue through debugger-assisted repair/review; only a genuine repeated-root or irreconcilable impasse may produce <code>BLOCKED-REVIEW</code>. The prior blocker entry remains as immutable execution history.</p>
+    <p><strong>2026-07-18T14:44:56+02:00 — Milestone 2 approved after reopening.</strong> Added the successful unchanged-screen session-reset characterization requested by R3, then debugger-assisted repair hardened the fake observer so hidden/deleted canvases cannot satisfy UI assertions. Mutation copies proved both reset restoration and visible delayed feedback turn the suite red when broken. A fresh reviewer approved with no Medium+ findings. Final evidence: 61/61 characterization examples, 72/72 full and coverage examples, <code>init.lua</code> 787/891 executable lines (88.33%), clean formatting/diff checks, and unchanged production source.</p>
   </section>
 </main>
 </body>
