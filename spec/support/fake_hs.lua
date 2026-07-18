@@ -407,9 +407,9 @@ function Fake.new(options)
     menubar = {},
     hotkey = { modal = {} },
     eventtap = { event = { types = {
-      keyDown = "keyDown",
-      keyUp = "keyUp",
-      flagsChanged = "flagsChanged",
+      keyDown = 10,
+      keyUp = 11,
+      flagsChanged = 12,
     } } },
     keycodes = { map = {} },
     canvas = {
@@ -725,7 +725,12 @@ function Fake.new(options)
         code = candidate
       end
     end
-    local actualEventType = eventType or hs.eventtap.event.types.keyDown
+    local eventAliases = {
+      keyDown = hs.eventtap.event.types.keyDown,
+      keyUp = hs.eventtap.event.types.keyUp,
+      flagsChanged = hs.eventtap.event.types.flagsChanged,
+    }
+    local actualEventType = eventAliases[eventType] or eventType or hs.eventtap.event.types.keyDown
     local event = {}
     function event.getType(self, ...)
       if self ~= event then

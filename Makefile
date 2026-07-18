@@ -5,12 +5,12 @@ BUSTED := $(CURDIR)/.lua/bin/busted
 LUACOV := $(CURDIR)/.lua/bin/luacov
 STYLUA := $(CURDIR)/.tools/stylua
 TIMEOUT := $(CURDIR)/tools/run_with_timeout.py
-MILESTONE ?= 5
+MILESTONE ?= 6
 LOCAL_CONFIG := $(CURDIR)/.lua/etc/luarocks/config-5.4.lua
 LOCAL_HOME := $(CURDIR)/.lua/home
 LOCAL_ENV := HOME=$(LOCAL_HOME) LUAROCKS_CONFIG=$(LOCAL_CONFIG) LUA_PATH=';;' LUA_CPATH=';;'
 
-.PHONY: bootstrap toolchain-check test test-characterization test-core test-actions test-facade coverage format-check smoke-load verify deps-update
+.PHONY: bootstrap toolchain-check test test-characterization test-core test-actions test-controller test-facade coverage format-check smoke-load verify deps-update
 
 bootstrap:
 	@tools/bootstrap
@@ -41,6 +41,9 @@ test-core: toolchain-check
 
 test-actions: toolchain-check
 	@. tools/test-minimums.env; $(LOCAL_ENV) $(TIMEOUT) --seconds 30 --minimum-examples "$$TEST_MINIMUM_ACTIONS" -- $(BUSTED) --config-file=.busted spec/actions spec/core/history_spec.lua
+
+test-controller: toolchain-check
+	@. tools/test-minimums.env; $(LOCAL_ENV) $(TIMEOUT) --seconds 30 --minimum-examples "$$TEST_MINIMUM_CONTROLLER" -- $(BUSTED) --config-file=.busted spec/controller
 
 test-facade: toolchain-check
 	@. tools/test-minimums.env; $(LOCAL_ENV) $(TIMEOUT) --seconds 30 --minimum-examples "$$TEST_MINIMUM_FACADE" -- $(BUSTED) --config-file=.busted spec/facade

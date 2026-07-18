@@ -515,12 +515,12 @@ describe("Milestone 2 characterization", function()
 
     it("registers all three exact event types and filters unregistered delivery", function()
       local tap = driver.runtime.taps[#driver.runtime.taps]
-      assert.same({ "keyDown", "keyUp", "flagsChanged" }, tap._state.events)
-      tap._state.registered.keyUp = nil
+      assert.same({ 10, 11, 12 }, tap._state.events)
+      tap._state.registered[driver.hs.eventtap.event.types.keyUp] = nil
       local deliveries = tap._state.deliveries
       assert.is_false(driver:key("a", {}, "keyUp"))
       assert.are.equal(deliveries, tap._state.deliveries)
-      tap._state.registered.flagsChanged = nil
+      tap._state.registered[driver.hs.eventtap.event.types.flagsChanged] = nil
       assert.is_false(driver:key("a", {}, "flagsChanged"))
       assert.are.equal(deliveries, tap._state.deliveries)
     end)
@@ -588,7 +588,7 @@ describe("Milestone 2 characterization", function()
       assert.are.equal("WI", menu.title)
       assert.are.equal("Window management: ctrl+alt+cmd+M for keyboard mode", menu.tooltip)
       driver:triggerEntry()
-      assert.same({ "keyDown", "keyUp", "flagsChanged" }, driver.runtime.taps[1]._state.events)
+      assert.same({ 10, 11, 12 }, driver.runtime.taps[1]._state.events)
     end)
 
     it("constructs all 47 menu items with frozen strings and order", function()
