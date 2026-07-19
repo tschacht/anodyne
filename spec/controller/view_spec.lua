@@ -56,7 +56,7 @@ describe("Anodyne view", function()
       "Center Bottom [M B C]",
       "Bottom Right [M B →]",
       "-",
-      "Resize 50 px [R then arrows / G / S]",
+      "Resize toward 50 px grid [R then arrows / G / S]",
       "Grow Width [R →]",
       "Grow Height [R ↓]",
       "Shrink Width [R ←]",
@@ -87,12 +87,12 @@ describe("Anodyne view", function()
       },
       move_bottom = { "← = bottom left", "C = center bottom", "→ = bottom right", "B or ⌫ = back to Move" },
       resize = {
-        "→ = grow width 50 px",
-        "↓ = grow height 50 px",
-        "← = shrink width 50 px",
-        "↑ = shrink height 50 px",
-        "G = grow width + height 50 px",
-        "S = shrink width + height 50 px",
+        "→ = grow width toward next 50 px boundary",
+        "↓ = grow height toward next 50 px boundary",
+        "← = shrink width toward previous 50 px boundary",
+        "↑ = shrink height toward previous 50 px boundary",
+        "G = grow width + height toward next 50 px boundary",
+        "S = shrink width + height toward previous 50 px boundary",
       },
     }
     for screen, body in pairs(expectedBodies) do
@@ -126,7 +126,7 @@ describe("Anodyne view", function()
     assert.are.equal("Unknown action bogus", view:statusText({ kind = "unknown-action", action = "bogus" }))
     assert.are.equal("WI action failed\nThe action could not be completed", view:failureText())
     assert.are.equal("WI action failed\nUnknown action bogus", view:failureText({ kind = "unknown-action", action = "bogus" }))
-    assert.are.equal("Shrink Width -50 px", view:resizeLabel({ label = "Shrink Width", deltaWidth = -50, deltaHeight = 0 }))
+    assert.are.equal("Shrink Width toward previous 50 px boundary", view:resizeLabel({ label = "Shrink Width", deltaWidth = -50, deltaHeight = 0 }))
   end)
 
   it("preserves the exact legacy empty-preset line sequence", function()

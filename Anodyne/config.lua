@@ -192,6 +192,9 @@ function Config.build(overrides)
   if values.undoDepth < 1 or values.undoDepth ~= math.floor(values.undoDepth) then
     error("CONFIG.undoDepth must be a positive integer", 2)
   end
+  if values.growStep < 1 or values.growStep == math.huge or values.growStep ~= math.floor(values.growStep) then
+    error("CONFIG.growStep must be a positive integer", 2)
+  end
   local frozen = freeze(values)
   return frozen, metadata(frozen)
 end

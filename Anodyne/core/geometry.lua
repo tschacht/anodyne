@@ -76,8 +76,19 @@ function Geometry.cornerTarget(frame, screenFrame, corner)
   return target
 end
 
+local function snapDimension(value, delta)
+  if delta == 0 then
+    return value
+  end
+  local step = math.abs(delta)
+  if delta < 0 then
+    return (math.ceil(value / step) - 1) * step
+  end
+  return (math.floor(value / step) + 1) * step
+end
+
 function Geometry.resizeTarget(frame, deltaWidth, deltaHeight)
-  return { x = frame.x, y = frame.y, w = frame.w + deltaWidth, h = frame.h + deltaHeight }
+  return { x = frame.x, y = frame.y, w = snapDimension(frame.w, deltaWidth), h = snapDimension(frame.h, deltaHeight) }
 end
 
 function Geometry.snapPosition(origin, current, step, direction)

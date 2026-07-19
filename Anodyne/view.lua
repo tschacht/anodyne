@@ -74,7 +74,7 @@ end
 function View:resizeLabel(action)
   local magnitude = math.max(math.abs(action.deltaWidth), math.abs(action.deltaHeight))
   local negative = action.deltaWidth < 0 or action.deltaHeight < 0
-  return string.format("%s %s%d px", action.label, negative and "-" or "+", magnitude)
+  return string.format("%s toward %s %d px boundary", action.label, negative and "previous" or "next", magnitude)
 end
 
 function View:navigationLine()
@@ -130,7 +130,7 @@ function View:modalLines(state, currentSize, status)
     lines[#lines + 1] = "B or ⌫ = back to Move"
   elseif screen == "resize" then
     for _, action in ipairs(self.metadata.resizeActions) do
-      lines[#lines + 1] = action.shortcut .. " = " .. action.prompt .. " " .. self.config.growStep .. " px"
+      lines[#lines + 1] = action.shortcut .. " = " .. string.lower(self:resizeLabel(action))
     end
   end
 
@@ -189,7 +189,7 @@ function View:menuItems(state, sessionScreenChanged)
     local shortcut = action.screen == "move_bottom" and "M B " .. action.shortcut or "M " .. action.shortcut
     items[#items + 1] = { title = string.format("%s [%s]", action.label, shortcut), intent = { type = "action", action = "corner", value = action.corner } }
   end
-  append(items, { { title = "-" }, { title = "Resize " .. self.config.growStep .. " px [R then arrows / G / S]", disabled = true } })
+  append(items, { { title = "-" }, { title = "Resize toward " .. self.config.growStep .. " px grid [R then arrows / G / S]", disabled = true } })
   for _, action in ipairs(self.metadata.resizeActions) do
     items[#items + 1] = { title = string.format("%s [R %s]", action.label, action.shortcut), intent = { type = "action", action = "resize", value = action } }
   end

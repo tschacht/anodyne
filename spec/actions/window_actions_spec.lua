@@ -255,6 +255,18 @@ describe("Milestone 5 transactional window actions", function()
     assert.same({ false, "Unknown move direction: nowhere" }, { actions:moveByStep("nowhere") })
   end)
 
+  it("clamps snapped resizes to configured minima and usable-screen maxima", function()
+    driver:setWindowFrame(window, frame(100, 100, 505, 605))
+    assert.is_true(actions:resize(-50, 0, "Shrink Width"))
+    assert.same(frame(100, 100, 500, 605), window:frame())
+
+    driver:setWindowFrame(window, frame(100, 100, 1905, 605))
+    local ok, _, status = actions:resize(50, 0, "Grow Width toward next 50 px boundary")
+    assert.is_true(ok)
+    assert.same(frame(0, 100, 1920, 605), window:frame())
+    assert.are.equal("Grow Width toward next 50 px boundary (1920 x 605)", status)
+  end)
+
   it("forgets destroyed or explicitly removed windows independently", function()
     assert.is_true(actions:applyWidthPreset(900))
     actions:forgetWindow(window)

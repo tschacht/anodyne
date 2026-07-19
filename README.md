@@ -11,7 +11,7 @@ The default entry shortcut is `ctrl+alt+cmd+M`. While the modal is open:
 - `A` selects an aspect-ratio preset.
 - `W` or `H` selects an exact width or height preset.
 - `M` opens movement and screen-position actions.
-- `R` opens incremental resize actions.
+- `R` resizes the selected dimension or dimensions toward the next or previous grid boundary (50 px by default).
 - `U` undoes the most recent action for the active window.
 - `shift+U` restores the window frame captured when the modal opened.
 - `delete` returns to the previous screen; `escape` exits.

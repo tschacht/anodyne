@@ -80,11 +80,19 @@ describe("core geometry", function()
     )
   end)
 
-  it("grows and shrinks both axes without mutating its input", function()
+  it("snaps dimensions to adjacent step boundaries without mutating its input", function()
     local frame = { x = -5, y = 7, w = 800, h = 600 }
     assert.same({ x = -5, y = 7, w = 850, h = 650 }, Geometry.resizeTarget(frame, 50, 50))
     assert.same({ x = -5, y = 7, w = 750, h = 550 }, Geometry.resizeTarget(frame, -50, -50))
     assert.same({ x = -5, y = 7, w = 800, h = 600 }, frame)
+    local unaligned = { x = -5, y = 7, w = 1005, h = 1005 }
+    assert.same({ x = -5, y = 7, w = 1050, h = 1050 }, Geometry.resizeTarget(unaligned, 50, 50))
+    assert.same({ x = -5, y = 7, w = 1000, h = 1000 }, Geometry.resizeTarget(unaligned, -50, -50))
+    assert.same({ x = -5, y = 7, w = 1005, h = 1005 }, unaligned)
+    local fractional = { x = -5, y = 7, w = 1005.5, h = 713.5 }
+    assert.same({ x = -5, y = 7, w = 1025, h = 713.5 }, Geometry.resizeTarget(fractional, 25, 0))
+    assert.same({ x = -5, y = 7, w = 1000, h = 713.5 }, Geometry.resizeTarget(fractional, -25, 0))
+    assert.same({ x = -5, y = 7, w = 1005.5, h = 725 }, Geometry.resizeTarget(fractional, 0, 25))
   end)
 
   it("snaps aligned positions one full step in all directions", function()

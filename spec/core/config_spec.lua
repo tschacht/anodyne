@@ -136,6 +136,14 @@ describe("configuration", function()
     end
   end)
 
+  it("rejects non-positive and fractional resize grid steps", function()
+    for _, value in ipairs({ 0, -50, 33.3, math.huge }) do
+      assert.has_error(function()
+        Config.build({ growStep = value })
+      end, "CONFIG.growStep must be a positive integer")
+    end
+  end)
+
   it("derives consistent mode maps, labels, symbols, and resize deltas", function()
     local _, metadata = Config.build({ symbols = { left = "L", shift = "S" }, growStep = 25 })
     for _, mode in ipairs(metadata.modeSelectors) do

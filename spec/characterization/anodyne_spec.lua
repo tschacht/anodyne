@@ -310,9 +310,16 @@ describe("Milestone 2 characterization", function()
       assert.are.equal(150, window:frame().x)
     end)
 
-    it("grows both dimensions by exactly 50", function()
+    it("snaps resize dimensions to the adjacent 50 point boundaries", function()
+      driver:setWindowFrame(window, frame(100, 100, 1005, 1005))
       click(driver, "Grow Width + Height [R G]")
-      assertFrame(frame(100, 100, 850, 650), window:frame())
+      assertFrame(frame(100, 30, 1050, 1050), window:frame())
+      driver:setWindowFrame(window, frame(100, 100, 1005, 1005))
+      click(driver, "Shrink Width + Height [R S]")
+      assertFrame(frame(100, 80, 1000, 1000), window:frame())
+      driver:setWindowFrame(window, frame(100, 100, 1000, 1000))
+      click(driver, "Grow Width + Height [R G]")
+      assertFrame(frame(100, 30, 1050, 1050), window:frame())
     end)
   end)
 
@@ -644,7 +651,7 @@ describe("Milestone 2 characterization", function()
         "Center Bottom [M B C]",
         "Bottom Right [M B →]",
         "-",
-        "Resize 50 px [R then arrows / G / S]",
+        "Resize toward 50 px grid [R then arrows / G / S]",
         "Grow Width [R →]",
         "Grow Height [R ↓]",
         "Shrink Width [R ←]",
@@ -763,12 +770,12 @@ describe("Milestone 2 characterization", function()
         "Resize:",
         "Current: 800 x 600",
         "",
-        "→ = grow width 50 px",
-        "↓ = grow height 50 px",
-        "← = shrink width 50 px",
-        "↑ = shrink height 50 px",
-        "G = grow width + height 50 px",
-        "S = shrink width + height 50 px",
+        "→ = grow width toward next 50 px boundary",
+        "↓ = grow height toward next 50 px boundary",
+        "← = shrink width toward previous 50 px boundary",
+        "↑ = shrink height toward previous 50 px boundary",
+        "G = grow width + height toward next 50 px boundary",
+        "S = shrink width + height toward previous 50 px boundary",
       })
     end)
 
