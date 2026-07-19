@@ -170,12 +170,13 @@ function Fake.new(options)
     table.insert(self._state.frameReads, result)
     return result
   end
-  function windowMethods:setFrame(frame, duration, ...)
-    noExtra("window:setFrame", ...)
+  local function applyWindowFrame(self, frame, duration, operation, usesWorkarounds, ...)
+    noExtra(operation, ...)
     live(self._state, "window")
+    lifecycle(operation)
     frame = copyFrame(frame)
     if duration ~= 0 then
-      fail("window:setFrame duration must be zero")
+      fail(operation .. " duration must be zero")
     end
     local faults = self._state.faults
     self._state.writeCount = self._state.writeCount + 1
@@ -191,8 +192,24 @@ function Fake.new(options)
     if faults.coerceWrite and self._state.writeCount == 1 then
       frame.w = frame.w + (faults.coerceBy or 1)
     end
+    if faults.stickyEdgeWrite and not usesWorkarounds and self._state.writeCount == 1 then
+      local acceptedDelta = faults.stickyEdgeWrite == true and 2 or faults.stickyEdgeWrite
+      local current = self._state.frame
+      for _, dimension in ipairs({ "w", "h" }) do
+        local delta = frame[dimension] - current[dimension]
+        if delta ~= 0 then
+          frame[dimension] = current[dimension] + (delta < 0 and -1 or 1) * math.min(math.abs(delta), acceptedDelta)
+        end
+      end
+    end
     self._state.frame = frame
     return self
+  end
+  function windowMethods:setFrame(frame, duration, ...)
+    return applyWindowFrame(self, frame, duration, "window:setFrame", false, ...)
+  end
+  function windowMethods:setFrameWithWorkarounds(frame, duration, ...)
+    return applyWindowFrame(self, frame, duration, "window:setFrameWithWorkarounds", true, ...)
   end
 
   local function addWindow(spec)
@@ -639,7 +656,7 @@ function Fake.new(options)
   end
   function driver:setFault(object, name, value)
     object._state.faults[name] = value == nil and true or value
-    if name == "coerceWrite" or name == "rollbackFails" or name == "readThrowsAfterSet" then
+    if name == "coerceWrite" or name == "stickyEdgeWrite" or name == "rollbackFails" or name == "readThrowsAfterSet" then
       object._state.writeCount = 0
     end
   end

@@ -250,7 +250,7 @@ function Adapter:start()
       return window:frame()
     end,
     setWindowFrame = function(window, frame)
-      window:setFrame(frame, 0)
+      window:setFrameWithWorkarounds(frame, 0)
     end,
     screenIdentity = function(screen)
       return screen:getUUID() or tostring(screen:id())
