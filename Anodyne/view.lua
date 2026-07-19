@@ -11,6 +11,10 @@ local function isArrowKey(key)
   return key == "left" or key == "right" or key == "up" or key == "down"
 end
 
+local function capitalize(value)
+  return value:sub(1, 1):upper() .. value:sub(2)
+end
+
 function View.new(config, metadata)
   return setmetatable({ config = config, metadata = metadata }, View)
 end
@@ -74,7 +78,12 @@ end
 function View:resizeLabel(action)
   local magnitude = math.max(math.abs(action.deltaWidth), math.abs(action.deltaHeight))
   local negative = action.deltaWidth < 0 or action.deltaHeight < 0
-  return string.format("%s toward %s %d px boundary", action.label, negative and "previous" or "next", magnitude)
+  local both = action.deltaWidth ~= 0 and action.deltaHeight ~= 0
+  return string.format("%s%s to %s %d px", negative and "Shrink" or "Grow", both and " both" or "", negative and "previous" or "next", magnitude)
+end
+
+function View:moveLabel(action)
+  return string.format("%s %d px", capitalize(action.direction), self.config.moveStep)
 end
 
 function View:navigationLine()
@@ -113,24 +122,24 @@ function View:modalLines(state, currentSize, status)
     end
   elseif screen == "move" then
     for _, action in ipairs(self.metadata.moveStepActions) do
-      lines[#lines + 1] = string.format("%s = %s %d px", action.symbol, string.lower(action.label), self.config.moveStep)
+      lines[#lines + 1] = string.format("%s = %s", action.symbol, self:moveLabel(action))
     end
     for _, action in ipairs(self.metadata.cornerActions) do
       if action.screen == "move" then
-        lines[#lines + 1] = action.shortcut .. " = " .. string.lower(action.label)
+        lines[#lines + 1] = action.shortcut .. " = " .. action.label
       end
     end
     lines[#lines + 1] = "B = bottom positions"
   elseif screen == "move_bottom" then
     for _, action in ipairs(self.metadata.cornerActions) do
       if action.screen == "move_bottom" then
-        lines[#lines + 1] = action.shortcut .. " = " .. string.lower(action.label)
+        lines[#lines + 1] = action.shortcut .. " = " .. action.label
       end
     end
     lines[#lines + 1] = "B or ⌫ = back to Move"
   elseif screen == "resize" then
     for _, action in ipairs(self.metadata.resizeActions) do
-      lines[#lines + 1] = action.shortcut .. " = " .. string.lower(self:resizeLabel(action))
+      lines[#lines + 1] = action.shortcut .. " = " .. self:resizeLabel(action)
     end
   end
 
@@ -167,31 +176,32 @@ function View:menuItems(state, sessionScreenChanged)
     { title = "Undo Last Action [U]", intent = { type = "action", action = "undo" } },
     { title = resetTitle, disabled = not resetAvailable, intent = { type = "action", action = "reset" } },
     { title = "-" },
-    { title = string.format("Aspect Presets [A then 1-%d]", #self.config.aspectPresets), disabled = true },
+    { title = string.format("Aspect [A then 1-%d]", #self.config.aspectPresets), disabled = true },
   }
   for index, preset in ipairs(self.config.aspectPresets) do
     items[#items + 1] = { title = string.format("%s [A %d]", preset.label, index), intent = { type = "action", action = "aspect", value = preset } }
   end
-  append(items, { { title = "-" }, { title = string.format("Width Presets [W then 1-%d]", #self.config.widthPresets), disabled = true } })
+  append(items, { { title = "-" }, { title = string.format("Width [W then 1-%d]", #self.config.widthPresets), disabled = true } })
   for index, width in ipairs(self.config.widthPresets) do
     items[#items + 1] = { title = string.format("%d px [W %d]", width, index), intent = { type = "action", action = "width", value = width } }
   end
-  append(items, { { title = "-" }, { title = string.format("Height Presets [H then 1-%d]", #self.config.heightPresets), disabled = true } })
+  append(items, { { title = "-" }, { title = string.format("Height [H then 1-%d]", #self.config.heightPresets), disabled = true } })
   for index, height in ipairs(self.config.heightPresets) do
     items[#items + 1] = { title = string.format("%d px [H %d]", height, index), intent = { type = "action", action = "height", value = height } }
   end
-  append(items, { { title = "-" }, { title = "Move " .. self.config.moveStep .. " px [M then arrows / C / B]", disabled = true } })
+  append(items, { { title = "-" }, { title = "Move [M then arrows / C / B]", disabled = true } })
   for _, action in ipairs(self.metadata.moveStepActions) do
     items[#items + 1] =
-      { title = string.format("%s [M %s]", action.label, action.symbol), intent = { type = "action", action = "move", value = action.direction } }
+      { title = string.format("%s [M %s]", self:moveLabel(action), action.symbol), intent = { type = "action", action = "move", value = action.direction } }
   end
   for _, action in ipairs(self.metadata.cornerActions) do
     local shortcut = action.screen == "move_bottom" and "M B " .. action.shortcut or "M " .. action.shortcut
     items[#items + 1] = { title = string.format("%s [%s]", action.label, shortcut), intent = { type = "action", action = "corner", value = action.corner } }
   end
-  append(items, { { title = "-" }, { title = "Resize toward " .. self.config.growStep .. " px grid [R then arrows / G / S]", disabled = true } })
+  append(items, { { title = "-" }, { title = "Resize [R then arrows / G / S]", disabled = true } })
   for _, action in ipairs(self.metadata.resizeActions) do
-    items[#items + 1] = { title = string.format("%s [R %s]", action.label, action.shortcut), intent = { type = "action", action = "resize", value = action } }
+    items[#items + 1] =
+      { title = string.format("%s [R %s]", self:resizeLabel(action), action.shortcut), intent = { type = "action", action = "resize", value = action } }
   end
   return items
 end

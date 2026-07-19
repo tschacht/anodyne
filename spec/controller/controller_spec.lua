@@ -169,8 +169,8 @@ describe("Anodyne controller", function()
       intent.type = "action"
       assert.is_true(controller:perform(intent))
     end
-    assert.are.equal("Shrink Width toward previous 50 px boundary", log.calls[8][4])
-    assert.are.equal("Grow Height toward next 50 px boundary", log.calls[9][4])
+    assert.are.equal("Shrink to previous 50 px", log.calls[8][4])
+    assert.are.equal("Grow to next 50 px", log.calls[9][4])
     local ok, message = controller:perform({ action = "bogus" })
     assert.is_false(ok)
     assert.same({ kind = "unknown-action", action = "bogus" }, message)

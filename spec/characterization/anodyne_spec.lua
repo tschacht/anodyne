@@ -306,19 +306,19 @@ describe("Milestone 2 characterization", function()
 
     it("snaps right to the next 50 pixel grid line", function()
       driver:setWindowFrame(window, frame(111, 100, 800, 600))
-      click(driver, "Move Right [M →]")
+      click(driver, "Right 50 px [M →]")
       assert.are.equal(150, window:frame().x)
     end)
 
     it("snaps resize dimensions to the adjacent 50 point boundaries", function()
       driver:setWindowFrame(window, frame(100, 100, 1005, 1005))
-      click(driver, "Grow Width + Height [R G]")
+      click(driver, "Grow both to next 50 px [R G]")
       assertFrame(frame(100, 30, 1050, 1050), window:frame())
       driver:setWindowFrame(window, frame(100, 100, 1005, 1005))
-      click(driver, "Shrink Width + Height [R S]")
+      click(driver, "Shrink both to previous 50 px [R S]")
       assertFrame(frame(100, 80, 1000, 1000), window:frame())
       driver:setWindowFrame(window, frame(100, 100, 1000, 1000))
-      click(driver, "Grow Width + Height [R G]")
+      click(driver, "Grow both to next 50 px [R G]")
       assertFrame(frame(100, 30, 1050, 1050), window:frame())
     end)
   end)
@@ -617,14 +617,14 @@ describe("Milestone 2 characterization", function()
         "Undo Last Action [U]",
         "Reset Session [Shift+U]",
         "-",
-        "Aspect Presets [A then 1-5]",
+        "Aspect [A then 1-5]",
         "16:9 [A 1]",
         "4:3 [A 2]",
         "3:2 [A 3]",
         "2:1 [A 4]",
         "3:1 [A 5]",
         "-",
-        "Width Presets [W then 1-7]",
+        "Width [W then 1-7]",
         "1400 px [W 1]",
         "1600 px [W 2]",
         "1800 px [W 3]",
@@ -633,17 +633,17 @@ describe("Milestone 2 characterization", function()
         "2400 px [W 6]",
         "2600 px [W 7]",
         "-",
-        "Height Presets [H then 1-4]",
+        "Height [H then 1-4]",
         "1000 px [H 1]",
         "1200 px [H 2]",
         "1400 px [H 3]",
         "1500 px [H 4]",
         "-",
-        "Move 50 px [M then arrows / C / B]",
-        "Move Left [M ←]",
-        "Move Right [M →]",
-        "Move Up [M ↑]",
-        "Move Down [M ↓]",
+        "Move [M then arrows / C / B]",
+        "Left 50 px [M ←]",
+        "Right 50 px [M →]",
+        "Up 50 px [M ↑]",
+        "Down 50 px [M ↓]",
         "Top Left [M shift + ←]",
         "Center Top [M C]",
         "Top Right [M shift + →]",
@@ -651,13 +651,13 @@ describe("Milestone 2 characterization", function()
         "Center Bottom [M B C]",
         "Bottom Right [M B →]",
         "-",
-        "Resize toward 50 px grid [R then arrows / G / S]",
-        "Grow Width [R →]",
-        "Grow Height [R ↓]",
-        "Shrink Width [R ←]",
-        "Shrink Height [R ↑]",
-        "Grow Width + Height [R G]",
-        "Shrink Width + Height [R S]",
+        "Resize [R then arrows / G / S]",
+        "Grow to next 50 px [R →]",
+        "Grow to next 50 px [R ↓]",
+        "Shrink to previous 50 px [R ←]",
+        "Shrink to previous 50 px [R ↑]",
+        "Grow both to next 50 px [R G]",
+        "Shrink both to previous 50 px [R S]",
       }, titles)
     end)
 
@@ -737,13 +737,13 @@ describe("Milestone 2 characterization", function()
         "Move:",
         "Current: 800 x 600",
         "",
-        "← = move left 50 px",
-        "→ = move right 50 px",
-        "↑ = move up 50 px",
-        "↓ = move down 50 px",
-        "shift + ← = top left",
-        "C = center top",
-        "shift + → = top right",
+        "← = Left 50 px",
+        "→ = Right 50 px",
+        "↑ = Up 50 px",
+        "↓ = Down 50 px",
+        "shift + ← = Top Left",
+        "C = Center Top",
+        "shift + → = Top Right",
         "B = bottom positions",
       })
     end)
@@ -756,9 +756,9 @@ describe("Milestone 2 characterization", function()
         "Move bottom positions:",
         "Current: 800 x 600",
         "",
-        "← = bottom left",
-        "C = center bottom",
-        "→ = bottom right",
+        "← = Bottom Left",
+        "C = Center Bottom",
+        "→ = Bottom Right",
         "B or ⌫ = back to Move",
       })
     end)
@@ -770,12 +770,12 @@ describe("Milestone 2 characterization", function()
         "Resize:",
         "Current: 800 x 600",
         "",
-        "→ = grow width toward next 50 px boundary",
-        "↓ = grow height toward next 50 px boundary",
-        "← = shrink width toward previous 50 px boundary",
-        "↑ = shrink height toward previous 50 px boundary",
-        "G = grow width + height toward next 50 px boundary",
-        "S = shrink width + height toward previous 50 px boundary",
+        "→ = Grow to next 50 px",
+        "↓ = Grow to next 50 px",
+        "← = Shrink to previous 50 px",
+        "↑ = Shrink to previous 50 px",
+        "G = Grow both to next 50 px",
+        "S = Shrink both to previous 50 px",
       })
     end)
 
