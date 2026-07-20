@@ -231,27 +231,27 @@
     </div>
 
     <div class="phase">
-      <h3><code class="status">[wip]</code> Milestone 2: Crop Session State Machine</h3>
+      <h3><code class="status">[x]</code> Milestone 2: Crop Session State Machine</h3>
       <p>The controller packet turns the pure contracts into a recoverable Enter/Finish/Cancel Composition Mode workflow while remaining independent of Hammerspoon.</p>
       <p><strong>Validation goal:</strong> prove every state transition is deterministic, never moves the target window, and copies nothing for invalid or stale geometry.</p>
 
       <h4><span class="tag packet">WP-04</span> Port-driven controller</h4>
       <ul class="checklist">
-        <li><code class="status">[wip]</code> Owner: worker agent. Depends on WP-01 and WP-02. Touch only <code>Anodyne/obs_crop_controller.lua</code> and <code>spec/controller/obs_crop_controller_spec.lua</code>.</li>
-        <li><code class="status">[wip]</code> Model explicit inactive/active Composition Mode state containing the pinned window object and ID, arbitrary baseline guide frame, screen identity/full frame, chosen scale, and no native resource handles.</li>
-        <li><code class="status">[wip]</code> Enter selects the established window via a port, snapshots its authoritative frame unchanged, snapshots screen data, resolves override-or-auto scale, asks the adapter to render, and commits state only after successful rendering.</li>
-        <li><code class="status">[wip]</code> Finish validates generation, target identity, screen snapshot, scale stability, and containment; then formats/copies output, closes Composition Mode, clears state, and reports success.</li>
-        <li><code class="status">[wip]</code> Outside-edge or pasteboard failures leave Composition Mode active for correction/retry; stale window/screen state cancels because the geometry is no longer trustworthy.</li>
-        <li><code class="status">[wip]</code> Cancel, cross-mode switch, and target-destroyed paths close the guide exactly once and clear state only after successful native teardown.</li>
-        <li><code class="status">[wip]</code> Test port exceptions, false returns, stale-generation callbacks, repeated Enter/Finish/Cancel, arbitrary baseline ratios, target destruction, screen/scale changes, pasteboard failure, cross-mode switching, and teardown retry.</li>
+        <li><code class="status">[x]</code> Owner: worker agent. Depends on WP-01 and WP-02. Touch only <code>Anodyne/obs_crop_controller.lua</code> and <code>spec/controller/obs_crop_controller_spec.lua</code>.</li>
+        <li><code class="status">[x]</code> Model explicit inactive/active Composition Mode state containing the pinned window object and ID, arbitrary baseline guide frame, screen identity/full frame, chosen scale, and no native resource handles.</li>
+        <li><code class="status">[x]</code> Enter selects the established window via a port, snapshots its authoritative frame unchanged, snapshots screen data, resolves override-or-auto scale, asks the adapter to render, and commits state only after successful rendering.</li>
+        <li><code class="status">[x]</code> Finish validates generation, target identity, screen snapshot, scale stability, and containment; then formats/copies output, closes Composition Mode, clears state, and reports success.</li>
+        <li><code class="status">[x]</code> Outside-edge or pasteboard failures leave Composition Mode active for correction/retry; stale window/screen state cancels because the geometry is no longer trustworthy.</li>
+        <li><code class="status">[x]</code> Cancel, cross-mode switch, and target-destroyed paths close the guide exactly once and clear state only after successful native teardown.</li>
+        <li><code class="status">[x]</code> Test port exceptions, false returns, stale-generation callbacks, repeated Enter/Finish/Cancel, arbitrary baseline ratios, target destruction, screen/scale changes, pasteboard failure, cross-mode switching, and teardown retry.</li>
       </ul>
 
       <h4>2.2 Testing Strategy</h4>
       <p>Use deterministic port doubles. Mutation-sensitive assertions must prove that the controller never copies on invalid geometry and never changes the target window.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>make test-controller</code> — validates all state transitions and presentation outputs.</li>
-        <li><code class="status">[]</code> <code>make test-core</code> — revalidates the controller's crop dependency contract.</li>
-        <li><code class="status">[]</code> <code>make architecture</code> — proves the new controller contains no native <code>hs</code> access and introduces no cycle.</li>
+        <li><code class="status">[x]</code> <code>make test-controller</code> — validates all state transitions and presentation outputs.</li>
+        <li><code class="status">[x]</code> <code>make test-core</code> — revalidates the controller's crop dependency contract.</li>
+        <li><code class="status">[x]</code> <code>make architecture</code> — proves the new controller contains no native <code>hs</code> access and introduces no cycle.</li>
       </ul>
       <div class="loop">🔁 <strong>Do not exit this milestone until the state machine is fully green.</strong> The primary agent then requests a read-only reviewer verdict focused on transition safety and copy-nothing failures.</div>
     </div>
