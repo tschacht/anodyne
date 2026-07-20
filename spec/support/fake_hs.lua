@@ -71,6 +71,8 @@ function Fake.new(options)
     lifecycleFaults = {},
     lifecycleReturns = {},
     invocationCounts = {},
+    clipboard = nil,
+    alerts = {},
   }
 
   local function lifecycle(operation)
@@ -124,14 +126,35 @@ function Fake.new(options)
     end
     return copyFrame(self._state.fullFrame)
   end
+  function screenMethods:currentMode(...)
+    noExtra("screen:currentMode", ...)
+    live(self._state, "screen")
+    local overridden, value = lifecycle("screen.currentMode")
+    if overridden then
+      return value
+    end
+    return {
+      w = self._state.currentMode.w,
+      h = self._state.currentMode.h,
+      scale = self._state.currentMode.scale,
+    }
+  end
 
   local function addScreen(spec)
     spec = spec or {}
+    local frame = copyFrame(spec.frame or { x = 0, y = 0, w = 1920, h = 1080 })
+    local fullFrame = copyFrame(spec.fullFrame or spec.frame or { x = 0, y = 0, w = 1920, h = 1080 })
+    local scale = spec.scale == nil and 1 or spec.scale
     local state = {
       id = spec.id or (#runtime.screens + 1),
       uuid = spec.uuid or ("screen-" .. (#runtime.screens + 1)),
-      frame = copyFrame(spec.frame or { x = 0, y = 0, w = 1920, h = 1080 }),
-      fullFrame = copyFrame(spec.fullFrame or spec.frame or { x = 0, y = 0, w = 1920, h = 1080 }),
+      frame = frame,
+      fullFrame = fullFrame,
+      currentMode = {
+        w = spec.modeWidth or fullFrame.w * scale,
+        h = spec.modeHeight or fullFrame.h * scale,
+        scale = scale,
+      },
       faults = {},
     }
     local screen = strictObject("screen", screenMethods, state)
@@ -383,6 +406,17 @@ function Fake.new(options)
     self._state.behavior = value
     return self
   end
+  function canvasMethods:mouseCallback(value, ...)
+    noExtra("canvas:mouseCallback", ...)
+    lifecycle("canvas.mouseCallback")
+    live(self._state, "canvas")
+    if value ~= nil then
+      fail("canvas mouse callback must be nil")
+    end
+    self._state.mouseCallback = nil
+    self._state.mouseCallbackSet = true
+    return self
+  end
   function canvasMethods:show(...)
     noExtra("canvas:show", ...)
     lifecycle("canvas.show")
@@ -421,6 +455,8 @@ function Fake.new(options)
       windowLevels = { overlay = "overlay" },
       windowBehaviors = { canJoinAllSpaces = "canJoinAllSpaces" },
     },
+    pasteboard = {},
+    alert = {},
     fnutils = {},
   }
 
@@ -591,6 +627,31 @@ function Fake.new(options)
     table.insert(runtime.canvases, canvas)
     return canvas
   end
+  function hs.pasteboard.setContents(value, ...)
+    noExtra("pasteboard.setContents", ...)
+    local overridden, result = lifecycle("pasteboard.setContents")
+    if overridden then
+      return result
+    end
+    if type(value) ~= "string" then
+      fail("pasteboard.setContents requires a string")
+    end
+    runtime.clipboard = value
+    return true
+  end
+  function hs.alert.show(message, duration, ...)
+    noExtra("alert.show", ...)
+    local overridden, result = lifecycle("alert.show")
+    if overridden then
+      return result
+    end
+    if type(message) ~= "string" or type(duration) ~= "number" or duration <= 0 then
+      fail("alert.show requires a message and positive duration")
+    end
+    local identifier = "alert-" .. (#runtime.alerts + 1)
+    table.insert(runtime.alerts, { message = message, duration = duration })
+    return identifier
+  end
   function hs.fnutils.split(value, separator, ...)
     noExtra("fnutils.split", ...)
     if type(value) ~= "string" or type(separator) ~= "string" or separator == "" then
@@ -638,6 +699,8 @@ function Fake.new(options)
   hs.canvas.windowLevels = strictNamespace("canvas.windowLevels", hs.canvas.windowLevels)
   hs.canvas.windowBehaviors = strictNamespace("canvas.windowBehaviors", hs.canvas.windowBehaviors)
   hs.canvas = strictNamespace("canvas", hs.canvas)
+  hs.pasteboard = strictNamespace("pasteboard", hs.pasteboard)
+  hs.alert = strictNamespace("alert", hs.alert)
   hs.fnutils = strictNamespace("fnutils", hs.fnutils)
   hs = strictNamespace("hs", hs)
 
@@ -707,6 +770,9 @@ function Fake.new(options)
   function driver:setScreenFrame(screen, frame)
     screen._state.frame = copyFrame(frame)
   end
+  function driver:setScreenScale(screen, scale)
+    screen._state.currentMode.scale = scale
+  end
   function driver:setWindowFrame(window, frame)
     window._state.frame = copyFrame(frame)
   end
@@ -758,6 +824,57 @@ function Fake.new(options)
     local hotkey = runtime.hotkeys[#runtime.hotkeys]
     live(hotkey._state, "hotkey")
     hotkey._state.callback()
+  end
+  function driver:triggerHotkey(modifiers, key)
+    if type(modifiers) ~= "table" or type(key) ~= "string" then
+      fail("driver:triggerHotkey requires modifiers and key")
+    end
+    local function modifierKey(values)
+      local result = {}
+      for index, value in ipairs(values) do
+        if type(value) ~= "string" then
+          fail("driver:triggerHotkey modifiers must be strings")
+        end
+        result[index] = value
+      end
+      table.sort(result)
+      return table.concat(result, "\0")
+    end
+    local expected = modifierKey(modifiers)
+    for _, hotkey in ipairs(runtime.hotkeys) do
+      local state = hotkey._state
+      if state.active and not state.deleted and state.key == key and modifierKey(state.modifiers) == expected then
+        state.callback()
+        return
+      end
+    end
+    fail("no active hotkey matches " .. key)
+  end
+  function driver:clipboardContents()
+    return runtime.clipboard
+  end
+  function driver:alerts()
+    local result = {}
+    for index, alert in ipairs(runtime.alerts) do
+      result[index] = { message = alert.message, duration = alert.duration }
+    end
+    return result
+  end
+  function driver:canvasFrame(canvas)
+    return copyFrame(canvas._state.frame)
+  end
+  function driver:canvasElements(canvas)
+    local function copy(value)
+      if type(value) ~= "table" then
+        return value
+      end
+      local result = {}
+      for key, nested in pairs(value) do
+        result[key] = copy(nested)
+      end
+      return result
+    end
+    return copy(canvas._state.elements)
   end
   function driver:key(name, flags, eventType)
     local code

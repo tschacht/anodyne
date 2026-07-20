@@ -23,6 +23,10 @@ function View:hotkeyLabel()
   return table.concat(self.config.modalHotkey.modifiers, "+") .. "+" .. string.upper(self.config.modalHotkey.key)
 end
 
+function View:compositionHotkeyLabel()
+  return table.concat(self.config.compositionHotkey.modifiers, "+") .. "+" .. string.upper(self.config.compositionHotkey.key)
+end
+
 function View:tooltip()
   return "Window management: " .. self:hotkeyLabel() .. " for keyboard mode"
 end
@@ -44,22 +48,40 @@ end
 function View:statusText(status)
   if type(status) ~= "table" then
     return status
-  elseif status.kind == "unrecognized-key" then
+  end
+  local code = status.code or status.kind
+  if code == "unrecognized-key" then
     return "Unrecognized key"
-  elseif status.kind == "already-home" then
+  elseif code == "already-home" then
     return "Already at Home"
-  elseif status.kind == "unavailable-key" then
+  elseif code == "unavailable-key" then
     return string.format("%s is not available in %s", self:formatKey(status.key, status.flags), self.metadata.screenTitles[status.screen] or "this mode")
-  elseif status.kind == "unknown-mode" then
+  elseif code == "unknown-mode" then
     return "Unknown mode " .. tostring(status.screen)
-  elseif status.kind == "numbers-unavailable" then
+  elseif code == "numbers-unavailable" then
     return "Number keys are not available in " .. (self.metadata.screenTitles[status.screen] or "this mode")
-  elseif status.kind == "missing-preset" then
+  elseif code == "missing-preset" then
     return string.format("No %s preset %d", string.lower(self.metadata.screenTitles[status.screen]), status.index)
-  elseif status.kind == "target-unavailable" then
+  elseif code == "target-unavailable" or code == "stale-target" or code == "stale-window" then
     return "The target window is no longer available"
-  elseif status.kind == "unknown-action" then
+  elseif code == "unknown-action" then
     return "Unknown action " .. tostring(status.action)
+  elseif code == "outside_final" then
+    local edge = ({ left = "left", top = "top", right = "right", bottom = "bottom" })[status.edge]
+    return edge and ("The locked guide is outside the final window at the " .. edge .. " edge") or "The locked guide is outside the final window"
+  elseif code == "invalid_rect" then
+    local rect = ({ final = "final window", guide = "locked guide" })[status.rect]
+    return rect and ("Invalid " .. rect .. " geometry") or "Invalid crop geometry"
+  elseif code == "invalid_scale" then
+    return "Invalid display scale"
+  elseif code == "stale-screen" then
+    return "The screen geometry changed; Composition Mode was cancelled"
+  elseif code == "stale-scale" then
+    return "The display scale changed; Composition Mode was cancelled"
+  elseif code == "stale-geometry" then
+    return "The captured geometry changed; Composition Mode was cancelled"
+  elseif code == "copy-failed" or code == "pasteboard-failed" then
+    return "Could not copy OBS crop values; Composition Mode is still active"
   end
   return "Unknown status"
 end
@@ -73,6 +95,37 @@ end
 
 function View:failureText(message)
   return "WI action failed\n" .. (message and self:statusText(message) or "The action could not be completed")
+end
+
+function View:compositionHelpText(baseline, status)
+  local dimensions = baseline and string.format("%d x %d", math.floor(baseline.width + 0.5), math.floor(baseline.height + 0.5)) or "unavailable"
+  local lines = {
+    "Composition Mode:",
+    "Locked baseline: " .. dimensions,
+    "Return = Finish/Copy",
+    "Esc = Cancel",
+  }
+  if status then
+    lines[#lines + 1] = "Status: " .. self:statusText(status)
+  end
+  return table.concat(lines, "\n")
+end
+
+function View:cropClipboardText(result)
+  return string.format(
+    "Left: %d, Top: %d, Right: %d, Bottom: %d | Result: %d x %d | Scale: %s",
+    result.left,
+    result.top,
+    result.right,
+    result.bottom,
+    result.resultWidth,
+    result.resultHeight,
+    tostring(result.scale)
+  )
+end
+
+function View:cropResultText(result)
+  return self:cropClipboardText(result)
 end
 
 function View:resizeLabel(action)
@@ -203,6 +256,10 @@ function View:menuItems(state, sessionScreenChanged)
     items[#items + 1] =
       { title = string.format("%s [R %s]", self:resizeLabel(action), action.shortcut), intent = { type = "action", action = "resize", value = action } }
   end
+  append(items, {
+    { title = "-" },
+    { title = "Composition Mode: " .. self:compositionHotkeyLabel(), intent = { type = "composition", action = "enter" } },
+  })
   return items
 end
 

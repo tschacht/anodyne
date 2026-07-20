@@ -9,7 +9,7 @@ describe("Anodyne view", function()
     view = View.new(config, metadata)
   end)
 
-  it("builds all 52 exact ordered menu titles and stable intents", function()
+  it("preserves all 52 exact ordered Window Mode menu titles and adds Composition Mode", function()
     local items = view:menuItems({ active = false }, false)
     local titles = {}
     for _, item in ipairs(items) do
@@ -68,10 +68,13 @@ describe("Anodyne view", function()
       "Shrink to previous 50 px [R ↑]",
       "Grow both to next 50 px [R G]",
       "Shrink both to previous 50 px [R S]",
+      "-",
+      "Composition Mode: ctrl+alt+cmd+C",
     }, titles)
     assert.same({ type = "action", action = "undo" }, items[4].intent)
     assert.same({ type = "action", action = "width", value = 1000 }, items[15].intent)
     assert.is_true(items[5].disabled)
+    assert.same({ type = "composition", action = "enter" }, items[54].intent)
   end)
 
   it("renders exact bodies for every screen", function()
@@ -132,6 +135,50 @@ describe("Anodyne view", function()
     assert.are.equal("WI action failed\nThe action could not be completed", view:failureText())
     assert.are.equal("WI action failed\nUnknown action bogus", view:failureText({ kind = "unknown-action", action = "bogus" }))
     assert.are.equal("Shrink to previous 50 px", view:resizeLabel({ label = "Shrink Width", deltaWidth = -50, deltaHeight = 0 }))
+  end)
+
+  it("renders deterministic Composition Mode help and OBS output text", function()
+    assert.are.equal(
+      "Composition Mode:\nLocked baseline: 1234 x 777\nReturn = Finish/Copy\nEsc = Cancel",
+      view:compositionHelpText({ width = 1234, height = 777 })
+    )
+    assert.are.equal(
+      "Composition Mode:\nLocked baseline: 1235 x 777\nReturn = Finish/Copy\nEsc = Cancel",
+      view:compositionHelpText({ width = 1234.5, height = 777.49 })
+    )
+    assert.are.equal(
+      "Composition Mode:\nLocked baseline: unavailable\nReturn = Finish/Copy\nEsc = Cancel\nStatus: failed",
+      view:compositionHelpText(nil, "failed")
+    )
+    local result = { left = 10, top = 20, right = 30, bottom = 40, resultWidth = 1280, resultHeight = 720, scale = 2 }
+    local expected = "Left: 10, Top: 20, Right: 30, Bottom: 40 | Result: 1280 x 720 | Scale: 2"
+    assert.are.equal(expected, view:cropClipboardText(result))
+    assert.are.equal(expected, view:cropResultText(result))
+    assert.is_nil(view:cropClipboardText(result):match("\n"))
+  end)
+
+  it("identifies Composition Mode crop, stale, and copy failures", function()
+    local expected = {
+      { { code = "outside_final", edge = "left" }, "The locked guide is outside the final window at the left edge" },
+      { { code = "outside_final", edge = "top" }, "The locked guide is outside the final window at the top edge" },
+      { { code = "outside_final", edge = "right" }, "The locked guide is outside the final window at the right edge" },
+      { { code = "outside_final", edge = "bottom" }, "The locked guide is outside the final window at the bottom edge" },
+      { { code = "outside_final" }, "The locked guide is outside the final window" },
+      { { code = "invalid_rect", rect = "final" }, "Invalid final window geometry" },
+      { { code = "invalid_rect", rect = "guide" }, "Invalid locked guide geometry" },
+      { { code = "invalid_rect" }, "Invalid crop geometry" },
+      { { code = "invalid_scale" }, "Invalid display scale" },
+      { { kind = "stale-target" }, "The target window is no longer available" },
+      { { kind = "stale-screen" }, "The screen geometry changed; Composition Mode was cancelled" },
+      { { kind = "stale-scale" }, "The display scale changed; Composition Mode was cancelled" },
+      { { kind = "stale-geometry" }, "The captured geometry changed; Composition Mode was cancelled" },
+      { { kind = "copy-failed" }, "Could not copy OBS crop values; Composition Mode is still active" },
+      { { kind = "pasteboard-failed" }, "Could not copy OBS crop values; Composition Mode is still active" },
+    }
+    for _, case in ipairs(expected) do
+      assert.are.equal(case[2], view:statusText(case[1]))
+      assert.matches("Status: " .. case[2] .. "$", view:compositionHelpText({ width = 800, height = 600 }, case[1]))
+    end
   end)
 
   it("preserves the exact legacy empty-preset line sequence", function()

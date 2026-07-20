@@ -17,6 +17,15 @@ local DEFAULTS = {
     modifiers = { "ctrl", "alt", "cmd" },
     key = "m",
   },
+  compositionHotkey = {
+    modifiers = { "ctrl", "alt", "cmd" },
+    key = "c",
+  },
+  obsCrop = {
+    scaleOverride = 0,
+    resultDuration = 4,
+    dimAlpha = 0.45,
+  },
   aspectPresets = {
     { label = "16:9", width = 16, height = 9 },
     { label = "4:3", width = 4, height = 3 },
@@ -194,6 +203,29 @@ function Config.build(overrides)
   end
   if values.growStep < 1 or values.growStep == math.huge or values.growStep ~= math.floor(values.growStep) then
     error("CONFIG.growStep must be a positive integer", 2)
+  end
+  if values.compositionHotkey.key == "" then
+    error("CONFIG.compositionHotkey.key must not be empty", 2)
+  end
+  local seenModifiers = {}
+  local validModifiers = { ctrl = true, alt = true, cmd = true, shift = true, fn = true }
+  for _, modifier in ipairs(values.compositionHotkey.modifiers) do
+    if not validModifiers[modifier] or seenModifiers[modifier] then
+      error("CONFIG.compositionHotkey.modifiers must contain unique valid modifiers", 2)
+    end
+    seenModifiers[modifier] = true
+  end
+  local scaleOverride = values.obsCrop.scaleOverride
+  if scaleOverride < 0 or scaleOverride == math.huge or scaleOverride ~= scaleOverride then
+    error("CONFIG.obsCrop.scaleOverride must be zero or a finite positive number", 2)
+  end
+  local resultDuration = values.obsCrop.resultDuration
+  if resultDuration <= 0 or resultDuration == math.huge or resultDuration ~= resultDuration then
+    error("CONFIG.obsCrop.resultDuration must be a finite positive number", 2)
+  end
+  local dimAlpha = values.obsCrop.dimAlpha
+  if dimAlpha <= 0 or dimAlpha > 1 or dimAlpha ~= dimAlpha then
+    error("CONFIG.obsCrop.dimAlpha must be greater than zero and at most one", 2)
   end
   local frozen = freeze(values)
   return frozen, metadata(frozen)

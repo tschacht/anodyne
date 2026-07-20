@@ -22,6 +22,8 @@ describe("configuration", function()
       minimumWidth = 500,
       minimumHeight = 500,
       modalHotkey = { modifiers = { "ctrl", "alt", "cmd" }, key = "m" },
+      compositionHotkey = { modifiers = { "ctrl", "alt", "cmd" }, key = "c" },
+      obsCrop = { scaleOverride = 0, resultDuration = 4, dimAlpha = 0.45 },
       aspectPresets = {
         { label = "16:9", width = 16, height = 9 },
         { label = "4:3", width = 4, height = 3 },
@@ -71,6 +73,9 @@ describe("configuration", function()
     end, "configuration is immutable")
     assert.has_error(function()
       config.aspectPresets[1].label = "X"
+    end, "configuration is immutable")
+    assert.has_error(function()
+      config.obsCrop.dimAlpha = 1
     end, "configuration is immutable")
   end)
 
@@ -142,6 +147,38 @@ describe("configuration", function()
         Config.build({ growStep = value })
       end, "CONFIG.growStep must be a positive integer")
     end
+  end)
+
+  it("validates the Composition Mode hotkey", function()
+    assert.has_error(function()
+      Config.build({ compositionHotkey = { key = "" } })
+    end, "CONFIG.compositionHotkey.key must not be empty")
+    assert.has_error(function()
+      Config.build({ compositionHotkey = { modifiers = { "ctrl", "ctrl" } } })
+    end, "CONFIG.compositionHotkey.modifiers must contain unique valid modifiers")
+    assert.has_error(function()
+      Config.build({ compositionHotkey = { modifiers = { "hyper" } } })
+    end, "CONFIG.compositionHotkey.modifiers must contain unique valid modifiers")
+  end)
+
+  it("validates OBS crop configuration ranges", function()
+    for _, value in ipairs({ -1, math.huge, 0 / 0 }) do
+      assert.has_error(function()
+        Config.build({ obsCrop = { scaleOverride = value } })
+      end, "CONFIG.obsCrop.scaleOverride must be zero or a finite positive number")
+    end
+    for _, value in ipairs({ 0, -1, math.huge, 0 / 0 }) do
+      assert.has_error(function()
+        Config.build({ obsCrop = { resultDuration = value } })
+      end, "CONFIG.obsCrop.resultDuration must be a finite positive number")
+    end
+    for _, value in ipairs({ 0, -0.1, 1.1, math.huge, 0 / 0 }) do
+      assert.has_error(function()
+        Config.build({ obsCrop = { dimAlpha = value } })
+      end, "CONFIG.obsCrop.dimAlpha must be greater than zero and at most one")
+    end
+    local config = Config.build({ obsCrop = { scaleOverride = 1.5, resultDuration = 0.5, dimAlpha = 1 } })
+    assert.same({ scaleOverride = 1.5, resultDuration = 0.5, dimAlpha = 1 }, plain(config.obsCrop))
   end)
 
   it("derives consistent mode maps, labels, symbols, and resize deltas", function()
