@@ -248,7 +248,7 @@ describe("Milestone 3 facade", function()
     assert.are.equal(instance, instance:start())
     assert.are.equal(instance, instance:start())
     assert.is_true(instance:isRunning())
-    assert.same({ timers = 0, menus = 1, hotkeys = 1, modals = 1, filters = 2, taps = 0, canvases = 0 }, driver:activeCounts())
+    assert.same({ timers = 0, menus = 1, hotkeys = 2, modals = 2, filters = 2, taps = 0, canvases = 0 }, driver:activeCounts())
     local stopped, errors = instance:stop()
     assert.are.equal(instance, stopped)
     assert.is_nil(errors)
@@ -271,7 +271,11 @@ describe("Milestone 3 facade", function()
       { "filter.subscribe", 1 },
       { "filter.subscribe", 2 },
       { "modal.new", 1 },
+      { "modal.new", 2 },
       { "hotkey.bind", 1 },
+      { "modal.bind", 1 },
+      { "modal.bind", 2 },
+      { "hotkey.bind", 2 },
     }
     for _, stage in ipairs(stages) do
       local candidate = FakeHs.new()
@@ -290,22 +294,28 @@ describe("Milestone 3 facade", function()
     end
   end)
 
-  it("rolls back a nil entry-hotkey acquisition and permits retry", function()
-    local instance = Anodyne.new({ hs = driver.hs })
-    driver:setLifecycleReturn("hotkey.bind", 1, nil)
-    local ok, message = pcall(function()
-      instance:start()
-    end)
-    assert.is_false(ok)
-    assert.matches("Failed to create/enable entry hotkey", message)
-    assert.is_false(instance:isRunning())
-    assert.is_nil(instance.entryHotkey)
-    assertNoResources(driver)
-    driver:clearLifecycleReturns()
-    assert.are.equal(instance, instance:start())
-    assert.is_true(instance:isRunning())
-    assert.is_nil(select(2, instance:stop()))
-    assertNoResources(driver)
+  it("rolls back nil entry-hotkey acquisitions and permits retry", function()
+    for _, case in ipairs({
+      { invocation = 1, message = "Failed to create/enable composition entry hotkey", field = "compositionEntryHotkey" },
+      { invocation = 2, message = "Failed to create/enable entry hotkey", field = "entryHotkey" },
+    }) do
+      local candidate = FakeHs.new()
+      local instance = Anodyne.new({ hs = candidate.hs })
+      candidate:setLifecycleReturn("hotkey.bind", case.invocation, nil)
+      local ok, message = pcall(function()
+        instance:start()
+      end)
+      assert.is_false(ok)
+      assert.matches(case.message, message, 1, true)
+      assert.is_false(instance:isRunning())
+      assert.is_nil(instance[case.field])
+      assertNoResources(candidate)
+      candidate:clearLifecycleReturns()
+      assert.are.equal(instance, instance:start())
+      assert.is_true(instance:isRunning())
+      assert.is_nil(select(2, instance:stop()))
+      assertNoResources(candidate)
+    end
   end)
 
   it("reports retained native stop handles and reaches zero after retry", function()

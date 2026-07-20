@@ -112,7 +112,7 @@
 
   <section id="solution">
     <h2>Solution</h2>
-    <p>Introduce a tested Composition Mode state machine with a strict native boundary. <code>ctrl+alt+cmd+C</code> enters this top-level mode independently of Window Mode at <code>ctrl+alt+cmd+M</code>; <code>Return</code> finishes and copies the crops, while <code>Esc</code> cancels. Entering the mode freezes the current window frame without resizing it and the mode remains active until one of those explicit exits. Pure Lua calculates crop values and formats outcomes; a dedicated controller owns the inactive/active transition; the existing Hammerspoon adapter owns mode resources, window discovery, screen scale, click-through canvases, pasteboard output, alerts, and retry-safe cleanup. Automatic scale detection uses <code>screen:currentMode().scale</code>, while <code>0</code> means auto and a positive configuration value overrides it.</p>
+    <p>Introduce a tested Composition Mode state machine with a strict native boundary. <code>ctrl+alt+cmd+C</code> enters this top-level mode independently of Window Mode at <code>ctrl+alt+cmd+M</code>; <code>Return</code> finishes and copies the crops, while <code>Esc</code> cancels. Entering the mode freezes the current window frame without resizing it and the guide session remains active until one of those explicit exits. Pure Lua calculates crop values and formats outcomes; a dedicated controller owns the inactive/active transition; the existing Hammerspoon adapter owns mode resources, window discovery, screen scale, click-through canvases, pasteboard output, persistent Window-Mode-style status presentation, and retry-safe cleanup. Automatic scale detection uses <code>screen:currentMode().scale</code>, while <code>0</code> means auto and a positive configuration value overrides it.</p>
     <div class="flow" aria-label="Composition flow">
       <div class="node">Any established frame</div><div class="arrow">→</div>
       <div class="node guide">Composition Mode guide</div><div class="arrow">→</div>
@@ -121,7 +121,7 @@
       <div class="node done">Copy L/T/R/B</div><div class="arrow">→</div>
       <div class="node done">Enter in OBS</div>
     </div>
-    <div class="callout good"><strong>Scope boundary:</strong> there is no OBS WebSocket, IPC, UI automation, source discovery, or automatic OBS mutation. The only external output is a human-readable clipboard string plus a transient status alert.</div>
+    <div class="callout good"><strong>Scope boundary:</strong> there is no OBS WebSocket, IPC, UI automation, source discovery, or automatic OBS mutation. The only external output is a human-readable clipboard string plus an Anodyne-owned status modal matching Window Mode.</div>
   </section>
 
   <section id="contracts">
@@ -129,13 +129,13 @@
     <table>
       <thead><tr><th>ID</th><th>Contract</th><th>Failure behavior</th></tr></thead>
       <tbody>
-        <tr><td class="contract">COMPOSE-MODE-01</td><td>Composition Mode is a top-level modal entered with configurable default <code>ctrl+alt+cmd+C</code>, parallel to Window Mode at <code>ctrl+alt+cmd+M</code>. Only one top-level mode may be active; entering the other cleanly exits or cancels the current mode. Composition Mode has no automatic timeout.</td><td>Mode acquisition or cross-mode teardown failure leaves no half-entered replacement mode and reports a concise alert.</td></tr>
+        <tr><td class="contract">COMPOSE-MODE-01</td><td>Composition Mode is a top-level modal entered with configurable default <code>ctrl+alt+cmd+C</code>, parallel to Window Mode at <code>ctrl+alt+cmd+M</code>. Only one top-level mode may be active; entering the other cleanly exits or cancels the current mode. The active guide session has no automatic timeout; only the post-Finish result presentation uses the configured timeout.</td><td>Mode acquisition or cross-mode teardown failure leaves no half-entered replacement mode and reports concise visible status through Anodyne-owned presentation.</td></tr>
         <tr><td class="contract">CROP-BASELINE-01</td><td>Entering Composition Mode snapshots the selected window's exact current frame, including its arbitrary width, height, and aspect ratio; it never resizes or repositions that window.</td><td>No valid focused/remembered window means no session and a concise alert.</td></tr>
         <tr><td class="contract">CROP-PIN-01</td><td>The session remains pinned to the same window object and ID even when focus changes.</td><td>A missing or replaced target cancels the session and copies nothing.</td></tr>
         <tr><td class="contract">CROP-MATH-01</td><td>Crop values are integers in OBS order: Left, Top, Right, Bottom. Pixel conversion preserves the guide's rounded pixel width and height exactly.</td><td>If any guide edge lies outside the final window beyond tolerance, keep the session active, identify the invalid edge, and copy nothing.</td></tr>
         <tr><td class="contract">CROP-SCALE-01</td><td>Automatic scale is the start screen's finite positive <code>currentMode().scale</code>; a positive configured override wins. The chosen value is frozen for the session.</td><td>Invalid/missing scale or changed screen identity/full frame/scale cancels as stale geometry.</td></tr>
-        <tr><td class="contract">CROP-UI-01</td><td>The guide is floating, click-through, fixed in absolute screen coordinates, and visible until Finish or Cancel. Later milestone dimming affects only the area outside the guide.</td><td>Canvas setup/teardown failures retain native handles for retry-safe adapter cleanup.</td></tr>
-        <tr><td class="contract">CROP-OUT-01</td><td><code>Return</code> finishes Composition Mode, copies one line, and shows the same values, result dimensions, and scale in a transient alert. <code>Esc</code> cancels and copies nothing.</td><td>Pasteboard failure leaves Composition Mode active and recoverable, with a visible failure status.</td></tr>
+        <tr><td class="contract">CROP-UI-01</td><td>The guide is floating, click-through, fixed in absolute screen coordinates, and visible until Finish or Cancel. Its border width is configurable through immutable <code>obsCrop.guideStrokeWidth</code> and defaults to exactly <code>1</code> point. Later milestone dimming affects only the area outside the guide.</td><td>Canvas setup/teardown failures retain native handles for retry-safe adapter cleanup.</td></tr>
+        <tr><td class="contract">CROP-OUT-01</td><td>While the guide is active, a click-through status modal matching Window Mode remains visible with the locked baseline and controls. <code>Return</code> removes the guide, copies one line, and changes that modal to the same crop values, result dimensions, and scale for <code>obsCrop.resultDuration</code> additional seconds. <code>Esc</code> cancels an active guide or dismisses the lingering result early; early dismissal never clears the clipboard.</td><td>Pasteboard failure leaves the guide session active and recoverable, with visible failure status in the persistent modal.</td></tr>
         <tr><td class="contract">CROP-LIFE-01</td><td>Reload/stop removes the Composition Mode entry hotkey, modal bindings, and every guide canvas with no stale callbacks or resources.</td><td>Cleanup aggregates failures and repeated <code>:stop()</code> retries retained resources, matching existing Anodyne lifecycle policy.</td></tr>
       </tbody>
     </table>
@@ -146,9 +146,9 @@
 
     <h3>Existing Files</h3>
     <ul>
-      <li><span class="tag existing">existing</span> <code>Anodyne/config.lua</code> — add the validated Composition Mode entry hotkey, scale override, result duration, and dim opacity defaults.</li>
+      <li><span class="tag existing">existing</span> <code>Anodyne/config.lua</code> — add the validated Composition Mode entry hotkey, scale override, result duration, dim opacity, and guide stroke-width defaults.</li>
       <li><span class="tag existing">existing</span> <code>Anodyne/view.lua</code> — format Composition Mode help/status, crop clipboard text, and the top-level mode's menu presentation.</li>
-      <li><span class="tag existing">existing</span> <code>Anodyne/adapter/hammerspoon.lua</code> — own the second top-level modal, its entry hotkey/bindings, cross-mode exclusion, canvas, screen mode access, pasteboard, alerts, callbacks, and teardown.</li>
+      <li><span class="tag existing">existing</span> <code>Anodyne/adapter/hammerspoon.lua</code> — own the second top-level modal, its entry hotkey/bindings, cross-mode exclusion, guide/status canvases, result timer, screen mode access, pasteboard, callbacks, and teardown.</li>
       <li><span class="tag existing">existing</span> <code>spec/support/fake_hs.lua</code> — extend the strict fake with <code>currentMode</code>, pasteboard, alert, and click-through canvas behavior.</li>
       <li><span class="tag existing">existing</span> <code>spec/adapter/hammerspoon_spec.lua</code> and <code>spec/characterization/anodyne_spec.lua</code> — prove native acquisition, interaction, failure retention, and reload cleanup.</li>
       <li><span class="tag existing">existing</span> <code>tools/check_architecture.lua</code> and <code>tools/check_coverage.lua</code> — recognize the new modules and enforce pure/controller coverage floors.</li>
@@ -257,31 +257,62 @@
     </div>
 
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone 3: Native Guide and Clipboard Integration</h3>
+      <h3><code class="status">[x]</code> Milestone 3: Native Guide and Clipboard Integration</h3>
       <p>This is the first end-to-end feature milestone. It adds Composition Mode as a peer of Window Mode and deliberately renders only the border; exterior dimming remains disabled until the crop workflow itself passes native and offline gates.</p>
       <p><strong>Validation goal:</strong> complete the border-only Hammerspoon workflow end to end with click-through interaction, correct clipboard output, and retry-safe native resource cleanup.</p>
 
       <h4><span class="tag packet">WP-05</span> Hammerspoon adapter wiring</h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> Owner: worker agent. Depends on WP-03 and WP-04. Touch <code>Anodyne/adapter/hammerspoon.lua</code>, <code>spec/adapter/hammerspoon_spec.lua</code>, and <code>spec/characterization/anodyne_spec.lua</code>.</li>
-        <li><code class="status">[]</code> Instantiate the crop controller and inject only narrow ports for window/frame/screen reads, scale detection, guide render/close, pasteboard, alert, generation guard, and view formatting.</li>
-        <li><code class="status">[]</code> Create <code>owner.compositionMode</code> with its own configurable entry hotkey, bind <code>Return</code> to Finish/Copy and <code>Esc</code> to Cancel, guard callbacks by generation, and route the new top-level menu entry through the same mode lifecycle.</li>
-        <li><code class="status">[]</code> Enforce mutual exclusion between <code>windowMode</code> and <code>compositionMode</code>: entering either cleanly exits or cancels the other before acquisition, never leaving both event surfaces active.</li>
-        <li><code class="status">[]</code> Render a full-screen transparent canvas on the stored screen with an orange guide border in canvas-local coordinates; explicitly call <code>mouseCallback(nil)</code>, set overlay level, and retain the canvas before every fallible setup call.</li>
-        <li><code class="status">[]</code> Add the Composition Mode entry hotkey, modal resource, bindings, and canvas to ordered cleanup; enforce hide-before-delete, retain failed handles, aggregate errors, and allow repeated stop retries.</li>
-        <li><code class="status">[]</code> Fan out window-destroyed events to history and crop controllers without changing focused-window behavior.</li>
-        <li><code class="status">[]</code> Update acquisition/resource-count assertions, startup rollback matrices, callback generation tests, menu expectations, and reload characterization.</li>
+        <li><code class="status">[x]</code> Owner: worker agent. Depends on WP-03 and WP-04. Touch <code>Anodyne/adapter/hammerspoon.lua</code>, <code>spec/adapter/hammerspoon_spec.lua</code>, and <code>spec/characterization/anodyne_spec.lua</code>.</li>
+        <li><code class="status">[x]</code> Instantiate the crop controller and inject only narrow ports for window/frame/screen reads, scale detection, guide render/close, pasteboard, alert, generation guard, and view formatting.</li>
+        <li><code class="status">[x]</code> Create <code>owner.compositionMode</code> with its own configurable entry hotkey, bind <code>Return</code> to Finish/Copy and <code>Esc</code> to Cancel, guard callbacks by generation, and route the new top-level menu entry through the same mode lifecycle.</li>
+        <li><code class="status">[x]</code> Enforce mutual exclusion between <code>windowMode</code> and <code>compositionMode</code>: entering either cleanly exits or cancels the other before acquisition, never leaving both event surfaces active.</li>
+        <li><code class="status">[x]</code> Render a full-screen transparent canvas on the stored screen with an orange guide border in canvas-local coordinates; explicitly call <code>mouseCallback(nil)</code>, set overlay level, and retain the canvas before every fallible setup call.</li>
+        <li><code class="status">[x]</code> Add the Composition Mode entry hotkey, modal resource, bindings, and canvas to ordered cleanup; enforce hide-before-delete, retain failed handles, aggregate errors, and allow repeated stop retries.</li>
+        <li><code class="status">[x]</code> Fan out window-destroyed events to history and crop controllers without changing focused-window behavior.</li>
+        <li><code class="status">[x]</code> Update acquisition/resource-count assertions, startup rollback matrices, callback generation tests, menu expectations, and reload characterization.</li>
       </ul>
 
       <h4>3.2 Testing Strategy</h4>
       <p>The strict fake must reject wrong signatures and prove exact native ownership. A real-Hammerspoon spot check confirms click-through behavior and window pinning before visual dimming expands the canvas.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>make test-adapter</code> — validates native ports, resources, failure retention, and cleanup retry.</li>
-        <li><code class="status">[]</code> <code>make test-characterization</code> — validates reload, resource counts, and unchanged established behavior.</li>
-        <li><code class="status">[]</code> <code>make test-facade</code> — validates partial-start rollback now includes crop resources.</li>
-        <li><code class="status">[]</code> Manual Hammerspoon check: enter Composition Mode with a deliberately non-16:9 baseline, click and resize the target through the guide, press <code>Return</code>, and verify the clipboard's result dimensions equal that arbitrary baseline.</li>
+        <li><code class="status">[x]</code> <code>make test-adapter</code> — validates native ports, resources, failure retention, and cleanup retry.</li>
+        <li><code class="status">[x]</code> <code>make test-characterization</code> — validates reload, resource counts, and unchanged established behavior.</li>
+        <li><code class="status">[x]</code> <code>make test-facade</code> — validates partial-start rollback now includes crop resources.</li>
+        <li><code class="status">[x]</code> Manual Hammerspoon check: enter Composition Mode with a deliberately non-16:9 baseline, click and resize the target through the guide, press <code>Return</code>, and verify the clipboard's result dimensions equal that arbitrary baseline.</li>
+      </ul>
+
+      <h4><span class="tag packet">WP-02A / WP-05A</span> Owner-requested guide-width amendment</h4>
+      <ul class="checklist">
+        <li><code class="status">[x]</code> WP-02A owner: configuration worker. Touch only <code>Anodyne/config.lua</code> and <code>spec/core/config_spec.lua</code>; add immutable finite positive <code>obsCrop.guideStrokeWidth</code> with default exactly <code>1</code>.</li>
+        <li><code class="status">[x]</code> WP-05A owner: adapter worker after WP-02A. Source the canvas border width from immutable configuration and expose the controller's Composition Mode help on entry so the authoritative locked baseline dimensions are visible during native validation.</li>
+        <li><code class="status">[x]</code> Repeat the non-16:9 native check and compare the clipboard <code>Result</code> dimensions to the baseline dimensions reported by Composition Mode itself at the reported scale.</li>
       </ul>
       <div class="loop">🔁 <strong>Do not exit this milestone until border-only composition works end to end.</strong> A read-only reviewer must approve lifecycle ownership before dimming is added.</div>
+    </div>
+
+    <div class="phase">
+      <h3><code class="status">[wip]</code> Milestone 3A: Persistent Composition Status and Result Modal</h3>
+      <p>Replace Composition Mode's transient native alerts with an Anodyne-owned, click-through status modal that matches Window Mode's dark rounded presentation. This amendment is a dependency gate before exterior dimming.</p>
+      <p><strong>Validation goal:</strong> keep authoritative help and recoverable failure status visible for the entire guide session, then retain the copied result for the configured additional duration without changing clipboard contents.</p>
+
+      <h4><span class="tag packet">WP-05B</span> Persistent status/result presentation</h4>
+      <ul class="checklist">
+        <li><code class="status">[wip]</code> Owner: the WP-05 adapter worker as a sequential follow-up. Touch <code>Anodyne/adapter/hammerspoon.lua</code>, <code>spec/adapter/hammerspoon_spec.lua</code>, and <code>spec/characterization/anodyne_spec.lua</code>; extend the strict fake only if a missing native lifecycle seam is proven.</li>
+        <li><code class="status">[]</code> Render a separate click-through Composition status canvas using the same dark rounded rectangle, Menlo text, spacing, and sizing policy as Window Mode; keep baseline/control help visible with no timeout while the guide is active.</li>
+        <li><code class="status">[]</code> Route containment, pasteboard, stale, and teardown status through the Composition canvas instead of <code>hs.alert.show</code>, preserving recoverable active-session behavior.</li>
+        <li><code class="status">[]</code> After successful <code>Return</code>, close the guide, preserve the clipboard, replace help with the formatted result, and keep the native Composition modal/status canvas alive for exactly <code>obsCrop.resultDuration</code> additional seconds.</li>
+        <li><code class="status">[]</code> During the lingering-result phase, <code>Esc</code> stops the result timer, closes the status canvas, exits the native modal, and leaves clipboard contents unchanged. Timer expiry performs the same UI teardown.</li>
+        <li><code class="status">[]</code> Entering either top-level mode during result linger cleanly tears down the old result resources before acquisition. Stop/reload owns the result timer and status canvas with hide-before-delete, retained-handle retry, failure aggregation, and stale-callback guards.</li>
+      </ul>
+
+      <h4>3A.2 Testing Strategy</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>make test-adapter</code> — proves persistent help, modal-local dismissal, exact timer duration, clipboard retention, cross-mode behavior, and retry-safe native ownership.</li>
+        <li><code class="status">[]</code> <code>make test-characterization</code> and <code>make test-facade</code> — prove reload/startup rollback and established Window Mode presentation remain unchanged.</li>
+        <li><code class="status">[]</code> Manual Hammerspoon check: confirm the Composition status modal visually matches Window Mode, remains for the guide session, changes to the copied result after <code>Return</code>, dismisses early with <code>Esc</code>, and does not clear the clipboard.</li>
+      </ul>
+      <div class="loop">🔁 <strong>Do not start exterior dimming until persistent presentation, timed result linger, early dismissal, cleanup retry, and native visual behavior all pass independent review.</strong></div>
     </div>
 
     <div class="phase">
@@ -362,7 +393,8 @@
         <tr><td class="contract">WP-03</td><td>Milestone 0</td><td>Strict fake Hammerspoon support only</td><td><code>make test-adapter</code>; no namespace weakening</td></tr>
         <tr><td class="contract">WP-04</td><td>WP-01, WP-02</td><td>New crop controller and controller spec</td><td><code>make test-controller architecture</code>; transition-safety review</td></tr>
         <tr><td class="contract">WP-05</td><td>WP-03, WP-04</td><td>Adapter and native integration specs</td><td>Adapter/characterization/facade suites; lifecycle review</td></tr>
-        <tr><td class="contract">WP-06</td><td>WP-05</td><td>Same adapter/spec ownership, sequentially</td><td>Mask geometry tests plus native visual check</td></tr>
+        <tr><td class="contract">WP-05B</td><td>WP-05 plus owner amendments</td><td>Same adapter/spec ownership, sequentially</td><td>Persistent modal/timer/clipboard tests; lifecycle and native visual review</td></tr>
+        <tr><td class="contract">WP-06</td><td>WP-05B</td><td>Same adapter/spec ownership, sequentially</td><td>Mask geometry tests plus native visual check</td></tr>
         <tr><td class="contract">WP-07</td><td>WP-06</td><td>Tooling gates and README</td><td><code>make verify</code>; manual OBS calibration</td></tr>
       </tbody>
     </table>
@@ -413,6 +445,14 @@ bottom  = sourceH - top - resultH</code></pre>
     <details>
       <summary>2026-07-20T22:52:01+02:00 — Generalize the baseline and formalize Composition Mode</summary>
       <p>Replaced the accidental fixed-16:9 requirement with an arbitrary locked starting frame. Defined Composition Mode as a new top-level mode beside Window Mode, with configurable <code>ctrl+alt+cmd+C</code> entry, <code>Return</code> Finish/Copy, <code>Esc</code> Cancel, explicit cross-mode exclusion, no automatic timeout, revised worker/validation requirements, and 16:9 retained only as an optional Window Mode example.</p>
+    </details>
+    <details>
+      <summary>2026-07-21 — Make the guide border configurable and exactly 1 point by default</summary>
+      <p>Owner testing confirmed that the guide is click-through and that Finish displays and copies the crop result, but found the four-point border visually too heavy. Added <code>obsCrop.guideStrokeWidth</code> as an immutable finite positive setting with a default of exactly <code>1</code>, required the adapter to source the border width from configuration, and added a focused native retest that compares the clipboard result with Composition Mode's authoritative locked baseline dimensions.</p>
+    </details>
+    <details>
+      <summary>2026-07-21 — Replace transient alerts with a persistent Window-Mode-style Composition modal</summary>
+      <p>Owner testing approved the 1-point click-through guide and exact crop output, then requested consistent Anodyne presentation. Added Milestone 3A before dimming: help and recoverable status remain visible in a click-through Window-Mode-style canvas for the whole guide session; after Finish the guide closes while the copied result remains for configurable <code>obsCrop.resultDuration</code> additional seconds; <code>Esc</code> dismisses that result early without clearing the clipboard.</p>
     </details>
   </section>
 

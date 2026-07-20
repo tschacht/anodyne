@@ -25,6 +25,7 @@ local DEFAULTS = {
     scaleOverride = 0,
     resultDuration = 4,
     dimAlpha = 0.45,
+    guideStrokeWidth = 1,
   },
   aspectPresets = {
     { label = "16:9", width = 16, height = 9 },
@@ -226,6 +227,10 @@ function Config.build(overrides)
   local dimAlpha = values.obsCrop.dimAlpha
   if dimAlpha <= 0 or dimAlpha > 1 or dimAlpha ~= dimAlpha then
     error("CONFIG.obsCrop.dimAlpha must be greater than zero and at most one", 2)
+  end
+  local guideStrokeWidth = values.obsCrop.guideStrokeWidth
+  if guideStrokeWidth <= 0 or guideStrokeWidth == math.huge or guideStrokeWidth ~= guideStrokeWidth then
+    error("CONFIG.obsCrop.guideStrokeWidth must be a finite positive number", 2)
   end
   local frozen = freeze(values)
   return frozen, metadata(frozen)

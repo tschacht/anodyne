@@ -23,7 +23,7 @@ describe("configuration", function()
       minimumHeight = 500,
       modalHotkey = { modifiers = { "ctrl", "alt", "cmd" }, key = "m" },
       compositionHotkey = { modifiers = { "ctrl", "alt", "cmd" }, key = "c" },
-      obsCrop = { scaleOverride = 0, resultDuration = 4, dimAlpha = 0.45 },
+      obsCrop = { scaleOverride = 0, resultDuration = 4, dimAlpha = 0.45, guideStrokeWidth = 1 },
       aspectPresets = {
         { label = "16:9", width = 16, height = 9 },
         { label = "4:3", width = 4, height = 3 },
@@ -76,6 +76,9 @@ describe("configuration", function()
     end, "configuration is immutable")
     assert.has_error(function()
       config.obsCrop.dimAlpha = 1
+    end, "configuration is immutable")
+    assert.has_error(function()
+      config.obsCrop.guideStrokeWidth = 2
     end, "configuration is immutable")
   end)
 
@@ -177,8 +180,13 @@ describe("configuration", function()
         Config.build({ obsCrop = { dimAlpha = value } })
       end, "CONFIG.obsCrop.dimAlpha must be greater than zero and at most one")
     end
-    local config = Config.build({ obsCrop = { scaleOverride = 1.5, resultDuration = 0.5, dimAlpha = 1 } })
-    assert.same({ scaleOverride = 1.5, resultDuration = 0.5, dimAlpha = 1 }, plain(config.obsCrop))
+    for _, value in ipairs({ 0, -0.1, math.huge, 0 / 0 }) do
+      assert.has_error(function()
+        Config.build({ obsCrop = { guideStrokeWidth = value } })
+      end, "CONFIG.obsCrop.guideStrokeWidth must be a finite positive number")
+    end
+    local config = Config.build({ obsCrop = { guideStrokeWidth = 2.5 } })
+    assert.same({ scaleOverride = 0, resultDuration = 4, dimAlpha = 0.45, guideStrokeWidth = 2.5 }, plain(config.obsCrop))
   end)
 
   it("derives consistent mode maps, labels, symbols, and resize deltas", function()

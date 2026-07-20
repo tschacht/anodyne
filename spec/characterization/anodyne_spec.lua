@@ -54,9 +54,9 @@ describe("Milestone 2 characterization", function()
   end)
 
   describe("A-LIFE-01 lifecycle ownership", function()
-    it("loads with exactly one menu, modal, entry hotkey, and two subscriptions", function()
+    it("loads with one menu, two modals, two entry hotkeys, and two subscriptions", function()
       assert.is_table(_G.Anodyne)
-      assert.same({ timers = 0, menus = 1, hotkeys = 1, modals = 1, filters = 2, taps = 0, canvases = 0 }, driver:activeCounts())
+      assert.same({ timers = 0, menus = 1, hotkeys = 2, modals = 2, filters = 2, taps = 0, canvases = 0 }, driver:activeCounts())
     end)
 
     it("unloads every native resource", function()
@@ -66,7 +66,7 @@ describe("Milestone 2 characterization", function()
 
     it("cleans the first registration set before a second load", function()
       driver:load()
-      assert.same({ timers = 0, menus = 1, hotkeys = 1, modals = 1, filters = 2, taps = 0, canvases = 0 }, driver:activeCounts())
+      assert.same({ timers = 0, menus = 1, hotkeys = 2, modals = 2, filters = 2, taps = 0, canvases = 0 }, driver:activeCounts())
     end)
 
     it("reloads while modal without stale resources or callbacks crossing generations", function()
@@ -82,6 +82,8 @@ describe("Milestone 2 characterization", function()
         hotkey = manager.entryHotkey,
         focusFilter = manager.windowFilter,
         historyFilter = manager.historyWindowFilter,
+        compositionModal = manager.compositionMode,
+        compositionEntry = manager.compositionEntryHotkey,
       }
 
       driver:load()
@@ -91,6 +93,8 @@ describe("Milestone 2 characterization", function()
       assert.is_true(old.modal._state.deleted)
       assert.is_true(old.menu._state.deleted)
       assert.is_true(old.hotkey._state.deleted)
+      assert.is_true(old.compositionModal._state.deleted)
+      assert.is_true(old.compositionEntry._state.deleted)
       assert.is_nil(next(old.focusFilter._state.callbacks))
       assert.is_nil(next(old.historyFilter._state.callbacks))
       assert.has_error(function()
@@ -100,7 +104,7 @@ describe("Milestone 2 characterization", function()
         old.canvas[1] = { type = "text" }
       end, "fake_hs: canvas used after delete")
       assert.is_nil(driver:lastMessage())
-      assert.same({ timers = 0, menus = 1, hotkeys = 1, modals = 1, filters = 2, taps = 0, canvases = 0 }, driver:activeCounts())
+      assert.same({ timers = 0, menus = 1, hotkeys = 2, modals = 2, filters = 2, taps = 0, canvases = 0 }, driver:activeCounts())
 
       driver:triggerEntry()
       local newTimer = _G.Anodyne.modalTimer
@@ -110,11 +114,31 @@ describe("Milestone 2 characterization", function()
       assert.is_true(newTimer._state.active)
     end)
 
+    it("reloads an active Composition guide without stale bindings or canvas", function()
+      driver:triggerHotkey({ "ctrl", "alt", "cmd" }, "c")
+      local manager = _G.Anodyne
+      local oldModal = manager.compositionMode
+      local oldCanvas = manager.compositionCanvas
+      local oldFinish = oldModal._state.bindings[1].callback
+
+      driver:load()
+      assert.is_true(oldModal._state.deleted)
+      assert.is_true(oldCanvas._state.deleted)
+      assert.is_nil(_G.Anodyne.compositionCanvas)
+      oldFinish()
+      assert.is_nil(driver:clipboardContents())
+      assert.same({ timers = 0, menus = 1, hotkeys = 2, modals = 2, filters = 2, taps = 0, canvases = 0 }, driver:activeCounts())
+
+      driver:triggerHotkey({ "ctrl", "alt", "cmd" }, "c")
+      assert.is_true(_G.Anodyne.compositionMode._state.active)
+      assert.is_not.equal(oldCanvas, _G.Anodyne.compositionCanvas)
+    end)
+
     it("owns one timer, key tap, and canvas only while modal", function()
       driver:triggerEntry()
-      assert.same({ timers = 1, menus = 1, hotkeys = 1, modals = 1, filters = 2, taps = 1, canvases = 1 }, driver:activeCounts())
+      assert.same({ timers = 1, menus = 1, hotkeys = 2, modals = 2, filters = 2, taps = 1, canvases = 1 }, driver:activeCounts())
       assert.is_true(driver:key("escape"))
-      assert.same({ timers = 0, menus = 1, hotkeys = 1, modals = 1, filters = 2, taps = 0, canvases = 0 }, driver:activeCounts())
+      assert.same({ timers = 0, menus = 1, hotkeys = 2, modals = 2, filters = 2, taps = 0, canvases = 0 }, driver:activeCounts())
       assert.is_nil(driver:lastMessage())
     end)
 
@@ -594,7 +618,7 @@ describe("Milestone 2 characterization", function()
 
   describe("A-UI-01 strings, order, and timers", function()
     it("registers the exact entry chord, menubar identity, tooltip, and tap types", function()
-      local hotkey = driver.runtime.hotkeys[1]._state
+      local hotkey = _G.Anodyne.entryHotkey._state
       local menu = driver.runtime.menus[1]._state
       assert.same({ "ctrl", "alt", "cmd" }, hotkey.modifiers)
       assert.are.equal("m", hotkey.key)
@@ -604,7 +628,7 @@ describe("Milestone 2 characterization", function()
       assert.same({ 10, 11, 12 }, driver.runtime.taps[1]._state.events)
     end)
 
-    it("constructs all 52 menu items with frozen strings and order", function()
+    it("constructs all 54 menu items with frozen strings and order", function()
       local items = driver:menuItems()
       local titles = {}
       for _, item in ipairs(items) do
@@ -663,7 +687,27 @@ describe("Milestone 2 characterization", function()
         "Shrink to previous 50 px [R ↑]",
         "Grow both to next 50 px [R G]",
         "Shrink both to previous 50 px [R S]",
+        "-",
+        "Composition Mode: ctrl+alt+cmd+C",
       }, titles)
+    end)
+
+    it("runs Composition Mode end to end from the top-level menu", function()
+      click(driver, "Composition Mode: ctrl+alt+cmd+C")
+      local canvas = _G.Anodyne.compositionCanvas
+      assert.same(frame(0, 0, 1920, 1080), driver:canvasFrame(canvas))
+      assert.same(frame(100, 100, 800, 600), driver:canvasElements(canvas)[1].frame)
+      assert.is_true(canvas._state.mouseCallbackSet)
+      assert.are.equal(1, driver:canvasElements(canvas)[1].strokeWidth)
+      assert.matches("Locked baseline: 800 x 600", driver:alerts()[1].message)
+      assert.matches("Return = Finish/Copy", driver:alerts()[1].message)
+      assert.matches("Esc = Cancel", driver:alerts()[1].message)
+      driver:setWindowFrame(window, frame(50, 50, 900, 700))
+      assert.is_true(driver:triggerModalHotkey({}, "return"))
+      local expected = "Left: 50, Top: 50, Right: 50, Bottom: 50 | Result: 800 x 600 | Scale: 1"
+      assert.are.equal(expected, driver:clipboardContents())
+      assert.are.equal(expected, driver:alerts()[2].message)
+      assert.is_true(canvas._state.deleted)
     end)
 
     it("renders exact home content and current size", function()

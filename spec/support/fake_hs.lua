@@ -28,7 +28,7 @@ local function live(state, kind)
   end
 end
 
-local function strictObject(kind, methods, state, numeric)
+local function strictObject(kind, methods, state, numeric, beforeNumericWrite)
   local object = {}
   local metatable = {
     __index = function(_, key)
@@ -47,6 +47,9 @@ local function strictObject(kind, methods, state, numeric)
       live(state, kind)
       if type(key) ~= "number" or type(value) ~= "table" then
         fail(kind .. " elements require numeric indexes and table values")
+      end
+      if beforeNumericWrite then
+        beforeNumericWrite()
       end
       state.elements[key] = value
     end
@@ -88,6 +91,31 @@ function Fake.new(options)
       return true, returned.value
     end
     return false
+  end
+
+  local function copyModifiers(modifiers, context)
+    if type(modifiers) ~= "table" then
+      fail(context .. " modifiers must be a table")
+    end
+    local copied = {}
+    local count = 0
+    for key, value in pairs(modifiers) do
+      count = count + 1
+      if type(key) ~= "number" or key % 1 ~= 0 or key < 1 or type(value) ~= "string" then
+        fail(context .. " modifiers must be a dense array of strings")
+      end
+      copied[key] = value
+    end
+    if count ~= #copied then
+      fail(context .. " modifiers must be a dense array of strings")
+    end
+    return copied
+  end
+
+  local function modifierKey(modifiers, context)
+    local copied = copyModifiers(modifiers, context)
+    table.sort(copied)
+    return table.concat(copied, "\0")
   end
 
   local screenMethods = {}
@@ -313,6 +341,26 @@ function Fake.new(options)
   end
 
   local modalMethods = {}
+  function modalMethods:bind(modifiers, key, pressedfn, ...)
+    noExtra("modal:bind", ...)
+    local overridden, value = lifecycle("modal.bind")
+    if overridden then
+      return value
+    end
+    live(self._state, "modal")
+    local copiedModifiers = copyModifiers(modifiers, "modal:bind")
+    if type(key) ~= "string" or key == "" or type(pressedfn) ~= "function" then
+      fail("modal:bind requires modifiers, key, and pressed callback")
+    end
+    local identity = modifierKey(copiedModifiers, "modal:bind") .. "\0" .. key
+    if self._state.bindingIndex[identity] then
+      fail("modal binding registered twice")
+    end
+    local binding = { modifiers = copiedModifiers, key = key, callback = pressedfn }
+    table.insert(self._state.bindings, binding)
+    self._state.bindingIndex[identity] = binding
+    return self
+  end
   function modalMethods:enter(...)
     noExtra("modal:enter", ...)
     lifecycle("modal.enter")
@@ -561,7 +609,7 @@ function Fake.new(options)
     if overridden then
       return value
     end
-    local state = { active = false }
+    local state = { active = false, bindings = {}, bindingIndex = {} }
     local modal = strictObject("modal", modalMethods, state)
     rawset(modal, "_state", state)
     table.insert(runtime.modals, modal)
@@ -622,7 +670,9 @@ function Fake.new(options)
       return value
     end
     local state = { frame = copyFrame(frame), elements = {}, visible = false }
-    local canvas = strictObject("canvas", canvasMethods, state, true)
+    local canvas = strictObject("canvas", canvasMethods, state, true, function()
+      lifecycle("canvas.element")
+    end)
     rawset(canvas, "_state", state)
     table.insert(runtime.canvases, canvas)
     return canvas
@@ -829,26 +879,33 @@ function Fake.new(options)
     if type(modifiers) ~= "table" or type(key) ~= "string" then
       fail("driver:triggerHotkey requires modifiers and key")
     end
-    local function modifierKey(values)
-      local result = {}
-      for index, value in ipairs(values) do
-        if type(value) ~= "string" then
-          fail("driver:triggerHotkey modifiers must be strings")
-        end
-        result[index] = value
-      end
-      table.sort(result)
-      return table.concat(result, "\0")
-    end
-    local expected = modifierKey(modifiers)
+    local expected = modifierKey(modifiers, "driver:triggerHotkey")
     for _, hotkey in ipairs(runtime.hotkeys) do
       local state = hotkey._state
-      if state.active and not state.deleted and state.key == key and modifierKey(state.modifiers) == expected then
+      if state.active and not state.deleted and state.key == key and modifierKey(state.modifiers, "hotkey") == expected then
         state.callback()
         return
       end
     end
     fail("no active hotkey matches " .. key)
+  end
+  function driver:triggerModalHotkey(modifiers, key)
+    if type(modifiers) ~= "table" or type(key) ~= "string" then
+      fail("driver:triggerModalHotkey requires modifiers and key")
+    end
+    local expected = modifierKey(modifiers, "driver:triggerModalHotkey")
+    for index = #runtime.modals, 1, -1 do
+      local state = runtime.modals[index]._state
+      if state.active and not state.deleted then
+        local binding = state.bindingIndex[expected .. "\0" .. key]
+        if binding then
+          binding.callback()
+          return true
+        end
+        return false
+      end
+    end
+    return false
   end
   function driver:clipboardContents()
     return runtime.clipboard

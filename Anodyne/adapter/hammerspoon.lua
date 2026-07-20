@@ -6,6 +6,7 @@ local WindowActions = require("Anodyne.window_actions")
 local Keymap = require("Anodyne.core.keymap")
 local View = require("Anodyne.view")
 local Controller = require("Anodyne.controller")
+local ObsCropController = require("Anodyne.obs_crop_controller")
 
 local cleanupStages = {
   { "modalTimer", "stop" },
@@ -13,9 +14,13 @@ local cleanupStages = {
   { "menuFailureTimer", "stop" },
   { "modalKeyGuard", "stop" },
   { "entryHotkey", "delete" },
+  { "compositionEntryHotkey", "delete" },
   { "windowMode", "delete" },
+  { "compositionMode", "delete" },
   { "modalCanvas", "hide" },
   { "modalCanvas", "delete" },
+  { "compositionCanvas", "hide" },
+  { "compositionCanvas", "delete" },
   { "menu", "delete" },
   { "windowFilter", "unsubscribeAll" },
   { "historyWindowFilter", "unsubscribeAll" },
@@ -36,7 +41,8 @@ local function cleanup(owner, progress)
         record = { object = object, done = {} }
         progress[field] = record
       end
-      local blockedByHide = field == "modalCanvas" and method == "delete" and not record.done.hide
+      local isCanvas = field == "modalCanvas" or field == "compositionCanvas"
+      local blockedByHide = isCanvas and method == "delete" and not record.done.hide
       if not record.done[method] and not blockedByHide then
         local memberOk, member = pcall(function()
           return object[method]
@@ -55,8 +61,13 @@ local function cleanup(owner, progress)
         end
       end
       local needsStop = field == "modalTimer" or field == "modalRefreshTimer" or field == "menuFailureTimer" or field == "modalKeyGuard"
-      local needsHide = field == "modalCanvas"
-      local needsDelete = field == "entryHotkey" or field == "windowMode" or field == "modalCanvas" or field == "menu"
+      local needsHide = isCanvas
+      local needsDelete = field == "entryHotkey"
+        or field == "compositionEntryHotkey"
+        or field == "windowMode"
+        or field == "compositionMode"
+        or isCanvas
+        or field == "menu"
       local needsUnsubscribe = field == "windowFilter" or field == "historyWindowFilter"
       local complete = (not needsStop or record.done.stop)
         and (not needsHide or record.done.hide)
@@ -93,6 +104,11 @@ function Adapter:start()
   local metadata = self.metadata
   local currentGeneration = self.currentGeneration
   local windowMode
+  local compositionMode
+  local cropController
+  local compositionGeneration
+  local compositionExitPending = false
+  local exitCompositionMode
 
   owner.modalState = {
     active = false,
@@ -144,6 +160,27 @@ function Adapter:start()
     end)
     if deleted then
       owner.modalCanvas = nil
+      return true
+    end
+    return false, deleteError
+  end
+
+  local function closeCompositionGuide()
+    local canvas = owner.compositionCanvas
+    if not canvas then
+      return true
+    end
+    local hidden, hideError = pcall(function()
+      canvas:hide()
+    end)
+    if not hidden then
+      return false, hideError
+    end
+    local deleted, deleteError = pcall(function()
+      canvas:delete()
+    end)
+    if deleted then
+      owner.compositionCanvas = nil
       return true
     end
     return false, deleteError
@@ -274,6 +311,8 @@ function Adapter:start()
   local view = View.new(config, metadata)
   local keymap = Keymap.new(metadata)
   local controller
+  local requestWindowMode
+  local requestCompositionMode
 
   local function startModalKeyGuard()
     local stopped, stopError = stopModalKeyGuard()
@@ -349,6 +388,61 @@ function Adapter:start()
     },
   })
 
+  cropController = ObsCropController.new({
+    config = config,
+    view = view,
+    ports = {
+      currentGeneration = currentGeneration,
+      selectWindow = function()
+        return actions:getModalHomeWindow()
+      end,
+      windowId = ports.windowId,
+      windowFrame = ports.windowFrame,
+      windowScreen = ports.windowScreen,
+      screenIdentity = ports.screenIdentity,
+      screenFullFrame = ports.screenFullFrame,
+      screenScale = function(screen)
+        return screen:currentMode().scale
+      end,
+      renderGuide = function(_, fullFrame, guideFrame, help)
+        if owner.compositionCanvas then
+          local closed, closeError = closeCompositionGuide()
+          if not closed then
+            error(closeError, 0)
+          end
+        end
+        local canvas = hs.canvas.new(fullFrame)
+        if not canvas then
+          error("Failed to create composition canvas")
+        end
+        owner.compositionCanvas = canvas
+        canvas:level(hs.canvas.windowLevels.overlay)
+        canvas:mouseCallback(nil)
+        canvas[1] = {
+          type = "rectangle",
+          action = "stroke",
+          strokeColor = { red = 1, green = 0.5, blue = 0, alpha = 1 },
+          strokeWidth = config.obsCrop.guideStrokeWidth,
+          frame = {
+            x = guideFrame.x - fullFrame.x,
+            y = guideFrame.y - fullFrame.y,
+            w = guideFrame.w,
+            h = guideFrame.h,
+          },
+        }
+        canvas:show()
+        return hs.alert.show(help, config.obsCrop.resultDuration)
+      end,
+      copy = function(value)
+        return hs.pasteboard.setContents(value)
+      end,
+      close = closeCompositionGuide,
+      alert = function(message, duration)
+        return hs.alert.show(message, duration or config.menuFailureDuration)
+      end,
+    },
+  })
+
   local function buildMenuItems()
     local items = controller:menuItems()
     for _, item in ipairs(items) do
@@ -356,7 +450,11 @@ function Adapter:start()
         local intent = item.intent
         item.intent = nil
         item.fn = function()
-          controller:runMenu(intent)
+          if intent.type == "composition" then
+            requestCompositionMode()
+          else
+            controller:runMenu(intent)
+          end
         end
       end
     end
@@ -372,6 +470,11 @@ function Adapter:start()
   end)
   historyWindowFilter:subscribe(hs.window.filter.windowDestroyed, function(win)
     controller:onDestroyed(win)
+    local state = cropController:currentState()
+    local closed = cropController:onDestroyed(win, state.generation)
+    if closed and not cropController:isActive() and compositionGeneration ~= nil then
+      exitCompositionMode()
+    end
   end)
 
   owner.windowMode = hs.hotkey.modal.new()
@@ -390,10 +493,126 @@ function Adapter:start()
     controller:exit()
   end
 
-  owner.entryHotkey = hs.hotkey.bind(config.modalHotkey.modifiers, config.modalHotkey.key, function()
-    if currentGeneration() then
-      windowMode:enter()
+  owner.compositionMode = hs.hotkey.modal.new()
+  compositionMode = owner.compositionMode
+  if not compositionMode then
+    error("Failed to create composition modal")
+  end
+  exitCompositionMode = function()
+    compositionExitPending = true
+    local exited = pcall(function()
+      compositionMode:exit()
+    end)
+    if not exited then
+      pcall(hs.alert.show, "Composition Mode could not close; retry entry", config.menuFailureDuration)
+      return false
     end
+    compositionExitPending = false
+    compositionGeneration = nil
+    return true
+  end
+  function compositionMode:entered()
+    local entered, generation = cropController:enter()
+    if entered then
+      compositionGeneration = generation
+    else
+      exitCompositionMode()
+    end
+  end
+  function compositionMode:exited()
+    if cropController:isActive() then
+      cropController:cancel(compositionGeneration)
+    end
+    if not cropController:isActive() then
+      if not compositionExitPending then
+        compositionGeneration = nil
+      end
+    end
+  end
+
+  requestWindowMode = function()
+    if not currentGeneration() then
+      return
+    end
+    if compositionExitPending and not exitCompositionMode() then
+      return
+    end
+    if cropController:isActive() then
+      if not cropController:crossMode(compositionGeneration) then
+        return
+      end
+    end
+    if compositionGeneration ~= nil then
+      if not exitCompositionMode() then
+        return
+      end
+    end
+    windowMode:enter()
+  end
+
+  requestCompositionMode = function()
+    if not currentGeneration() then
+      return
+    end
+    if compositionExitPending and not exitCompositionMode() then
+      return
+    end
+    local function windowResourcesRemain()
+      return owner.modalTimer ~= nil
+        or owner.modalRefreshTimer ~= nil
+        or owner.menuFailureTimer ~= nil
+        or owner.modalKeyGuard ~= nil
+        or owner.modalCanvas ~= nil
+    end
+    if modalState.active or windowResourcesRemain() then
+      local exited = pcall(function()
+        windowMode:exit()
+      end)
+      if not exited or modalState.active or windowResourcesRemain() then
+        pcall(function()
+          controller:exit()
+        end)
+      end
+      if modalState.active or windowResourcesRemain() then
+        pcall(hs.alert.show, "Window Mode could not close; Composition Mode was not started", config.menuFailureDuration)
+        return
+      end
+    end
+    if not cropController:isActive() then
+      compositionMode:enter()
+    end
+  end
+
+  owner.compositionEntryHotkey = hs.hotkey.bind(config.compositionHotkey.modifiers, config.compositionHotkey.key, function()
+    requestCompositionMode()
+  end)
+  if not owner.compositionEntryHotkey then
+    error("Failed to create/enable composition entry hotkey")
+  end
+  local finishBinding = compositionMode:bind({}, "return", function()
+    if currentGeneration() and cropController:isActive() then
+      local finished = cropController:finish(compositionGeneration)
+      if finished and not cropController:isActive() then
+        exitCompositionMode()
+      end
+    end
+  end)
+  if not finishBinding then
+    error("Failed to create Composition Finish/Copy binding")
+  end
+  local cancelBinding = compositionMode:bind({}, "escape", function()
+    if currentGeneration() and cropController:isActive() then
+      local cancelled = cropController:cancel(compositionGeneration)
+      if cancelled then
+        exitCompositionMode()
+      end
+    end
+  end)
+  if not cancelBinding then
+    error("Failed to create Composition Cancel binding")
+  end
+  owner.entryHotkey = hs.hotkey.bind(config.modalHotkey.modifiers, config.modalHotkey.key, function()
+    requestWindowMode()
   end)
   if not owner.entryHotkey then
     error("Failed to create/enable entry hotkey")
