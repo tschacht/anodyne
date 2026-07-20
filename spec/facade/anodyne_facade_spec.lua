@@ -197,7 +197,7 @@ describe("Milestone 3 facade", function()
     assert.are.equal("L", first.config.symbols.left)
     assert.are.equal("↑", first.config.symbols.up)
     assert.same({ 1111, 1222 }, { first.config.widthPresets[1], first.config.widthPresets[2] })
-    assert.are.equal(1400, second.config.widthPresets[1])
+    assert.are.equal(1000, second.config.widthPresets[1])
     assert.has_error(function()
       first.config.menuTitle = "bad"
     end, "configuration is immutable")

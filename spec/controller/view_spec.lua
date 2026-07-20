@@ -9,7 +9,7 @@ describe("Anodyne view", function()
     view = View.new(config, metadata)
   end)
 
-  it("builds all 47 exact ordered menu titles and stable intents", function()
+  it("builds all 52 exact ordered menu titles and stable intents", function()
     local items = view:menuItems({ active = false }, false)
     local titles = {}
     for _, item in ipairs(items) do
@@ -29,20 +29,25 @@ describe("Anodyne view", function()
       "2:1 [A 4]",
       "3:1 [A 5]",
       "-",
-      "Width [W then 1-7]",
-      "1400 px [W 1]",
-      "1600 px [W 2]",
-      "1800 px [W 3]",
-      "2000 px [W 4]",
-      "2200 px [W 5]",
-      "2400 px [W 6]",
-      "2600 px [W 7]",
+      "Width [W then 1-8]",
+      "1000 px [W 1]",
+      "1200 px [W 2]",
+      "1400 px [W 3]",
+      "1600 px [W 4]",
+      "1800 px [W 5]",
+      "2000 px [W 6]",
+      "2200 px [W 7]",
+      "2400 px [W 8]",
       "-",
-      "Height [H then 1-4]",
-      "1000 px [H 1]",
-      "1200 px [H 2]",
-      "1400 px [H 3]",
-      "1500 px [H 4]",
+      "Height [H then 1-8]",
+      "600 px [H 1]",
+      "700 px [H 2]",
+      "800 px [H 3]",
+      "1000 px [H 4]",
+      "1200 px [H 5]",
+      "1400 px [H 6]",
+      "1500 px [H 7]",
+      "1600 px [H 8]",
       "-",
       "Move [M then arrows / C / B]",
       "Left 50 px [M ←]",
@@ -65,7 +70,7 @@ describe("Anodyne view", function()
       "Shrink both to previous 50 px [R S]",
     }, titles)
     assert.same({ type = "action", action = "undo" }, items[4].intent)
-    assert.same({ type = "action", action = "width", value = 1400 }, items[15].intent)
+    assert.same({ type = "action", action = "width", value = 1000 }, items[15].intent)
     assert.is_true(items[5].disabled)
   end)
 
@@ -73,8 +78,8 @@ describe("Anodyne view", function()
     local expectedBodies = {
       home = { "Choose a mode with A, W, H, M, or R" },
       aspect = { "1 = 16:9", "2 = 4:3", "3 = 3:2", "4 = 2:1", "5 = 3:1" },
-      width = { "1 = 1400 px", "2 = 1600 px", "3 = 1800 px", "4 = 2000 px", "5 = 2200 px", "6 = 2400 px", "7 = 2600 px" },
-      height = { "1 = 1000 px", "2 = 1200 px", "3 = 1400 px", "4 = 1500 px" },
+      width = { "1 = 1000 px", "2 = 1200 px", "3 = 1400 px", "4 = 1600 px", "5 = 1800 px", "6 = 2000 px", "7 = 2200 px", "8 = 2400 px" },
+      height = { "1 = 600 px", "2 = 700 px", "3 = 800 px", "4 = 1000 px", "5 = 1200 px", "6 = 1400 px", "7 = 1500 px", "8 = 1600 px" },
       move = {
         "← = Left 50 px",
         "→ = Right 50 px",

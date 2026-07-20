@@ -136,8 +136,8 @@ describe("Anodyne controller", function()
     assert.matches("Number keys are not available", log.renders[#log.renders])
     for _, expected in ipairs({
       { "aspect", "applyAspectPreset", 6, "No aspect preset preset 6" },
-      { "width", "applyWidthPreset", 8, "No width preset preset 8" },
-      { "height", "applyHeightPreset", 5, "No height preset preset 5" },
+      { "width", "applyWidthPreset", 9, "No width preset preset 9" },
+      { "height", "applyHeightPreset", 9, "No height preset preset 9" },
     }) do
       controller:transition(expected[1])
       controller:dispatch({ type = "preset", index = expected[3] })

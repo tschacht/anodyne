@@ -242,7 +242,7 @@ describe("Milestone 2 characterization", function()
     it("prefers the focused window", function()
       local other = driver:addWindow({ id = 2, frame = frame(200, 200, 700, 600), screen = screen })
       driver:setFrontmost(other)
-      click(driver, "1400 px [W 1]")
+      click(driver, "1400 px [W 3]")
       assert.are.equal(1400, window:frame().w)
       assert.are.equal(700, other:frame().w)
     end)
@@ -252,7 +252,7 @@ describe("Milestone 2 characterization", function()
       driver:focus(window)
       driver:setFocused(nil)
       driver:setFrontmost(other)
-      click(driver, "1400 px [W 1]")
+      click(driver, "1400 px [W 3]")
       assert.are.equal(1400, window:frame().w)
       assert.are.equal(700, other:frame().w)
     end)
@@ -262,7 +262,7 @@ describe("Milestone 2 characterization", function()
       driver:setFault(window, "invalidId")
       driver:setFocused(nil)
       driver:setFrontmost(other)
-      click(driver, "1400 px [W 1]")
+      click(driver, "1400 px [W 3]")
       assert.are.equal(1400, other:frame().w)
     end)
 
@@ -283,14 +283,14 @@ describe("Milestone 2 characterization", function()
     it("clamps a width preset and position to usable bounds", function()
       driver:setScreenFrame(screen, frame(10, 20, 1000, 700))
       driver:setWindowFrame(window, frame(900, 600, 800, 600))
-      click(driver, "1400 px [W 1]")
+      click(driver, "1400 px [W 3]")
       assertFrame(frame(10, 120, 1000, 600), window:frame())
     end)
 
     it("uses the entire usable screen when it is smaller than configured minimums", function()
       driver:setScreenFrame(screen, frame(-400, 30, 400, 300))
       driver:setFullFrame(screen, frame(-400, 0, 400, 330))
-      click(driver, "1400 px [W 1]")
+      click(driver, "1400 px [W 3]")
       assertFrame(frame(-400, 30, 400, 300), window:frame())
     end)
 
@@ -326,19 +326,19 @@ describe("Milestone 2 characterization", function()
   describe("A-TXN-01 transactional writes", function()
     it("reports a thrown set without changing the frame", function()
       driver:setFault(window, "setThrows")
-      click(driver, "1400 px [W 1]")
+      click(driver, "1400 px [W 3]")
       assert.matches("WI action failed\nThe window could not be changed", driver:lastMessage(), 1, true)
       assertFrame(frame(100, 100, 800, 600), window:frame())
     end)
 
     it("rejects an ignored write", function()
       driver:setFault(window, "ignoreWrite")
-      click(driver, "1400 px [W 1]")
+      click(driver, "1400 px [W 3]")
       assert.matches("The window did not accept that change", driver:lastMessage(), 1, true)
     end)
 
     it("rolls an inexact exact undo write back and retains history", function()
-      click(driver, "1400 px [W 1]")
+      click(driver, "1400 px [W 3]")
       driver:setFault(window, "coerceWrite")
       click(driver, "Undo Last Action [U]")
       assertFrame(frame(100, 100, 1400, 600), window:frame())
@@ -349,7 +349,7 @@ describe("Milestone 2 characterization", function()
     end)
 
     it("invalidates history when rollback after an inexact undo fails", function()
-      click(driver, "1400 px [W 1]")
+      click(driver, "1400 px [W 3]")
       driver:setFault(window, "coerceWrite")
       driver:setFault(window, "rollbackFails")
       click(driver, "Undo Last Action [U]")
@@ -360,7 +360,7 @@ describe("Milestone 2 characterization", function()
 
     it("records authoritative coerced readback for ordinary writes", function()
       driver:setFault(window, "coerceWrite")
-      click(driver, "1400 px [W 1]")
+      click(driver, "1400 px [W 3]")
       assert.are.equal(1401, window:frame().w)
       driver:clearFaults(window)
       click(driver, "Undo Last Action [U]")
@@ -368,9 +368,9 @@ describe("Milestone 2 characterization", function()
     end)
 
     it("invalidates history when authoritative readback throws", function()
-      click(driver, "1400 px [W 1]")
+      click(driver, "1400 px [W 3]")
       driver:setFault(window, "readThrowsAfterSet")
-      click(driver, "1600 px [W 2]")
+      click(driver, "1600 px [W 4]")
       driver:clearFaults(window)
       click(driver, "Undo Last Action [U]")
       assert.matches("Nothing to undo for this window", driver:lastMessage(), 1, true)
@@ -378,7 +378,7 @@ describe("Milestone 2 characterization", function()
 
     it("rejects an invalid window screen", function()
       driver:setFault(window, "invalidScreen")
-      click(driver, "1400 px [W 1]")
+      click(driver, "1400 px [W 3]")
       assert.matches("No focused window", driver:lastMessage(), 1, true)
     end)
 
@@ -386,7 +386,7 @@ describe("Milestone 2 characterization", function()
       driver:clearFaults(window)
       driver:setFault(window, "invalidFrame")
       assert.has_error(function()
-        click(driver, "1400 px [W 1]")
+        click(driver, "1400 px [W 3]")
       end, "attempt to index a nil value (local 'currentFrame')")
     end)
   end)
@@ -394,7 +394,7 @@ describe("Milestone 2 characterization", function()
   describe("A-HIST-01 history", function()
     it("is per-window", function()
       local other = driver:addWindow({ id = 2, frame = frame(20, 20, 700, 600), screen = screen })
-      click(driver, "1400 px [W 1]")
+      click(driver, "1400 px [W 3]")
       driver:focus(other)
       click(driver, "Undo Last Action [U]")
       assert.matches("Nothing to undo for this window", driver:lastMessage(), 1, true)
@@ -404,10 +404,10 @@ describe("Milestone 2 characterization", function()
     end)
 
     it("bounds undo to the latest three accepted actions", function()
-      click(driver, "1400 px [W 1]")
-      click(driver, "1600 px [W 2]")
-      click(driver, "1800 px [W 3]")
-      click(driver, "2000 px [W 4]")
+      click(driver, "1400 px [W 3]")
+      click(driver, "1600 px [W 4]")
+      click(driver, "1800 px [W 5]")
+      click(driver, "2000 px [W 6]")
       click(driver, "Undo Last Action [U]")
       click(driver, "Undo Last Action [U]")
       click(driver, "Undo Last Action [U]")
@@ -417,14 +417,14 @@ describe("Milestone 2 characterization", function()
     end)
 
     it("clears history after an external frame discontinuity", function()
-      click(driver, "1400 px [W 1]")
+      click(driver, "1400 px [W 3]")
       driver:setWindowFrame(window, frame(101, 100, 1400, 600))
       click(driver, "Undo Last Action [U]")
       assert.matches("Undo history was reset because the window changed outside WI", driver:lastMessage(), 1, true)
     end)
 
     it("clears history when the owning window is destroyed", function()
-      click(driver, "1400 px [W 1]")
+      click(driver, "1400 px [W 3]")
       driver:destroyWindow(window)
       local replacement = driver:addWindow({ id = 1, frame = frame(0, 0, 900, 600), screen = screen })
       driver:setFocused(replacement)
@@ -435,7 +435,7 @@ describe("Milestone 2 characterization", function()
 
     it("copies frame reads before recording history", function()
       driver:clearFrameReads(window)
-      click(driver, "1400 px [W 1]")
+      click(driver, "1400 px [W 3]")
       local reads = driver:frameReads(window)
       assert.is_true(#reads >= 3)
       for _, returnedFrame in ipairs(reads) do
@@ -451,7 +451,7 @@ describe("Milestone 2 characterization", function()
 
   describe("A-SCREEN-01 snapshots", function()
     it("refuses undo when the original screen was removed", function()
-      click(driver, "1400 px [W 1]")
+      click(driver, "1400 px [W 3]")
       driver:removeScreen(screen)
       click(driver, "Undo Last Action [U]")
       assert.matches("screen configuration changed; the previous frame is unavailable", driver:lastMessage(), 1, true)
@@ -471,7 +471,7 @@ describe("Milestone 2 characterization", function()
       assertFrame(frame(100, 100, 800, 600), window:frame())
       driver:triggerEntry()
       driver:key("w")
-      driver:key("1")
+      driver:key("3")
       assertFrame(frame(100, 100, 1400, 600), window:frame())
 
       driver:key("u", { shift = true })
@@ -485,7 +485,7 @@ describe("Milestone 2 characterization", function()
     end)
 
     it("rejects undo on a replacement screen with identical geometry but different identity", function()
-      click(driver, "1400 px [W 1]")
+      click(driver, "1400 px [W 3]")
       driver:removeScreen(screen)
       local replacement = driver:addScreen({ id = 2, uuid = "replacement", frame = frame(0, 0, 1920, 1080) })
       driver:setWindowScreen(window, replacement)
@@ -496,7 +496,7 @@ describe("Milestone 2 characterization", function()
     it("rejects reset on a replacement screen with identical geometry but different identity", function()
       driver:triggerEntry()
       driver:key("w")
-      driver:key("1")
+      driver:key("3")
       driver:advance(0.05)
       driver:removeScreen(screen)
       local replacement = driver:addScreen({ id = 2, uuid = "replacement", frame = frame(0, 0, 1920, 1080) })
@@ -604,7 +604,7 @@ describe("Milestone 2 characterization", function()
       assert.same({ 10, 11, 12 }, driver.runtime.taps[1]._state.events)
     end)
 
-    it("constructs all 47 menu items with frozen strings and order", function()
+    it("constructs all 52 menu items with frozen strings and order", function()
       local items = driver:menuItems()
       local titles = {}
       for _, item in ipairs(items) do
@@ -624,20 +624,25 @@ describe("Milestone 2 characterization", function()
         "2:1 [A 4]",
         "3:1 [A 5]",
         "-",
-        "Width [W then 1-7]",
-        "1400 px [W 1]",
-        "1600 px [W 2]",
-        "1800 px [W 3]",
-        "2000 px [W 4]",
-        "2200 px [W 5]",
-        "2400 px [W 6]",
-        "2600 px [W 7]",
+        "Width [W then 1-8]",
+        "1000 px [W 1]",
+        "1200 px [W 2]",
+        "1400 px [W 3]",
+        "1600 px [W 4]",
+        "1800 px [W 5]",
+        "2000 px [W 6]",
+        "2200 px [W 7]",
+        "2400 px [W 8]",
         "-",
-        "Height [H then 1-4]",
-        "1000 px [H 1]",
-        "1200 px [H 2]",
-        "1400 px [H 3]",
-        "1500 px [H 4]",
+        "Height [H then 1-8]",
+        "600 px [H 1]",
+        "700 px [H 2]",
+        "800 px [H 3]",
+        "1000 px [H 4]",
+        "1200 px [H 5]",
+        "1400 px [H 6]",
+        "1500 px [H 7]",
+        "1600 px [H 8]",
         "-",
         "Move [M then arrows / C / B]",
         "Left 50 px [M ←]",
@@ -706,13 +711,14 @@ describe("Milestone 2 characterization", function()
         "Width preset:",
         "Current: 800 x 600",
         "",
-        "1 = 1400 px",
-        "2 = 1600 px",
-        "3 = 1800 px",
-        "4 = 2000 px",
-        "5 = 2200 px",
-        "6 = 2400 px",
-        "7 = 2600 px",
+        "1 = 1000 px",
+        "2 = 1200 px",
+        "3 = 1400 px",
+        "4 = 1600 px",
+        "5 = 1800 px",
+        "6 = 2000 px",
+        "7 = 2200 px",
+        "8 = 2400 px",
       })
     end)
 
@@ -723,10 +729,14 @@ describe("Milestone 2 characterization", function()
         "Height preset:",
         "Current: 800 x 600",
         "",
-        "1 = 1000 px",
-        "2 = 1200 px",
-        "3 = 1400 px",
-        "4 = 1500 px",
+        "1 = 600 px",
+        "2 = 700 px",
+        "3 = 800 px",
+        "4 = 1000 px",
+        "5 = 1200 px",
+        "6 = 1400 px",
+        "7 = 1500 px",
+        "8 = 1600 px",
       })
     end)
 
@@ -792,7 +802,7 @@ describe("Milestone 2 characterization", function()
     it("delays active action feedback by 0.05 seconds", function()
       driver:triggerEntry()
       driver:key("w")
-      driver:key("1")
+      driver:key("3")
       assert.matches("^Width preset:", driver:lastMessage())
       driver:advance(0.05)
       assert.are.equal(1, driver:activeCounts().canvases)

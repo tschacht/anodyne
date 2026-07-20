@@ -29,8 +29,8 @@ describe("configuration", function()
         { label = "2:1", width = 2, height = 1 },
         { label = "3:1", width = 3, height = 1 },
       },
-      widthPresets = { 1400, 1600, 1800, 2000, 2200, 2400, 2600 },
-      heightPresets = { 1000, 1200, 1400, 1500 },
+      widthPresets = { 1000, 1200, 1400, 1600, 1800, 2000, 2200, 2400 },
+      heightPresets = { 600, 700, 800, 1000, 1200, 1400, 1500, 1600 },
       growStep = 50,
       moveStep = 50,
       undoDepth = 3,
@@ -55,7 +55,7 @@ describe("configuration", function()
     assert.are.equal("L", first.symbols.left)
     assert.are.equal(123, first.widthPresets[1])
     assert.are.equal("←", second.symbols.left)
-    assert.are.equal(1400, second.widthPresets[1])
+    assert.are.equal(1000, second.widthPresets[1])
   end)
 
   it("freezes maps, nested maps, and lists", function()
