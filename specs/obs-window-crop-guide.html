@@ -170,80 +170,80 @@
     <p>Status markers: <code>[]</code> idle · <code>[wip]</code> in progress · <code>[x]</code> complete · <code>[f]</code> failed. All start as <code>[]</code>; the Build Plan workflow updates them as it works.</p>
 
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone 0: Baseline and Contract Freeze</h3>
+      <h3><code class="status">[x]</code> Milestone 0: Baseline and Contract Freeze</h3>
       <p>The primary agent establishes a trustworthy baseline before delegating implementation. No worker packet starts against a failing baseline or an unexplained overlapping worktree.</p>
       <p><strong>Validation goal:</strong> establish a green, attributable baseline and lock the product contracts and non-overlapping ownership map before any worker edits production code.</p>
 
       <h4>0.1 Primary-agent preflight</h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> Record the starting SHA and inspect <code>git status --short</code>; preserve all unrelated user changes and stop on overlapping changes.</li>
-        <li><code class="status">[]</code> Re-read this plan's fixed contracts and translate them into packet prompts verbatim; workers do not invent OBS integration, force an aspect ratio, or resize the window when Composition Mode begins.</li>
-        <li><code class="status">[]</code> Confirm the default Composition Mode entry binding <code>ctrl+alt+cmd+C</code> is configurable and clearly parallel to Window Mode's <code>ctrl+alt+cmd+M</code>; bind <code>Return</code> to Finish/Copy and <code>Esc</code> to Cancel inside the mode.</li>
+        <li><code class="status">[x]</code> Record the starting SHA and inspect <code>git status --short</code>; preserve all unrelated user changes and stop on overlapping changes.</li>
+        <li><code class="status">[x]</code> Re-read this plan's fixed contracts and translate them into packet prompts verbatim; workers do not invent OBS integration, force an aspect ratio, or resize the window when Composition Mode begins.</li>
+        <li><code class="status">[x]</code> Confirm the default Composition Mode entry binding <code>ctrl+alt+cmd+C</code> is configurable and clearly parallel to Window Mode's <code>ctrl+alt+cmd+M</code>; bind <code>Return</code> to Finish/Copy and <code>Esc</code> to Cancel inside the mode.</li>
       </ul>
 
       <h4>0.2 Testing Strategy</h4>
       <p>Run the repository's complete offline gate unchanged. A red baseline is investigated before feature work so later failures remain attributable.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>make verify</code> — proves the existing toolchain, formatting, suites, coverage, and architecture are green before edits.</li>
+        <li><code class="status">[x]</code> <code>make verify</code> — proves the existing toolchain, formatting, suites, coverage, and architecture are green before edits.</li>
       </ul>
       <div class="loop">🔁 <strong>Do not exit this milestone until the baseline passes and file ownership is clean.</strong> If it fails, diagnose and restore the baseline before delegation.</div>
     </div>
 
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone 1: Parallel Foundations</h3>
+      <h3><code class="status">[x]</code> Milestone 1: Parallel Foundations</h3>
       <p>Three non-overlapping worker packets establish the domain math, user-facing configuration/text, and strict native-test seam. The primary agent dispatches them concurrently, waits for all three, reviews their diffs for scope, and runs the combined gate.</p>
       <p><strong>Validation goal:</strong> prove crop math, configuration/presentation, and the extended fake independently, then converge them without cross-packet edits or regressions.</p>
 
       <h4><span class="tag packet">WP-01</span> Pure crop math</h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> Owner: worker agent. Touch only <code>Anodyne/core/obs_crop.lua</code> and <code>spec/core/obs_crop_spec.lua</code>.</li>
-        <li><code class="status">[]</code> Validate rects and finite positive scale; accept a small documented point tolerance only for containment.</li>
-        <li><code class="status">[]</code> Convert using a pixel rectangle, not four independently rounded deltas: round source size, guide origin relative to the window, and guide size; derive Right/Bottom so result dimensions exactly equal the rounded guide dimensions.</li>
-        <li><code class="status">[]</code> Return structured success/error values with invalid edge names; perform no formatting and reference no native/window APIs.</li>
-        <li><code class="status">[]</code> Cover scale 1, scale 2, fractional coordinates, asymmetric crops, zero crop, tolerance clamping, invalid rects/scales, and each outside edge.</li>
+        <li><code class="status">[x]</code> Owner: worker agent. Touch only <code>Anodyne/core/obs_crop.lua</code> and <code>spec/core/obs_crop_spec.lua</code>.</li>
+        <li><code class="status">[x]</code> Validate rects and finite positive scale; accept a small documented point tolerance only for containment.</li>
+        <li><code class="status">[x]</code> Convert using a pixel rectangle, not four independently rounded deltas: round source size, guide origin relative to the window, and guide size; derive Right/Bottom so result dimensions exactly equal the rounded guide dimensions.</li>
+        <li><code class="status">[x]</code> Return structured success/error values with invalid edge names; perform no formatting and reference no native/window APIs.</li>
+        <li><code class="status">[x]</code> Cover scale 1, scale 2, fractional coordinates, asymmetric crops, zero crop, tolerance clamping, invalid rects/scales, and each outside edge.</li>
       </ul>
 
       <h4><span class="tag packet">WP-02</span> Configuration and presentation contract</h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> Owner: worker agent. Touch only <code>Anodyne/config.lua</code>, <code>Anodyne/view.lua</code>, <code>spec/core/config_spec.lua</code>, and <code>spec/controller/view_spec.lua</code>.</li>
-        <li><code class="status">[]</code> Add an immutable <code>compositionHotkey</code> default for mode entry plus <code>obsCrop</code> defaults for <code>scaleOverride = 0</code>, result duration, and dim alpha; validate ranges and hotkey structure.</li>
-        <li><code class="status">[]</code> Add deterministic Composition Mode help/status text and clipboard/result text in exact OBS order without performing native actions. The help must identify <code>Return</code> as Finish/Copy, <code>Esc</code> as Cancel, and the locked baseline dimensions.</li>
-        <li><code class="status">[]</code> Preserve existing Window Mode menu item order; add one clearly separated top-level Composition Mode entry with its shortcut and update exact menu tests.</li>
+        <li><code class="status">[x]</code> Owner: worker agent. Touch only <code>Anodyne/config.lua</code>, <code>Anodyne/view.lua</code>, <code>spec/core/config_spec.lua</code>, and <code>spec/controller/view_spec.lua</code>.</li>
+        <li><code class="status">[x]</code> Add an immutable <code>compositionHotkey</code> default for mode entry plus <code>obsCrop</code> defaults for <code>scaleOverride = 0</code>, result duration, and dim alpha; validate ranges and hotkey structure.</li>
+        <li><code class="status">[x]</code> Add deterministic Composition Mode help/status text and clipboard/result text in exact OBS order without performing native actions. The help must identify <code>Return</code> as Finish/Copy, <code>Esc</code> as Cancel, and the locked baseline dimensions.</li>
+        <li><code class="status">[x]</code> Preserve existing Window Mode menu item order; add one clearly separated top-level Composition Mode entry with its shortcut and update exact menu tests.</li>
       </ul>
 
       <h4><span class="tag packet">WP-03</span> Strict fake native seam</h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> Owner: worker agent. Touch only <code>spec/support/fake_hs.lua</code>.</li>
-        <li><code class="status">[]</code> Add screen <code>currentMode()</code> with configurable scale, <code>hs.pasteboard.setContents</code>, <code>hs.alert.show</code>, and canvas <code>mouseCallback(nil)</code> state/lifecycle validation.</li>
-        <li><code class="status">[]</code> Add driver helpers to trigger a specific hotkey, inspect clipboard/alerts, mutate screen scale, and inspect canvas frames/elements without weakening strict namespaces.</li>
-        <li><code class="status">[]</code> Preserve fault injection for every newly fallible lifecycle operation needed by adapter tests.</li>
+        <li><code class="status">[x]</code> Owner: worker agent. Touch only <code>spec/support/fake_hs.lua</code>.</li>
+        <li><code class="status">[x]</code> Add screen <code>currentMode()</code> with configurable scale, <code>hs.pasteboard.setContents</code>, <code>hs.alert.show</code>, and canvas <code>mouseCallback(nil)</code> state/lifecycle validation.</li>
+        <li><code class="status">[x]</code> Add driver helpers to trigger a specific hotkey, inspect clipboard/alerts, mutate screen scale, and inspect canvas frames/elements without weakening strict namespaces.</li>
+        <li><code class="status">[x]</code> Preserve fault injection for every newly fallible lifecycle operation needed by adapter tests.</li>
       </ul>
 
       <h4>1.4 Testing Strategy</h4>
       <p>Each worker runs its narrow suite. After integration, the primary agent reruns all affected suites together and rejects any packet that changed files outside its ownership set.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>make test-core</code> — validates crop math and configuration.</li>
-        <li><code class="status">[]</code> <code>make test-controller</code> — validates new view output and unchanged controller-facing presentation.</li>
-        <li><code class="status">[]</code> <code>make test-adapter</code> — proves the extended fake remains compatible with the current adapter before native feature wiring.</li>
-        <li><code class="status">[]</code> <code>make format-check</code> — proves all packet output conforms before the convergence milestone.</li>
+        <li><code class="status">[x]</code> <code>make test-core</code> — validates crop math and configuration.</li>
+        <li><code class="status">[x]</code> <code>make test-controller</code> — validates new view output and unchanged controller-facing presentation.</li>
+        <li><code class="status">[x]</code> <code>make test-adapter</code> — proves the extended fake remains compatible with the current adapter before native feature wiring.</li>
+        <li><code class="status">[x]</code> <code>make format-check</code> — proves all packet output conforms before the convergence milestone.</li>
       </ul>
       <div class="loop">🔁 <strong>Do not exit this milestone until all three packets are integrated and every narrow gate passes.</strong> Return failures to the owning worker; do not let another packet repair outside its ownership set.</div>
     </div>
 
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone 2: Crop Session State Machine</h3>
+      <h3><code class="status">[wip]</code> Milestone 2: Crop Session State Machine</h3>
       <p>The controller packet turns the pure contracts into a recoverable Enter/Finish/Cancel Composition Mode workflow while remaining independent of Hammerspoon.</p>
       <p><strong>Validation goal:</strong> prove every state transition is deterministic, never moves the target window, and copies nothing for invalid or stale geometry.</p>
 
       <h4><span class="tag packet">WP-04</span> Port-driven controller</h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> Owner: worker agent. Depends on WP-01 and WP-02. Touch only <code>Anodyne/obs_crop_controller.lua</code> and <code>spec/controller/obs_crop_controller_spec.lua</code>.</li>
-        <li><code class="status">[]</code> Model explicit inactive/active Composition Mode state containing the pinned window object and ID, arbitrary baseline guide frame, screen identity/full frame, chosen scale, and no native resource handles.</li>
-        <li><code class="status">[]</code> Enter selects the established window via a port, snapshots its authoritative frame unchanged, snapshots screen data, resolves override-or-auto scale, asks the adapter to render, and commits state only after successful rendering.</li>
-        <li><code class="status">[]</code> Finish validates generation, target identity, screen snapshot, scale stability, and containment; then formats/copies output, closes Composition Mode, clears state, and reports success.</li>
-        <li><code class="status">[]</code> Outside-edge or pasteboard failures leave Composition Mode active for correction/retry; stale window/screen state cancels because the geometry is no longer trustworthy.</li>
-        <li><code class="status">[]</code> Cancel, cross-mode switch, and target-destroyed paths close the guide exactly once and clear state only after successful native teardown.</li>
-        <li><code class="status">[]</code> Test port exceptions, false returns, stale-generation callbacks, repeated Enter/Finish/Cancel, arbitrary baseline ratios, target destruction, screen/scale changes, pasteboard failure, cross-mode switching, and teardown retry.</li>
+        <li><code class="status">[wip]</code> Owner: worker agent. Depends on WP-01 and WP-02. Touch only <code>Anodyne/obs_crop_controller.lua</code> and <code>spec/controller/obs_crop_controller_spec.lua</code>.</li>
+        <li><code class="status">[wip]</code> Model explicit inactive/active Composition Mode state containing the pinned window object and ID, arbitrary baseline guide frame, screen identity/full frame, chosen scale, and no native resource handles.</li>
+        <li><code class="status">[wip]</code> Enter selects the established window via a port, snapshots its authoritative frame unchanged, snapshots screen data, resolves override-or-auto scale, asks the adapter to render, and commits state only after successful rendering.</li>
+        <li><code class="status">[wip]</code> Finish validates generation, target identity, screen snapshot, scale stability, and containment; then formats/copies output, closes Composition Mode, clears state, and reports success.</li>
+        <li><code class="status">[wip]</code> Outside-edge or pasteboard failures leave Composition Mode active for correction/retry; stale window/screen state cancels because the geometry is no longer trustworthy.</li>
+        <li><code class="status">[wip]</code> Cancel, cross-mode switch, and target-destroyed paths close the guide exactly once and clear state only after successful native teardown.</li>
+        <li><code class="status">[wip]</code> Test port exceptions, false returns, stale-generation callbacks, repeated Enter/Finish/Cancel, arbitrary baseline ratios, target destruction, screen/scale changes, pasteboard failure, cross-mode switching, and teardown retry.</li>
       </ul>
 
       <h4>2.2 Testing Strategy</h4>
