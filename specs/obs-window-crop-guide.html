@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Plan: OBS Window Crop Guide</title>
+<title>Plan: OBS Window and Screen Crop Guide</title>
 <style>
   :root {
     --ink: #eaf0f4;
@@ -80,44 +80,44 @@
 <main>
 
   <header>
-    <h1>Plan: OBS Window Crop Guide</h1>
+    <h1>Plan: OBS Window and Screen Crop Guide</h1>
     <details class="meta">
       <summary>Metadata</summary>
       <dl>
         <dt>created</dt><dd>2026-07-20T22:25:01+02:00</dd>
-        <dt>modified</dt><dd>2026-07-20T22:33:13+02:00, 2026-07-20T22:52:01+02:00</dd>
-        <dt>commits</dt><dd>d8c54aaa1e0e27683e173767791b5488606477d8</dd>
-        <dt>agent name</dt><dd>Codex /root, Codex /root</dd>
-        <dt>session id</dt><dd>019f8117-f32e-7b51-98c3-9dd3e998f947, 019f8117-f32e-7b51-98c3-9dd3e998f947</dd>
-        <dt>back refs</dt><dd><code>README.md</code>, <code>Anodyne/adapter/hammerspoon.lua</code>, <code>Anodyne/core/geometry.lua</code>, owner discussion on 2026-07-20, owner clarification that Composition Mode locks an arbitrary current window frame and is a peer of Window Mode on 2026-07-20</dd>
-        <dt>forward refs</dt><dd>future execution by the primary orchestrating agent; OBS direct integration is explicitly out of scope</dd>
+        <dt>modified</dt><dd>2026-07-20T22:33:13+02:00, 2026-07-20T22:52:01+02:00, 2026-07-21T22:00:36+02:00</dd>
+        <dt>commits</dt><dd>d8c54aaa1e0e27683e173767791b5488606477d8, ed14626e8080f13eba333f482969ccfd8dee323b</dd>
+        <dt>agent name</dt><dd>Codex /root, Codex /root, Codex /root</dd>
+        <dt>session id</dt><dd>019f8117-f32e-7b51-98c3-9dd3e998f947, 019f8117-f32e-7b51-98c3-9dd3e998f947, 019f8155-9f64-7770-8dc2-e786a7025130</dd>
+        <dt>back refs</dt><dd><code>README.md</code>, <code>Anodyne/adapter/hammerspoon.lua</code>, <code>Anodyne/core/geometry.lua</code>, owner discussion on 2026-07-20, owner clarification that Composition Mode locks an arbitrary current window frame and is a peer of Window Mode on 2026-07-20, owner confirmation on 2026-07-21 that Screen Capture crops the frozen display to the locked guide while window adjustment changes only the content beneath it</dd>
+        <dt>forward refs</dt><dd>future execution by the primary orchestrating agent; OBS direct integration is explicitly out of scope, Screen Capture extension Milestones 6–8</dd>
       </dl>
     </details>
   </header>
 
   <figure>
     <img src="obs-window-crop-guide/composition-mode-flow.png" alt="Composition Mode locking an arbitrary baseline window frame, with exterior dimming and four crop values copied for OBS">
-    <figcaption>Composition Mode locks the established window frame—at any size or aspect ratio—as the fixed guide; the resized window supplies deterministic OBS crop values.</figcaption>
+    <figcaption>Composition Mode locks the established window frame as the fixed guide; Window Capture crops the resized window, while Screen Capture crops the frozen display around the same guide.</figcaption>
   </figure>
 
   <section id="purpose">
     <h2>Purpose</h2>
-    <p>Add Composition Mode as a new top-level Anodyne mode next to Window Mode. It snapshots the already-established frame of the focused window at its current size and aspect ratio, locks that exact frame as the recording guide, lets the user manually enlarge and reposition the same window underneath it, then calculates and copies the four crop values needed by an OBS macOS Window Capture source.</p>
+    <p>Support both OBS macOS Screen Capture source submodes inside Composition Mode. It snapshots the already-established frame of the focused window at its current size and aspect ratio, locks that exact frame as the recording guide, and lets the user manually enlarge and reposition the same window underneath it. Screen Capture is the default and crops the frozen display down to the guide; Window Capture remains selectable and continues to crop the final resized window with its existing behavior unchanged.</p>
   </section>
 
   <section id="problem">
     <h2>Problem</h2>
-    <p>OBS can crop a captured window precisely, but finding the correct Left, Top, Right, and Bottom values by eye is slow and error-prone. The desired recording region is known at the start—the window frame that Anodyne has already sized—but the values are needed only after the window has been enlarged and shifted to expose the desired subsection. macOS coordinates may also be expressed in points while OBS consumes source pixels.</p>
+    <p>OBS can crop either a captured window or a captured display precisely, but finding the correct Left, Top, Right, and Bottom values by eye is slow and error-prone. Both sources should resolve to the same locked guide: Window Capture derives crops from the final resized window, while Screen Capture derives crops from the selected display edges. In Screen Capture the values are geometrically fixed for the session, but moving and enlarging the window remains useful because it changes the content visible beneath the guide. macOS coordinates may also be expressed in points while OBS consumes source pixels.</p>
   </section>
 
   <section id="solution">
     <h2>Solution</h2>
-    <p>Introduce a tested Composition Mode state machine with a strict native boundary. <code>ctrl+alt+cmd+C</code> enters this top-level mode independently of Window Mode at <code>ctrl+alt+cmd+M</code>; <code>Return</code> finishes and copies the crops, while <code>Esc</code> cancels. Entering the mode freezes the current window frame without resizing it and the guide session remains active until one of those explicit exits. Pure Lua calculates crop values and formats outcomes; a dedicated controller owns the inactive/active transition; the existing Hammerspoon adapter owns mode resources, window discovery, screen scale, click-through canvases, pasteboard output, persistent Window-Mode-style status presentation, and retry-safe cleanup. Automatic scale detection uses <code>screen:currentMode().scale</code>, while <code>0</code> means auto and a positive configuration value overrides it.</p>
+    <p>Extend the tested Composition Mode state machine with a capture-source selection owned by the active session. <code>ctrl+alt+cmd+C</code> enters with Screen Capture selected; modal-local <code>S</code> selects Screen Capture and <code>W</code> selects Window Capture, both directly and idempotently. <code>Return</code> finishes and copies the crops, while <code>Esc</code> cancels. Both submodes retain the same frozen guide, pinned target, screen identity/full frame, scale, canvases, clipboard format, and lifecycle. Screen Capture uses the frozen screen <code>fullFrame()</code> as the crop source; Window Capture continues to use the target's final frame at Finish through the existing calculation and error paths without behavioral changes.</p>
     <div class="flow" aria-label="Composition flow">
       <div class="node">Any established frame</div><div class="arrow">→</div>
       <div class="node guide">Composition Mode guide</div><div class="arrow">→</div>
-      <div class="node">Manual resize</div>
-      <div class="node">Final frame</div><div class="arrow">→</div>
+      <div class="node">Select S or W</div>
+      <div class="node">Adjust window under guide</div><div class="arrow">→</div>
       <div class="node done">Copy L/T/R/B</div><div class="arrow">→</div>
       <div class="node done">Enter in OBS</div>
     </div>
@@ -130,13 +130,16 @@
       <thead><tr><th>ID</th><th>Contract</th><th>Failure behavior</th></tr></thead>
       <tbody>
         <tr><td class="contract">COMPOSE-MODE-01</td><td>Composition Mode is a top-level modal entered with configurable default <code>ctrl+alt+cmd+C</code>, parallel to Window Mode at <code>ctrl+alt+cmd+M</code>. Only one top-level mode may be active; entering the other cleanly exits or cancels the current mode. The active guide session has no automatic timeout; only the post-Finish result presentation uses the configured timeout.</td><td>Mode acquisition or cross-mode teardown failure leaves no half-entered replacement mode and reports concise visible status through Anodyne-owned presentation.</td></tr>
+        <tr><td class="contract">CROP-SOURCE-01</td><td>Every new Composition session starts in Screen Capture. While the guide is active, unmodified <code>S</code> selects Screen Capture and unmodified <code>W</code> selects Window Capture. Selection is direct, idempotent, generation-guarded, and changes neither the guide nor the target/window/screen snapshots.</td><td>A failed status refresh does not commit a half-applied selection. The prior source remains authoritative and recoverable.</td></tr>
+        <tr><td class="contract">CROP-SCREEN-01</td><td>Screen Capture treats the frozen starting screen <code>fullFrame()</code> as the OBS source rectangle and crops it down to the frozen guide. Its four values are therefore fixed for the session; resizing or moving the pinned window changes only the content underneath the guide.</td><td>If the guide is not contained by the frozen screen beyond tolerance, copy nothing, keep the session active, identify the invalid edge, and allow <code>W</code> selection or cancellation.</td></tr>
+        <tr><td class="contract">CROP-WINDOW-COMPAT-01</td><td>Window Capture retains the existing behavior exactly: at Finish it validates the same pinned target and stale screen/scale invariants, reads the final window frame, requires that frame to contain the guide, and runs the existing pixel-preserving crop calculation.</td><td>All existing containment, target-destroyed, stale geometry, pasteboard, teardown, retry, and lingering-result behaviors remain unchanged.</td></tr>
         <tr><td class="contract">CROP-BASELINE-01</td><td>Entering Composition Mode snapshots the selected window's exact current frame, including its arbitrary width, height, and aspect ratio; it never resizes or repositions that window.</td><td>No valid focused/remembered window means no session and a concise alert.</td></tr>
         <tr><td class="contract">CROP-PIN-01</td><td>The session remains pinned to the same window object and ID even when focus changes.</td><td>A missing or replaced target cancels the session and copies nothing.</td></tr>
-        <tr><td class="contract">CROP-MATH-01</td><td>Crop values are integers in OBS order: Left, Top, Right, Bottom. Pixel conversion preserves the guide's rounded pixel width and height exactly.</td><td>If any guide edge lies outside the final window beyond tolerance, keep the session active, identify the invalid edge, and copy nothing.</td></tr>
+        <tr><td class="contract">CROP-MATH-01</td><td>Crop values are integers in OBS order: Left, Top, Right, Bottom. Both submodes use the same selected-source-to-guide pixel conversion, which preserves the guide's rounded pixel width and height exactly.</td><td>If any guide edge lies outside the selected source rectangle beyond tolerance, keep the session active, identify the invalid edge, and copy nothing; Window Capture remains correctable by moving/resizing, while Screen Capture may switch to <code>W</code> or cancel.</td></tr>
         <tr><td class="contract">CROP-SCALE-01</td><td>Automatic scale is the start screen's finite positive <code>currentMode().scale</code>; a positive configured override wins. The chosen value is frozen for the session.</td><td>Invalid/missing scale or changed screen identity/full frame/scale cancels as stale geometry.</td></tr>
         <tr><td class="contract">CROP-UI-01</td><td>The guide is floating, click-through, fixed in absolute screen coordinates, and visible until Finish or Cancel. Its border width is configurable through immutable <code>obsCrop.guideStrokeWidth</code> and defaults to exactly <code>1</code> point. Later milestone dimming affects only the area outside the guide.</td><td>Canvas setup/teardown failures retain native handles for retry-safe adapter cleanup.</td></tr>
-        <tr><td class="contract">CROP-OUT-01</td><td>While the guide is active, a click-through status modal matching Window Mode remains visible with the locked baseline and controls. <code>Return</code> removes the guide, copies one line, and changes that modal to the same crop values, result dimensions, and scale for <code>obsCrop.resultDuration</code> additional seconds. <code>Esc</code> cancels an active guide or dismisses the lingering result early; early dismissal never clears the clipboard.</td><td>Pasteboard failure leaves the guide session active and recoverable, with visible failure status in the persistent modal.</td></tr>
-        <tr><td class="contract">CROP-LIFE-01</td><td>Reload/stop removes the Composition Mode entry hotkey, modal bindings, and every guide canvas with no stale callbacks or resources.</td><td>Cleanup aggregates failures and repeated <code>:stop()</code> retries retained resources, matching existing Anodyne lifecycle policy.</td></tr>
+        <tr><td class="contract">CROP-OUT-01</td><td>While the guide is active, a click-through status modal matching Window Mode remains visible with the locked baseline, selected source, and controls. <code>Return</code> removes the guide, copies the existing one-line crop format unchanged, and changes that modal to the selected source plus the same crop values, result dimensions, and scale for <code>obsCrop.resultDuration</code> additional seconds. <code>Esc</code> cancels an active guide or dismisses the lingering result early; early dismissal never clears the clipboard.</td><td>Pasteboard failure leaves the guide session active and recoverable, with visible failure status in the persistent modal.</td></tr>
+        <tr><td class="contract">CROP-LIFE-01</td><td>Reload/stop removes the Composition Mode entry hotkey, all modal bindings including <code>W</code>/<code>S</code>, and every guide canvas with no stale callbacks or resources.</td><td>Cleanup aggregates failures and repeated <code>:stop()</code> retries retained resources, matching existing Anodyne lifecycle policy.</td></tr>
       </tbody>
     </table>
   </section>
@@ -162,11 +165,20 @@
       <li><span class="tag new">new</span> <code>spec/core/obs_crop_spec.lua</code> — table-driven math and edge-case coverage.</li>
       <li><span class="tag new">new</span> <code>spec/controller/obs_crop_controller_spec.lua</code> — deterministic lifecycle, failure, and output-policy tests.</li>
     </ul>
+
+    <h3>Screen Capture Extension Touch Set</h3>
+    <ul>
+      <li><span class="tag existing">existing</span> <code>Anodyne/core/obs_crop.lua</code> and <code>spec/core/obs_crop_spec.lua</code> — reuse the existing generic source-to-guide coverage and add only missing frozen-screen cases.</li>
+      <li><span class="tag existing">existing</span> <code>Anodyne/view.lua</code> and <code>spec/controller/view_spec.lua</code> — add deterministic selected-source help/result presentation while preserving the exact clipboard line.</li>
+      <li><span class="tag existing">existing</span> <code>Anodyne/obs_crop_controller.lua</code> and <code>spec/controller/obs_crop_controller_spec.lua</code> — own the default source, idempotent selection, and Finish source routing.</li>
+      <li><span class="tag existing">existing</span> <code>Anodyne/adapter/hammerspoon.lua</code>, <code>spec/adapter/hammerspoon_spec.lua</code>, <code>spec/characterization/anodyne_spec.lua</code>, and <code>spec/facade/anodyne_facade_spec.lua</code> — bind modal-local <code>W</code>/<code>S</code>, refresh status, and prove native lifecycle and startup-rollback isolation.</li>
+      <li><span class="tag existing">existing</span> <code>README.md</code> — document both OBS source workflows and why Screen Capture crops remain fixed while the window moves underneath the guide.</li>
+    </ul>
   </section>
 
   <section id="phases">
     <h2>Implementation Milestones</h2>
-    <p><strong>IMPORTANT:</strong> Execute every milestone in order. Within Milestone 1, WP-01, WP-02, and WP-03 may run in parallel because their ownership sets do not overlap. All other packets are sequential dependency gates.</p>
+    <p><strong>IMPORTANT:</strong> Execute every milestone in order. Within Milestone 1, WP-01, WP-02, and WP-03 may run in parallel; within Milestone 6, WP-08 and WP-09 may run in parallel. Their ownership sets do not overlap. All other packets are sequential dependency gates.</p>
     <p>Status markers: <code>[]</code> idle · <code>[wip]</code> in progress · <code>[x]</code> complete · <code>[f]</code> failed. All start as <code>[]</code>; the Build Plan workflow updates them as it works.</p>
 
     <div class="phase">
@@ -372,11 +384,118 @@
       </ul>
       <div class="loop">🔁 <strong>The feature is complete only when the full offline gate, native Hammerspoon interaction, and manual OBS crop comparison all pass.</strong> Repair any mismatch and repeat the relevant narrow and global gates.</div>
     </div>
+
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone 6: Capture-Source Contracts and Screen Math</h3>
+      <p>Prove that the shipped pure calculator already accepts a generic source rectangle, add only missing frozen-screen fixtures, and prepare source-aware presentation without changing the active controller or adapter behavior.</p>
+      <p><strong>Validation goal:</strong> retain the existing Window Capture math suite unchanged, avoid redundant fixtures, and add exact screen-edge cases across coordinate and scale variants.</p>
+
+      <h4>6.1 Primary-agent extension preflight</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Record the starting SHA and <code>git status --short</code>; preserve unrelated changes and stop on overlap with any extension packet.</li>
+        <li><code class="status">[]</code> Run <code>make verify</code> before extension edits. If the baseline is red, diagnose and repair it in a separate commit before Milestone 6 work, preserving the earlier baseline-first policy.</li>
+        <li><code class="status">[]</code> Inventory the exact shipped Window Capture controller, adapter, clipboard, resource-count, and manual expectations that Milestone 7 must preserve; the extension is not permission to refactor that path.</li>
+      </ul>
+
+      <h4><span class="tag packet">WP-08</span> Frozen-screen source fixtures</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Owner: crop-math worker. Touch only <code>Anodyne/core/obs_crop.lua</code> and <code>spec/core/obs_crop_spec.lua</code>; production changes are permitted only if a missing generic source-rectangle seam is proven.</li>
+        <li><code class="status">[]</code> Audit and reuse the shipped exact cases for scale 1/2, fractional and negative coordinates, asymmetric crops, tolerance behavior, containment edges, and result-size invariants; do not duplicate them under a new label.</li>
+        <li><code class="status">[]</code> Add only missing Screen Capture fixtures by supplying the frozen screen <code>fullFrame()</code> as the source rectangle and proving screen-to-guide near-edge crops plus rounded far-edge derivation.</li>
+        <li><code class="status">[]</code> Cover normal and negative-origin screens, guide touching screen edges, representative fractional/scale cases, and guide-outside-screen errors where existing generic fixtures do not already prove the behavior.</li>
+      </ul>
+
+      <h4><span class="tag packet">WP-09</span> Capture-source presentation model</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Owner: view worker in parallel with WP-08. Touch only <code>Anodyne/view.lua</code> and <code>spec/controller/view_spec.lua</code>.</li>
+        <li><code class="status">[]</code> Add deterministic labels for <code>screen</code> and <code>window</code>. Explicit-source help shows the current selection and documents <code>S</code>/<code>W</code>, <code>Return</code>, and <code>Esc</code>; legacy calls without a source retain the shipped text until WP-10 wires selection, keeping the Milestone 6 commit behaviorally coherent.</li>
+        <li><code class="status">[]</code> Allow the lingering result formatter to show an explicitly supplied source while keeping legacy calls and <code>cropClipboardText</code> byte-for-byte compatible with the existing output.</li>
+        <li><code class="status">[]</code> Add concise source-specific containment text: Window Capture may be corrected by resizing/repositioning; Screen Capture may switch to <code>W</code> or cancel when the frozen guide lies outside the screen.</li>
+      </ul>
+
+      <h4>6.3 Testing Strategy</h4>
+      <p>The primary agent runs both non-overlapping packets in parallel, integrates them without changing controller or adapter behavior, and sends the combined milestone to an independent reviewer focused on nonredundant screen fixtures and exact output compatibility.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>make test-core</code> — proves the unchanged existing math suite plus targeted frozen-screen cases.</li>
+        <li><code class="status">[]</code> <code>make test-controller</code> — proves explicit source labels while the active controller behavior remains unchanged.</li>
+        <li><code class="status">[]</code> <code>make coverage</code> and <code>make format-check</code> — preserve enforced raw floors and formatting.</li>
+        <li><code class="status">[]</code> Independent reviewer approval — confirms screen cases are additive, nonredundant, and do not alter Window Capture arithmetic or clipboard output.</li>
+        <li><code class="status">[]</code> Commit Milestone 6 as one attributable, fully green commit only after all preceding checks pass.</li>
+      </ul>
+      <div class="loop">🔁 <strong>Do not advance until Screen Capture math is source-rectangle exact without duplicating or changing the shipped Window math suite.</strong></div>
+    </div>
+
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone 7: Session Selection and Native Routing</h3>
+      <p>Add the source submode to the pure controller and wire its modal-local selectors in the same milestone so the default change never lands without a usable Window Capture path.</p>
+      <p><strong>Validation goal:</strong> Screen Capture is the default; <code>S</code>/<code>W</code> selection is direct and idempotent; both native Finish routes work; and every commit passes the full repository gate with the shipped Window behavior intact.</p>
+
+      <h4><span class="tag packet">WP-10</span> Controller capture-source state</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Owner: controller worker after WP-08 and WP-09. Touch only <code>Anodyne/obs_crop_controller.lua</code> and <code>spec/controller/obs_crop_controller_spec.lua</code>.</li>
+        <li><code class="status">[]</code> Add a closed capture-source value with exactly <code>screen</code> and <code>window</code>; every successful Enter stores <code>screen</code> by default.</li>
+        <li><code class="status">[]</code> Add a generation-guarded selection transition through a narrow presentation port with no native handles. Selecting the current source is a successful no-op; selecting the other source updates presentation transactionally without recreating the guide, changing generation, or resnapshotting window/screen/scale.</li>
+        <li><code class="status">[]</code> On Screen Capture Finish, retain all existing generation, pinned target, screen identity/full-frame, and scale-stability checks, but use the frozen screen full frame—not the final window frame—as the crop source.</li>
+        <li><code class="status">[]</code> On Window Capture Finish, execute the shipped target read, final-frame containment, crop calculation, copy, teardown, and result-linger behavior unchanged.</li>
+        <li><code class="status">[]</code> Prove Screen Capture output is identical before and after arbitrary window movement/resizing, since final window geometry is excluded from that branch.</li>
+        <li><code class="status">[]</code> Add routing compatibility cases for explicit <code>W</code>, <code>S→W</code>, and repeated <code>W</code>, asserting the exact prior crops/clipboard plus containment retention, pasteboard retry, teardown, and result behavior.</li>
+        <li><code class="status">[]</code> Cover invalid source values, inactive/repeated/stale-generation selection, presentation exceptions/false returns, target destruction, display/scale staleness, screen-containment failure, teardown retry, and cross-mode cancellation.</li>
+      </ul>
+
+      <h4><span class="tag packet">WP-11</span> Adapter bindings and lifecycle integration</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Owner: adapter worker after WP-10 and before the Milestone 7 commit. Touch <code>Anodyne/adapter/hammerspoon.lua</code>, <code>spec/adapter/hammerspoon_spec.lua</code>, <code>spec/characterization/anodyne_spec.lua</code>, and <code>spec/facade/anodyne_facade_spec.lua</code>; touch <code>spec/support/fake_hs.lua</code> only if a strict missing seam is proven.</li>
+        <li><code class="status">[]</code> Bind unmodified lowercase <code>s</code> and <code>w</code> inside the already-retained Composition modal only, route both through the current generation, validate each bind acquisition, and rely on the modal's established ownership/deletion policy rather than adding a second cleanup owner.</li>
+        <li><code class="status">[]</code> Enter with Screen Capture visibly selected. Repeated <code>S</code> or <code>W</code> is idempotent; switching refreshes the persistent status without replacing the guide or changing its geometry.</li>
+        <li><code class="status">[]</code> Ignore source selectors during result linger, preserve <code>Esc</code> early dismissal, and add both bindings to startup rollback, stop/reload cleanup, resource-count, stale-callback, and fault-injection matrices.</li>
+        <li><code class="status">[]</code> Add adapter-boundary compatibility cases for <code>W</code>, <code>S→W</code>, and repeated <code>W</code>: same final-frame reads, exact crops/clipboard, containment recovery, pasteboard retry, timer, canvas order, and cleanup calls as the shipped path.</li>
+      </ul>
+
+      <h4>7.3 Testing Strategy</h4>
+      <p>The primary integrates WP-10 and WP-11 before any commit. Controller and native suites prove the complete transition/routing matrix; an independent reviewer audits transaction order and Window compatibility at the boundary actually changed.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>make test-controller</code> — validates defaulting, selection, both source routes, fixed Screen output, and Window compatibility.</li>
+        <li><code class="status">[]</code> <code>make test-adapter</code>, <code>make test-characterization</code>, and <code>make test-facade</code> — prove native selectors, resource ownership, rollback, reload, and shipped Window behavior.</li>
+        <li><code class="status">[]</code> <code>make test-core</code> and <code>make architecture</code> — revalidate the unchanged crop dependency and native isolation.</li>
+        <li><code class="status">[]</code> <code>make verify</code> — prevents a commit where the controller defaults to Screen before native integration and all existing tests are adapted.</li>
+        <li><code class="status">[]</code> Independent reviewer approval — validates explicit Window routing parity, transactional selection failures, and a fully green integration state.</li>
+        <li><code class="status">[]</code> Commit Milestone 7 as one attributable commit only after WP-10, WP-11, and every preceding check pass.</li>
+      </ul>
+      <div class="loop">🔁 <strong>Do not advance or commit until both native source routes work and every existing Window Capture controller/adapter behavior remains identical.</strong></div>
+    </div>
+
+    <div class="phase">
+      <h3><code class="status">[]</code> Milestone 8: Documentation and OBS Proof</h3>
+      <p>Document the now-integrated source selectors, then validate both OBS macOS Screen Capture source submodes end to end.</p>
+      <p><strong>Validation goal:</strong> Screen Capture matches the locked guide in OBS, Window Capture passes an explicit non-regression workflow, and the final documentation accurately distinguishes fixed and dynamic crop geometry.</p>
+
+      <h4><span class="tag packet">WP-12</span> User workflow documentation</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Owner: documentation worker after the green Milestone 7 integration. Touch only <code>README.md</code>.</li>
+        <li><code class="status">[]</code> Document Screen Capture as the default, <code>S</code>/<code>W</code> as direct selectors, the visible selected-source label, and the unchanged clipboard field order.</li>
+        <li><code class="status">[]</code> Explain that Screen Capture crops are fixed from the display edges to the locked guide while window resizing/repositioning changes the content underneath; contrast this with dynamic Window Capture crops derived at Finish.</li>
+        <li><code class="status">[]</code> Provide separate OBS Edit Transform workflows for macOS Screen Capture in Screen Capture and Window Capture source modes, retaining the no-IPC/no-automation boundary.</li>
+      </ul>
+
+      <h4>8.2 Testing Strategy</h4>
+      <p>The full offline gate remains green before native validation. The owner performs both real OBS workflows because display-source pixels and capture selection remain external boundaries.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>make verify</code> — proves documentation lands on the already-green integrated implementation with formatting, suites, coverage, and architecture intact.</li>
+        <li><code class="status">[]</code> Manual key check — enter Composition Mode and confirm Screen Capture is selected; <code>S,S</code> remains Screen, <code>W,W</code> remains Window, and <code>S</code> returns to Screen without moving/recreating the guide.</li>
+        <li><code class="status">[]</code> Manual Screen Capture check — record the screen bounds and locked guide, resize/reposition the window underneath it, Finish in <code>S</code>, and verify the copied crops equal the four frozen screen-to-guide margins and the result dimensions equal the guide at the reported scale.</li>
+        <li><code class="status">[]</code> Manual OBS Screen Capture check — paste all four values into Edit Transform for a macOS Screen Capture source configured to Screen Capture and verify every output edge and result dimension matches the guide.</li>
+        <li><code class="status">[]</code> Manual Window Capture regression — switch to <code>W</code>, repeat the established enlarge/reposition workflow, and verify the exact existing dynamic crops, containment correction, clipboard, result linger, and OBS output.</li>
+        <li><code class="status">[]</code> Manual reload check — reload with the guide active after switching sources and confirm no stale selector, guide/mask/status canvas, callback, or old-generation action survives; confirm a fresh session again defaults to Screen.</li>
+        <li><code class="status">[]</code> Final independent reviewer approval — audits implementation, Window compatibility evidence, plan status, and manual results before completion.</li>
+        <li><code class="status">[]</code> Commit Milestone 8 as one attributable commit only after all preceding checks pass.</li>
+      </ul>
+      <div class="loop">🔁 <strong>The extension is complete only when both real OBS source submodes match the same locked guide and Window Capture has no behavioral regression.</strong></div>
+    </div>
   </section>
 
   <section id="validation">
-    <h2>Global Validation Commands</h2>
-    <p>Execute these from the repository root after all milestones:</p>
+    <h2>Completed Window Capture Validation</h2>
+    <p>Historical aggregate evidence for the completed Window Capture implementation through Milestone 5:</p>
     <ul class="checklist">
       <li><code class="status">[x]</code> <code>make format-check</code> — all Lua follows the pinned StyLua format.</li>
       <li><code class="status">[x]</code> <code>make test-core</code> — crop math and configuration pass independently.</li>
@@ -387,7 +506,24 @@
       <li><code class="status">[x]</code> <code>make architecture</code> — native access remains isolated and dependencies remain acyclic.</li>
       <li><code class="status">[x]</code> <code>make verify</code> — final aggregate offline proof passes from a clean process.</li>
     </ul>
-    <div class="loop">🔁 <strong>The plan is not complete until every box is checked and every command passes.</strong> If a native/manual step is impossible, mark it <code>[f]</code>, preserve evidence, and do not claim OBS calibration.</div>
+    <div class="loop">✅ <strong>These checks remain the locked baseline for Window Capture compatibility.</strong> Extension work must keep them green and add the validation below.</div>
+  </section>
+
+  <section id="screen-validation">
+    <h2>Screen Capture Extension Validation</h2>
+    <p>Execute these from the repository root after Milestones 6–8:</p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> <code>make format-check</code> — all amended Lua follows the pinned StyLua format.</li>
+      <li><code class="status">[]</code> <code>make test-core</code> — targeted screen-source arithmetic and the unchanged existing Window Capture math suite pass independently.</li>
+      <li><code class="status">[]</code> <code>make test-controller</code> — default selection, idempotent switching, source routing, and view output pass.</li>
+      <li><code class="status">[]</code> <code>make test-adapter</code> — strict modal bindings, presentation, callbacks, and cleanup pass.</li>
+      <li><code class="status">[]</code> <code>make test-characterization</code> and <code>make test-facade</code> — established behavior, reload, and rollback remain intact.</li>
+      <li><code class="status">[]</code> <code>make coverage</code> — per-file and overall raw coverage floors remain enforced.</li>
+      <li><code class="status">[]</code> <code>make architecture</code> — native access remains isolated and dependencies remain acyclic.</li>
+      <li><code class="status">[]</code> <code>make verify</code> — final aggregate offline proof passes from a clean process.</li>
+      <li><code class="status">[]</code> Manual Hammerspoon and OBS checks in Milestone 8 — both capture sources, fixed-vs-dynamic geometry, direct selectors, and reload behavior pass.</li>
+    </ul>
+    <div class="loop">🔁 <strong>The amended plan is not complete until every extension box is checked.</strong> If a native/manual step is impossible, mark it <code>[f]</code>, preserve evidence, and do not claim Screen Capture support.</div>
   </section>
 
   <section id="orchestration">
@@ -403,10 +539,16 @@
         <tr><td class="contract">WP-05B</td><td>WP-05 plus owner amendments</td><td>Same adapter/spec ownership, sequentially</td><td>Persistent modal/timer/clipboard tests; lifecycle and native visual review</td></tr>
         <tr><td class="contract">WP-06</td><td>WP-05B</td><td>Same adapter/spec ownership, sequentially</td><td>Mask geometry tests plus native visual check</td></tr>
         <tr><td class="contract">WP-07</td><td>WP-06</td><td>Tooling gates and README</td><td><code>make verify</code>; manual OBS calibration</td></tr>
+        <tr><td class="contract">WP-08</td><td>Milestone 5</td><td>Crop math module/spec only</td><td>Targeted screen-source fixtures plus unchanged existing math suite; core/coverage review</td></tr>
+        <tr><td class="contract">WP-09</td><td>Milestone 5</td><td>View and view spec only; parallel with WP-08</td><td>Exact source labels; byte-identical clipboard review</td></tr>
+        <tr><td class="contract">WP-10</td><td>WP-08, WP-09</td><td>Crop controller and controller spec only</td><td>Transition-table tests; state/failure-order review</td></tr>
+        <tr><td class="contract">WP-11</td><td>WP-10</td><td>Adapter, native integration specs, and facade rollback spec</td><td>Adapter/characterization/facade suites; lifecycle and compatibility review</td></tr>
+        <tr><td class="contract">WP-12</td><td>WP-11</td><td>README only</td><td>Two-source workflow review; <code>make verify</code>; owner manual checks</td></tr>
       </tbody>
     </table>
 
     <div class="callout guide"><strong>Primary-agent protocol:</strong> dispatch only packets whose dependencies are green; include the fixed contracts and exclusive file list in every worker prompt; wait for workers; inspect diffs; rerun narrow validation personally; then request an independent read-only reviewer. Return actionable findings to the same worker before advancing. The primary agent owns cross-packet integration and never asks parallel workers to edit the same file.</div>
+    <div class="callout good"><strong>Extension commit protocol:</strong> WP-08 and WP-09 may run in parallel; WP-10 and WP-11 are integrated sequentially inside Milestone 7 before any commit; WP-12 follows the green integration. Milestones 6, 7, and 8 each produce exactly one fully green commit after their independent reviewer and required validation approve the result.</div>
     <div class="callout risk"><strong>Worktree safety:</strong> all agents share the filesystem. Before each dispatch, the primary records the packet's allowed paths and current hashes. Unexpected edits halt integration for attribution; no agent resets, stashes, deletes, commits, pushes, or opens a pull request unless the owner separately authorizes it.</div>
   </section>
 
@@ -417,16 +559,23 @@
     <p>The guide is not an aspect-ratio preset. Composition Mode copies the current window frame verbatim and freezes it in absolute screen coordinates; any positive width and height are valid. Window Mode remains the optional place to establish a preferred size or ratio before Composition Mode begins. Once Composition Mode is active, it never invokes a window move/resize action and does not expire on the Window Mode timer.</p>
 
     <h3>Pixel-preserving crop calculation</h3>
-    <p>Derive the far-edge crops from rounded pixel rectangles so OBS receives internally consistent integers:</p>
-    <pre><code>sourceW = round(finalWindow.w * scale)
-sourceH = round(finalWindow.h * scale)
-left    = round((guide.x - finalWindow.x) * scale)
-top     = round((guide.y - finalWindow.y) * scale)
+    <p>Both capture sources use the same generic source-to-guide calculation. Window Capture supplies the target's final frame; Screen Capture supplies the frozen screen full frame. Derive the far-edge crops from rounded pixel rectangles so OBS receives internally consistent integers:</p>
+    <pre><code>sourceRect = selectedSource == "screen" and frozenScreenFullFrame or finalWindow
+sourceW = round(sourceRect.w * scale)
+sourceH = round(sourceRect.h * scale)
+left    = round((guide.x - sourceRect.x) * scale)
+top     = round((guide.y - sourceRect.y) * scale)
 resultW = round(guide.w * scale)
 resultH = round(guide.h * scale)
 right   = sourceW - left - resultW
 bottom  = sourceH - top - resultH</code></pre>
     <p>This guarantees <code>sourceW - left - right == resultW</code> and the equivalent height invariant. Validate point containment before conversion; clamp only within the documented tolerance.</p>
+
+    <h3>Fixed Screen crops versus dynamic Window crops</h3>
+    <p>Screen Capture is selected by default because OBS's source is the full display. Its source rectangle, guide, and scale are all frozen at entry, so its crop values do not change during the session. The owner still resizes and repositions the pinned window because those actions change which window content appears underneath the fixed guide. Window Capture remains different by design: <code>W</code> selects it and Finish reads the current final window frame, so its crop values change with that frame. Switching sources never moves the window, moves the guide, or starts a new generation.</p>
+
+    <h3>Window Capture non-regression boundary</h3>
+    <p>The extension may add selection and source routing around the shipped Window Capture branch, but it must not change that branch's arithmetic, containment tolerance, target/screen/scale staleness checks, failure recovery, clipboard string, guide/status lifecycle, result timeout, or cleanup order. Existing core fixtures remain authoritative; Milestone 7 adds targeted compatibility tests at the controller/adapter routing boundary for explicit <code>W</code>, <code>S→W</code>, repeated <code>W</code>, exact output, containment recovery, pasteboard retry, teardown, and linger behavior.</p>
 
     <h3>Guide/mask geometry</h3>
     <p>The canvas frame is the stored screen's <code>fullFrame()</code>. Convert the absolute guide to canvas-local coordinates once. The dim mask comprises four non-overlapping rectangles around that local guide; the border is the final canvas element. Negative global screen origins therefore require no special rendering beyond the absolute-to-local subtraction.</p>
@@ -442,7 +591,7 @@ bottom  = sourceH - top - resultH</code></pre>
       <li>Reading OBS source dimensions or scene state.</li>
       <li>Applying OBS filters/transforms, starting recordings, or automating OBS UI.</li>
       <li>Supporting a guide that spans displays or changes display scale during one session.</li>
-      <li>Guaranteeing compatibility with legacy/deprecated OBS Window Capture; calibration targets current macOS Screen Capture in Window Capture mode.</li>
+      <li>Guaranteeing compatibility with legacy/deprecated OBS Window Capture; calibration targets the current macOS Screen Capture source in its Screen Capture and Window Capture submodes.</li>
     </ul>
   </section>
 
@@ -460,6 +609,10 @@ bottom  = sourceH - top - resultH</code></pre>
     <details>
       <summary>2026-07-21 — Replace transient alerts with a persistent Window-Mode-style Composition modal</summary>
       <p>Owner testing approved the 1-point click-through guide and exact crop output, then requested consistent Anodyne presentation. Added Milestone 3A before dimming: help and recoverable status remain visible in a click-through Window-Mode-style canvas for the whole guide session; after Finish the guide closes while the copied result remains for configurable <code>obsCrop.resultDuration</code> additional seconds; <code>Esc</code> dismisses that result early without clearing the clipboard.</p>
+    </details>
+    <details>
+      <summary>2026-07-21T22:00:36+02:00 — Add Screen Capture as Composition Mode's default source</summary>
+      <p>Extended Composition Mode to plan for both submodes of OBS macOS Screen Capture. New sessions default to Screen Capture; modal-local <code>S</code> and <code>W</code> are direct, idempotent selectors. Screen Capture crops the frozen display full frame to the locked guide, so moving or enlarging the window changes the content underneath without changing the crop values. Window Capture continues to derive crops from the final window frame and is protected by targeted controller/adapter routing compatibility tests and reviewer gates. Added Milestones 6–8, non-overlapping worker packets, separate extension validation, native/OBS checks for both sources, and one fully green reviewed commit per milestone.</p>
     </details>
   </section>
 
