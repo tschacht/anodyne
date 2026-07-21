@@ -718,9 +718,10 @@ describe("Milestone 2 characterization", function()
       click(driver, "Composition Mode: ctrl+alt+cmd+C")
       local canvas = _G.Anodyne.compositionCanvas
       assert.same(frame(0, 0, 1920, 1080), driver:canvasFrame(canvas))
-      assert.same(frame(100, 100, 800, 600), driver:canvasElements(canvas)[1].frame)
+      assert.same(frame(100, 100, 800, 600), driver:canvasElements(canvas)[5].frame)
       assert.is_true(canvas._state.mouseCallbackSet)
-      assert.are.equal(1, driver:canvasElements(canvas)[1].strokeWidth)
+      assert.are.equal(0.45, driver:canvasElements(canvas)[1].fillColor.alpha)
+      assert.are.equal(1, driver:canvasElements(canvas)[5].strokeWidth)
       local status = _G.Anodyne.compositionStatusCanvas
       assert.matches("Locked baseline: 800 x 600", driver:canvasElements(status)[2].text)
       assert.matches("Return = Finish/Copy", driver:canvasElements(status)[2].text)

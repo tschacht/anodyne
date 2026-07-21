@@ -7,6 +7,25 @@ local function assertNoResources(driver)
   assert.same({ timers = 0, menus = 0, hotkeys = 0, modals = 0, filters = 0, taps = 0, canvases = 0 }, driver:activeCounts())
 end
 
+local function mask(frame, alpha)
+  return {
+    type = "rectangle",
+    action = "fill",
+    fillColor = { red = 0, green = 0, blue = 0, alpha = alpha or 0.45 },
+    frame = frame,
+  }
+end
+
+local function border(frame, width)
+  return {
+    type = "rectangle",
+    action = "stroke",
+    strokeColor = { red = 1, green = 0.5, blue = 0, alpha = 1 },
+    strokeWidth = width or 1,
+    frame = frame,
+  }
+end
+
 describe("Hammerspoon adapter", function()
   local adapter, driver, owner
 
@@ -274,7 +293,7 @@ describe("Hammerspoon adapter", function()
     assertNoResources(driver)
   end)
 
-  it("renders a border-only click-through guide and finishes through the pinned window", function()
+  it("renders a masked click-through guide and finishes through the pinned window", function()
     start()
     local window = driver.runtime.focused
     driver:triggerHotkey({ "ctrl", "alt", "cmd" }, "c")
@@ -283,13 +302,20 @@ describe("Hammerspoon adapter", function()
     assert.same({ x = 0, y = 0, w = 1920, h = 1080 }, driver:canvasFrame(canvas))
     assert.are.equal("overlay", canvas._state.level)
     assert.is_true(canvas._state.mouseCallbackSet)
+    local guideElements = driver:canvasElements(canvas)
     assert.same({
-      type = "rectangle",
-      action = "stroke",
-      strokeColor = { red = 1, green = 0.5, blue = 0, alpha = 1 },
-      strokeWidth = 1,
-      frame = { x = 100, y = 100, w = 800, h = 600 },
-    }, driver:canvasElements(canvas)[1])
+      mask({ x = 0, y = 0, w = 1920, h = 100 }),
+      mask({ x = 0, y = 700, w = 1920, h = 380 }),
+      mask({ x = 0, y = 100, w = 100, h = 600 }),
+      mask({ x = 900, y = 100, w = 1020, h = 600 }),
+      border({ x = 100, y = 100, w = 800, h = 600 }),
+    }, guideElements)
+    local maskArea = 0
+    for index = 1, 4 do
+      local frame = guideElements[index].frame
+      maskArea = maskArea + frame.w * frame.h
+    end
+    assert.are.equal(1920 * 1080 - 800 * 600, maskArea)
     local help = "Composition Mode:\nLocked baseline: 800 x 600\nReturn = Finish/Copy\nEsc = Cancel"
     local helpCanvas = owner.compositionStatusCanvas
     assert.same({ x = 780, y = 60, w = 360, h = 148 }, driver:canvasFrame(helpCanvas))
@@ -341,9 +367,81 @@ describe("Hammerspoon adapter", function()
   end)
 
   it("uses the configured guide stroke width override", function()
-    start(nil, { obsCrop = { guideStrokeWidth = 2.5 } })
+    start(nil, { obsCrop = { guideStrokeWidth = 2.5, dimAlpha = 0.7 } })
     driver:triggerHotkey({ "ctrl", "alt", "cmd" }, "c")
-    assert.are.equal(2.5, driver:canvasElements(owner.compositionCanvas)[1].strokeWidth)
+    local elements = driver:canvasElements(owner.compositionCanvas)
+    assert.are.equal(0.7, elements[1].fillColor.alpha)
+    assert.are.equal(2.5, elements[5].strokeWidth)
+  end)
+
+  it("partitions negative-origin, edge-touching, and fractional clipped guides exactly", function()
+    local cases = {
+      {
+        fullFrame = { x = -500, y = -300, w = 1920, h = 1080 },
+        guide = { x = 100, y = 100, w = 800, h = 600 },
+        elements = {
+          mask({ x = 0, y = 0, w = 1920, h = 400 }),
+          mask({ x = 0, y = 1000, w = 1920, h = 80 }),
+          mask({ x = 0, y = 400, w = 600, h = 600 }),
+          mask({ x = 1400, y = 400, w = 520, h = 600 }),
+          border({ x = 600, y = 400, w = 800, h = 600 }),
+        },
+      },
+      {
+        fullFrame = { x = 0, y = 0, w = 1920, h = 1080 },
+        guide = { x = 0, y = 0, w = 800, h = 600 },
+        elements = {
+          mask({ x = 0, y = 0, w = 1920, h = 0 }),
+          mask({ x = 0, y = 600, w = 1920, h = 480 }),
+          mask({ x = 0, y = 0, w = 0, h = 600 }),
+          mask({ x = 800, y = 0, w = 1120, h = 600 }),
+          border({ x = 0, y = 0, w = 800, h = 600 }),
+        },
+      },
+      {
+        fullFrame = { x = -100, y = -50, w = 1000, h = 800 },
+        guide = { x = -150.25, y = 25.5, w = 1200.75, h = 900.25 },
+        elements = {
+          mask({ x = 0, y = 0, w = 1000, h = 75.5 }),
+          mask({ x = 0, y = 800, w = 1000, h = 0 }),
+          mask({ x = 0, y = 75.5, w = 0, h = 724.5 }),
+          mask({ x = 1000, y = 75.5, w = 0, h = 724.5 }),
+          border({ x = -50.25, y = 75.5, w = 1200.75, h = 900.25 }),
+        },
+      },
+    }
+
+    for _, case in ipairs(cases) do
+      driver = FakeHs.new()
+      driver:setFullFrame(driver.runtime.screens[1], case.fullFrame)
+      driver:setWindowFrame(driver.runtime.focused, case.guide)
+      start()
+      driver:triggerHotkey({ "ctrl", "alt", "cmd" }, "c")
+      assert.same(case.fullFrame, driver:canvasFrame(owner.compositionCanvas))
+      assert.same(case.elements, driver:canvasElements(owner.compositionCanvas))
+      assert.is_true(owner.compositionCanvas._state.mouseCallbackSet)
+      for index = 1, 4 do
+        local frame = case.elements[index].frame
+        assert.is_true(frame.x >= 0 and frame.y >= 0 and frame.w >= 0 and frame.h >= 0)
+        assert.is_true(frame.x + frame.w <= case.fullFrame.w)
+        assert.is_true(frame.y + frame.h <= case.fullFrame.h)
+      end
+      local guide = case.elements[5].frame
+      local left = math.max(0, math.min(guide.x, case.fullFrame.w))
+      local top = math.max(0, math.min(guide.y, case.fullFrame.h))
+      local right = math.max(0, math.min(guide.x + guide.w, case.fullFrame.w))
+      local bottom = math.max(0, math.min(guide.y + guide.h, case.fullFrame.h))
+      local maskArea = 0
+      for index = 1, 4 do
+        local frame = case.elements[index].frame
+        maskArea = maskArea + frame.w * frame.h
+      end
+      assert.are.equal(case.fullFrame.w * case.fullFrame.h - (right - left) * (bottom - top), maskArea)
+      assert.is_nil(adapter:stop())
+      assertNoResources(driver)
+      driver:shutdown()
+      adapter = nil
+    end
   end)
 
   it("keeps recoverable containment, pasteboard, and guide-close errors persistent without timers", function()
@@ -577,10 +675,19 @@ describe("Hammerspoon adapter", function()
   end)
 
   it("retains composition canvases across fallible setup and cleanup retries", function()
-    for _, operation in ipairs({ "canvas.level", "canvas.mouseCallback", "canvas.element", "canvas.show" }) do
+    for _, fault in ipairs({
+      { "canvas.level", 1 },
+      { "canvas.mouseCallback", 1 },
+      { "canvas.element", 1 },
+      { "canvas.element", 2 },
+      { "canvas.element", 3 },
+      { "canvas.element", 4 },
+      { "canvas.element", 5 },
+      { "canvas.show", 1 },
+    }) do
       driver = FakeHs.new()
       start()
-      driver:setLifecycleFault(operation, 1)
+      driver:setLifecycleFault(fault[1], fault[2])
       driver:triggerHotkey({ "ctrl", "alt", "cmd" }, "c")
       local failed = owner.compositionCanvas
       assert.are.equal(driver.runtime.canvases[1], failed)
@@ -599,7 +706,8 @@ describe("Hammerspoon adapter", function()
       { "canvas.level", 2 },
       { "canvas.behavior", 1 },
       { "canvas.mouseCallback", 2 },
-      { "canvas.element", 2 },
+      { "canvas.element", 6 },
+      { "canvas.element", 7 },
       { "canvas.show", 2 },
     }) do
       driver = FakeHs.new()

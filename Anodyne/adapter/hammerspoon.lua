@@ -551,17 +551,51 @@ function Adapter:start()
         owner.compositionCanvas = canvas
         canvas:level(hs.canvas.windowLevels.overlay)
         canvas:mouseCallback(nil)
+        local localGuide = {
+          x = guideFrame.x - fullFrame.x,
+          y = guideFrame.y - fullFrame.y,
+          w = guideFrame.w,
+          h = guideFrame.h,
+        }
+        local function clamp(value, maximum)
+          return math.max(0, math.min(value, maximum))
+        end
+        local left = clamp(localGuide.x, fullFrame.w)
+        local top = clamp(localGuide.y, fullFrame.h)
+        local right = clamp(localGuide.x + localGuide.w, fullFrame.w)
+        local bottom = clamp(localGuide.y + localGuide.h, fullFrame.h)
+        local centerHeight = math.max(0, bottom - top)
+        local dimColor = { red = 0, green = 0, blue = 0, alpha = config.obsCrop.dimAlpha }
         canvas[1] = {
+          type = "rectangle",
+          action = "fill",
+          fillColor = dimColor,
+          frame = { x = 0, y = 0, w = fullFrame.w, h = top },
+        }
+        canvas[2] = {
+          type = "rectangle",
+          action = "fill",
+          fillColor = dimColor,
+          frame = { x = 0, y = bottom, w = fullFrame.w, h = math.max(0, fullFrame.h - bottom) },
+        }
+        canvas[3] = {
+          type = "rectangle",
+          action = "fill",
+          fillColor = dimColor,
+          frame = { x = 0, y = top, w = left, h = centerHeight },
+        }
+        canvas[4] = {
+          type = "rectangle",
+          action = "fill",
+          fillColor = dimColor,
+          frame = { x = right, y = top, w = math.max(0, fullFrame.w - right), h = centerHeight },
+        }
+        canvas[5] = {
           type = "rectangle",
           action = "stroke",
           strokeColor = { red = 1, green = 0.5, blue = 0, alpha = 1 },
           strokeWidth = config.obsCrop.guideStrokeWidth,
-          frame = {
-            x = guideFrame.x - fullFrame.x,
-            y = guideFrame.y - fullFrame.y,
-            w = guideFrame.w,
-            h = guideFrame.h,
-          },
+          frame = localGuide,
         }
         canvas:show()
         local rendered, renderError = compositionStatus(help)

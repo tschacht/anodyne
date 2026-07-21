@@ -316,26 +316,26 @@
     </div>
 
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone 4: Exterior Dimming</h3>
+      <h3><code class="status">[x]</code> Milestone 4: Exterior Dimming</h3>
       <p>Add the requested crop preview only after the underlying interaction is stable. Dimming uses geometry already stored for the full-screen guide canvas and cannot affect crop calculation.</p>
       <p><strong>Validation goal:</strong> visually isolate the guide using an exact four-region mask while preserving a clear center, click-through behavior, and unchanged crop calculations.</p>
 
       <h4><span class="tag packet">WP-06</span> Four-region dim mask</h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> Owner: the WP-05 worker as a sequential follow-up, preventing overlapping edits to the adapter and adapter specs.</li>
-        <li><code class="status">[]</code> Add four translucent rectangle elements—top, bottom, left, and right—around the guide; keep the center entirely transparent and draw the guide border above the masks.</li>
-        <li><code class="status">[]</code> Clamp local element dimensions to nonnegative values and support screens with negative absolute origins.</li>
-        <li><code class="status">[]</code> Source opacity from immutable config and preserve explicit click-through behavior across the full canvas.</li>
-        <li><code class="status">[]</code> Assert exact element frames/order for normal, negative-origin, edge-touching, and fractional guide coordinates.</li>
+        <li><code class="status">[x]</code> Owner: the WP-05 worker as a sequential follow-up, preventing overlapping edits to the adapter and adapter specs.</li>
+        <li><code class="status">[x]</code> Add four translucent rectangle elements—top, bottom, left, and right—around the guide; keep the center entirely transparent and draw the guide border above the masks.</li>
+        <li><code class="status">[x]</code> Clamp local element dimensions to nonnegative values and support screens with negative absolute origins.</li>
+        <li><code class="status">[x]</code> Source opacity from immutable config and preserve explicit click-through behavior across the full canvas.</li>
+        <li><code class="status">[x]</code> Assert exact element frames/order for normal, negative-origin, edge-touching, and fractional guide coordinates.</li>
       </ul>
 
       <h4>4.2 Testing Strategy</h4>
       <p>Offline tests verify the mask partition; native validation verifies the visual and interaction properties that a strict fake cannot render.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>make test-adapter</code> — proves correct dim rectangles, border z-order, and canvas lifecycle.</li>
-        <li><code class="status">[]</code> <code>make test-characterization</code> — proves no resource/regression drift.</li>
-        <li><code class="status">[]</code> Manual Hammerspoon check: confirm only the exterior dims, the guide interior remains visually unchanged, and all clicks/drags pass through.</li>
-        <li><code class="status">[]</code> Manual OBS check: confirm macOS Window Capture contains only the selected app window and does not include the Hammerspoon guide/mask.</li>
+        <li><code class="status">[x]</code> <code>make test-adapter</code> — proves correct dim rectangles, border z-order, and canvas lifecycle.</li>
+        <li><code class="status">[x]</code> <code>make test-characterization</code> — proves no resource/regression drift.</li>
+        <li><code class="status">[x]</code> Manual Hammerspoon check: confirm only the exterior dims, the guide interior remains visually unchanged, and all clicks/drags pass through.</li>
+        <li><code class="status">[x]</code> Manual OBS check: confirm macOS Window Capture contains only the selected app window and does not include the Hammerspoon guide/mask.</li>
       </ul>
       <div class="loop">🔁 <strong>Do not exit this milestone until the dim mask is both geometrically exact and natively click-through.</strong></div>
     </div>
