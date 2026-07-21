@@ -183,7 +183,14 @@ function View:modalLines(state, currentSize, status)
   local screen = state.screen or "home"
   local lines = { (self.metadata.screenTitles[screen] or "Window mode") .. ":", self:sizeLine(currentSize), "" }
   if screen == "home" then
-    lines[#lines + 1] = "Choose a mode with A, W, H, M, or R"
+    lines[#lines + 1] = "Choose a mode with E, A, W, H, M, or R"
+  elseif screen == "exact" then
+    for index, preset in ipairs(self.config.exactPresets) do
+      lines[#lines + 1] = string.format("%d = %d x %d px", index, preset.width, preset.height)
+    end
+    if #self.config.exactPresets == 0 then
+      lines[#lines + 1] = ""
+    end
   elseif screen == "aspect" then
     for index, preset in ipairs(self.config.aspectPresets) do
       lines[#lines + 1] = string.format("%d = %s", index, preset.label)
@@ -261,8 +268,15 @@ function View:menuItems(state, sessionScreenChanged)
     { title = "Undo Last Action [U]", intent = { type = "action", action = "undo" } },
     { title = resetTitle, disabled = not resetAvailable, intent = { type = "action", action = "reset" } },
     { title = "-" },
-    { title = string.format("Aspect [A then 1-%d]", #self.config.aspectPresets), disabled = true },
+    { title = string.format("Exact pixels [E then 1-%d]", #self.config.exactPresets), disabled = true },
   }
+  for index, preset in ipairs(self.config.exactPresets) do
+    items[#items + 1] = {
+      title = string.format("%d x %d px [E %d]", preset.width, preset.height, index),
+      intent = { type = "action", action = "exact", value = preset },
+    }
+  end
+  append(items, { { title = "-" }, { title = string.format("Aspect [A then 1-%d]", #self.config.aspectPresets), disabled = true } })
   for index, preset in ipairs(self.config.aspectPresets) do
     items[#items + 1] = { title = string.format("%s [A %d]", preset.label, index), intent = { type = "action", action = "aspect", value = preset } }
   end

@@ -121,6 +121,77 @@ describe("Milestone 5 transactional window actions", function()
     assert.are.equal(1401, entries[1][1].after.w)
   end)
 
+  it("applies exact-pixel presets without screen clamping and records undo history", function()
+    assert.same({ true, nil, "Exact pixels 2560 x 1440 (2560 x 1440)" }, { actions:applyExactPreset({ width = 2560, height = 1440 }) })
+    assert.same(frame(100, 100, 2560, 1440), window:frame())
+    assert.same(frame(100, 100, 800, 600), entries[1][1].before)
+    assert.same(frame(100, 100, 2560, 1440), entries[1][1].after)
+    assert.same({ true, nil, "Undid last action (800 x 600)" }, { actions:undoLastFrame() })
+  end)
+
+  it("reports exact-pixel no-ops and transactionally rolls back coerced writes", function()
+    driver:setWindowFrame(window, frame(100, 100, 2560, 1440))
+    assert.same({ true, nil, "No change — Exact pixels 2560 x 1440 (2560 x 1440)" }, { actions:applyExactPreset({ width = 2560, height = 1440 }) })
+    driver:setWindowFrame(window, frame(100, 100, 800, 600))
+    driver:setFault(window, "coerceWrite", 1)
+    assert.same({ false, "The window could not restore the exact-pixels preset exactly" }, { actions:applyExactPreset({ width = 2560, height = 1440 }) })
+    assert.same(frame(100, 100, 800, 600), window:frame())
+    assert.is_nil(entries[1])
+  end)
+
+  it("requires literal equality for every exact-pixel frame field", function()
+    local fields = { "x", "y", "w", "h" }
+    for _, field in ipairs(fields) do
+      driver:setWindowFrame(window, frame(100, 100, 800, 600))
+      driver:clearFaults(window)
+      driver:setFault(window, "coerceWrite")
+      driver:setFault(window, "coerceField", field)
+      driver:setFault(window, "coerceBy", 0.4)
+      assert.same(
+        { false, "The window could not restore the exact-pixels preset exactly" },
+        { actions:applyExactPreset({ width = 2560, height = 1440 }) },
+        field
+      )
+      assert.same(frame(100, 100, 800, 600), window:frame(), field)
+    end
+
+    driver:setWindowFrame(window, frame(100, 100, 2559.6, 1440))
+    driver:clearFaults(window)
+    assert.same({ true, nil, "Exact pixels 2560 x 1440 (2560 x 1440)" }, { actions:applyExactPreset({ width = 2560, height = 1440 }) })
+    assert.same(frame(100, 100, 2560, 1440), window:frame())
+  end)
+
+  it("rejects unavailable exact-pixel frame reads before mutation", function()
+    for _, fault in ipairs({ "readThrows", "invalidFrame" }) do
+      driver:clearFaults(window)
+      driver:setFault(window, fault)
+      assert.same({ false, "The target window is no longer available" }, { actions:applyExactPreset({ width = 2560, height = 1440 }) })
+      assert.same(frame(100, 100, 800, 600), window._state.frame)
+      assert.is_nil(entries[1])
+    end
+  end)
+
+  it("rolls back a one-shot exact readback failure and retains prior history", function()
+    assert.is_true(actions:applyWidthPreset(900))
+    driver:setFault(window, "readThrowsAfterFirstSet")
+    assert.same({ false, "The window frame could not be verified" }, { actions:applyExactPreset({ width = 2560, height = 1440 }) })
+    assert.same(frame(100, 100, 900, 600), window:frame())
+    assert.is_not_nil(entries[1])
+    driver:clearFaults(window)
+    assert.is_true(actions:undoLastFrame())
+    assert.same(frame(100, 100, 800, 600), window:frame())
+  end)
+
+  it("invalidates history when an exact readback failure cannot be verified after rollback", function()
+    assert.is_true(actions:applyWidthPreset(900))
+    driver:setFault(window, "readThrowsAfterSet")
+    assert.same(
+      { false, "The window changed but could not restore the exact-pixels preset exactly" },
+      { actions:applyExactPreset({ width = 2560, height = 1440 }) }
+    )
+    assert.is_nil(entries[1])
+  end)
+
   it("does not record no-op, ignored, rejected-id, or thrown writes", function()
     assert.same({ true, nil, "No change — Width 800 px (800 x 600)" }, { actions:applyWidthPreset(800) })
     driver:setFault(window, "ignoreWrite")
@@ -235,7 +306,7 @@ describe("Milestone 5 transactional window actions", function()
     assert.same({ false, "The previous window position is no longer available" }, { actions:undoLastFrame() })
     entries[1] = { { before = frame(1, 1, 700, 500), after = window:frame(), beforeScreen = snapshot } }
     driver:setFault(window, "readThrowsAfterSet")
-    assert.same({ false, "The window frame could not be verified" }, { actions:undoLastFrame() })
+    assert.same({ false, "The window changed but could not restore the previous frame exactly" }, { actions:undoLastFrame() })
     assert.is_nil(entries[1])
   end)
 

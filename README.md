@@ -17,6 +17,7 @@ Only one mode can be active. Entering one cleanly exits or cancels the other.
 
 While Window Mode is open:
 
+- `E`, then a number, applies an exact width-and-height preset. Exact presets are not clamped to the usable screen and may extend off-screen.
 - `A` selects an aspect-ratio preset.
 - `W` or `H` selects an exact width or height preset.
 - `M` opens movement and screen-position actions.
@@ -26,6 +27,16 @@ While Window Mode is open:
 - `delete` returns to the previous screen; `escape` exits.
 
 The `WI` menu-bar item exposes the same actions and a separate Composition Mode entry. Defaults, including presets, minimum dimensions, step sizes, shortcuts, undo depth, and modal duration, are defined in `Anodyne/config.lua`.
+
+Exact-pixel presets are configured as an ordered list of one to nine entries, matching the modal's single-digit selection keys. The default provides one `2560 x 1440` entry:
+
+```lua
+exactPresets = {
+  { width = 2560, height = 1440 },
+}
+```
+
+These values are applied directly as macOS/Hammerspoon window-frame dimensions without display-scale conversion. They are intended to match the logical source dimensions used by OBS macOS Screen Capture in Window Capture mode: under that OBS behavior, a `2560 x 1440` preset is expected to produce a `2560 x 1440` source at either scale 1 or scale 2, even though the Retina backing surface may contain more physical pixels. The target application must accept the complete requested frame exactly; otherwise Anodyne restores the prior frame and reports a failure. OBS behavior and its canvas, scene-transform, and output scaling remain external to Anodyne and outside this test suite.
 
 ## Composition Mode and OBS
 

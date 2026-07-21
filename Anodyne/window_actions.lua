@@ -5,6 +5,10 @@ local function failure(message)
   return false, message
 end
 
+local function framesExactlyEqual(first, second)
+  return first.x == second.x and first.y == second.y and first.w == second.w and first.h == second.h
+end
+
 function WindowActions.new(options)
   return setmetatable(options, WindowActions)
 end
@@ -113,19 +117,27 @@ function WindowActions:setFrameAndRead(window, frame)
   return self.geometry.copyFrame(actualFrame), nil, false
 end
 
-function WindowActions:setFrameExactly(window, targetFrame, currentFrame, description)
+function WindowActions:setFrameExactly(window, targetFrame, currentFrame, description, framesEqual)
+  framesEqual = framesEqual or self.geometry.framesEqual
   local actualFrame, message, invalidated = self:setFrameAndRead(window, targetFrame)
   if not actualFrame then
+    if invalidated then
+      local rollbackFrame = self:setFrameAndRead(window, currentFrame)
+      if not rollbackFrame or not framesEqual(rollbackFrame, currentFrame) then
+        return nil, "The window changed but could not restore " .. description .. " exactly", true
+      end
+      return nil, message, false
+    end
     return nil, message, invalidated
   end
-  if self.geometry.framesEqual(currentFrame, actualFrame) then
+  if framesEqual(currentFrame, actualFrame) then
     return nil, "The window did not accept " .. description, false
   end
-  if self.geometry.framesEqual(actualFrame, targetFrame) then
+  if framesEqual(actualFrame, targetFrame) then
     return actualFrame, nil, false
   end
   local rollbackFrame = self:setFrameAndRead(window, currentFrame)
-  if not rollbackFrame or not self.geometry.framesEqual(rollbackFrame, currentFrame) then
+  if not rollbackFrame or not framesEqual(rollbackFrame, currentFrame) then
     return nil, "The window changed but could not restore " .. description .. " exactly", true
   end
   return nil, "The window could not restore " .. description .. " exactly", false
@@ -161,11 +173,13 @@ function WindowActions:applyFrame(window, frame, label, options)
       self.geometry.clampFrameToScreen(frame, screenFrame, self.config.minimumWidth, self.config.minimumHeight, options and options.allowBelowMinimum)
   end
 
+  local framesEqual = (options and options.framesEqual) or self.geometry.framesEqual
   local actualFrame, changed = currentFrame, false
-  if not self.geometry.framesEqual(currentFrame, targetFrame) then
+  if not framesEqual(currentFrame, targetFrame) then
     local message, invalidated
     if options and options.requireExact then
-      actualFrame, message, invalidated = self:setFrameExactly(window, targetFrame, currentFrame, options.frameDescription or "the requested frame")
+      actualFrame, message, invalidated =
+        self:setFrameExactly(window, targetFrame, currentFrame, options.frameDescription or "the requested frame", framesEqual)
     else
       actualFrame, message, invalidated = self:setFrameAndRead(window, targetFrame)
     end
@@ -175,7 +189,7 @@ function WindowActions:applyFrame(window, frame, label, options)
     if not actualFrame then
       return failure(message)
     end
-    if self.geometry.framesEqual(currentFrame, actualFrame) then
+    if framesEqual(currentFrame, actualFrame) then
       return failure("The window did not accept that change")
     end
     self.history:record(windowId, currentFrame, actualFrame, currentScreen)
@@ -251,6 +265,25 @@ function WindowActions:undoLastFrame()
   end
   self.history:acceptRestore(windowId, actualFrame)
   return true, nil, string.format("Undid last action (%d x %d)", self.geometry.round(actualFrame.w), self.geometry.round(actualFrame.h))
+end
+
+function WindowActions:applyExactPreset(preset)
+  local window, message = self:getFocusedWindow()
+  if not window then
+    return failure(message)
+  end
+  local frameOk, currentFrame = pcall(self.ports.windowFrame, window)
+  if not frameOk or not currentFrame then
+    return failure("The target window is no longer available")
+  end
+  local target = { x = currentFrame.x, y = currentFrame.y, w = preset.width, h = preset.height }
+  return self:applyFrame(window, target, string.format("Exact pixels %d x %d", preset.width, preset.height), {
+    showSize = true,
+    clampToScreen = false,
+    requireExact = true,
+    frameDescription = "the exact-pixels preset",
+    framesEqual = framesExactlyEqual,
+  })
 end
 
 function WindowActions:applyAspectPreset(preset)

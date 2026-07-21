@@ -24,6 +24,9 @@ describe("configuration", function()
       modalHotkey = { modifiers = { "ctrl", "alt", "cmd" }, key = "m" },
       compositionHotkey = { modifiers = { "ctrl", "alt", "cmd" }, key = "c" },
       obsCrop = { scaleOverride = 0, resultDuration = 4, dimAlpha = 0.45, guideStrokeWidth = 1 },
+      exactPresets = {
+        { width = 2560, height = 1440 },
+      },
       aspectPresets = {
         { label = "16:9", width = 16, height = 9 },
         { label = "4:3", width = 4, height = 3 },
@@ -42,10 +45,16 @@ describe("configuration", function()
   end)
 
   it("deep-merges maps and replaces lists", function()
-    local config = Config.build({ symbols = { left = "L" }, modalHotkey = { modifiers = { "alt" } }, widthPresets = { 111, 222 } })
+    local config = Config.build({
+      symbols = { left = "L" },
+      modalHotkey = { modifiers = { "alt" } },
+      exactPresets = { { width = 1920, height = 1080 }, { width = 1280, height = 720 } },
+      widthPresets = { 111, 222 },
+    })
     assert.are.equal("L", config.symbols.left)
     assert.are.equal("↑", config.symbols.up)
     assert.same({ "alt" }, plain(config.modalHotkey.modifiers))
+    assert.same({ { width = 1920, height = 1080 }, { width = 1280, height = 720 } }, plain(config.exactPresets))
     assert.same({ 111, 222 }, plain(config.widthPresets))
   end)
 
@@ -73,6 +82,9 @@ describe("configuration", function()
     end, "configuration is immutable")
     assert.has_error(function()
       config.aspectPresets[1].label = "X"
+    end, "configuration is immutable")
+    assert.has_error(function()
+      config.exactPresets[1].width = 1
     end, "configuration is immutable")
     assert.has_error(function()
       config.obsCrop.dimAlpha = 1
@@ -104,6 +116,9 @@ describe("configuration", function()
     assert.has_error(function()
       Config.build({ widthPresets = { "bad" } })
     end, "invalid config type for widthPresets[1]: expected number")
+    assert.has_error(function()
+      Config.build({ exactPresets = { "bad" } })
+    end, "invalid config type for exactPresets[1]: expected table")
   end)
 
   it("rejects malformed sparse lists", function()
@@ -134,6 +149,33 @@ describe("configuration", function()
     assert.has_error(function()
       Config.build({ aspectPresets = { { label = "square", width = 1, height = 1, extra = 2 } } })
     end, "unknown config key: aspectPresets[1].extra")
+  end)
+
+  it("requires finite positive integer exact-pixel dimensions", function()
+    for _, value in ipairs({ 0, -1, 1.5, math.huge, 1e20, 0 / 0 }) do
+      assert.has_error(function()
+        Config.build({ exactPresets = { { width = value, height = 1080 } } })
+      end, "CONFIG.exactPresets[1].width must be a positive integer")
+      assert.has_error(function()
+        Config.build({ exactPresets = { { width = 1920, height = value } } })
+      end, "CONFIG.exactPresets[1].height must be a positive integer")
+    end
+    assert.has_error(function()
+      Config.build({ exactPresets = { { width = 1920 } } })
+    end, "CONFIG.exactPresets[1].height must be a positive integer")
+    assert.has_error(function()
+      Config.build({ exactPresets = { { width = 1920, height = 1080, depth = 32 } } })
+    end, "unknown config key: exactPresets[1].depth")
+    assert.has_error(function()
+      Config.build({ exactPresets = {} })
+    end, "CONFIG.exactPresets must contain between 1 and 9 presets")
+    local ten = {}
+    for index = 1, 10 do
+      ten[index] = { width = index, height = index }
+    end
+    assert.has_error(function()
+      Config.build({ exactPresets = ten })
+    end, "CONFIG.exactPresets must contain between 1 and 9 presets")
   end)
 
   it("rejects invalid undo depths", function()
@@ -200,6 +242,7 @@ describe("configuration", function()
     assert.are.equal("S + L", metadata.cornerActions[1].shortcut)
     assert.are.equal(25, metadata.resizeActions[1].deltaWidth)
     assert.are.equal(-25, metadata.resizeActions[3].deltaWidth)
+    assert.same({ key = "e", screen = "exact", label = "Exact pixels" }, plain(metadata.modeSelectors[1]))
   end)
 
   it("returns fresh immutable derived metadata per instance", function()

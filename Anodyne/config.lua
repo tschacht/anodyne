@@ -27,6 +27,9 @@ local DEFAULTS = {
     dimAlpha = 0.45,
     guideStrokeWidth = 1,
   },
+  exactPresets = {
+    { width = 2560, height = 1440 },
+  },
   aspectPresets = {
     { label = "16:9", width = 16, height = 9 },
     { label = "4:3", width = 4, height = 3 },
@@ -131,6 +134,7 @@ end
 
 local function metadata(config)
   local modes = {
+    { key = "e", screen = "exact", label = "Exact pixels" },
     { key = "a", screen = "aspect", label = "Aspect" },
     { key = "w", screen = "width", label = "Width" },
     { key = "h", screen = "height", label = "Height" },
@@ -184,6 +188,7 @@ local function metadata(config)
     resizeActions = resizeActions,
     screenTitles = {
       home = "Window mode",
+      exact = "Exact pixels",
       aspect = "Aspect preset",
       width = "Width preset",
       height = "Height preset",
@@ -199,6 +204,17 @@ function Config.build(overrides)
     error("config overrides must be a table", 2)
   end
   local values = merge(DEFAULTS, overrides, "")
+  if #values.exactPresets < 1 or #values.exactPresets > 9 then
+    error("CONFIG.exactPresets must contain between 1 and 9 presets", 2)
+  end
+  for index, preset in ipairs(values.exactPresets) do
+    for _, dimension in ipairs({ "width", "height" }) do
+      local value = preset[dimension]
+      if type(value) ~= "number" or value < 1 or value > math.maxinteger or value ~= value or value ~= math.floor(value) then
+        error(string.format("CONFIG.exactPresets[%d].%s must be a positive integer", index, dimension), 2)
+      end
+    end
+  end
   if values.undoDepth < 1 or values.undoDepth ~= math.floor(values.undoDepth) then
     error("CONFIG.undoDepth must be a positive integer", 2)
   end

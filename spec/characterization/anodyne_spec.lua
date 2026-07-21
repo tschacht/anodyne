@@ -17,6 +17,7 @@ end
 local modalNavigation = {
   "",
   "Modes:",
+  "E = Exact pixels",
   "A = Aspect",
   "W = Width",
   "H = Height",
@@ -330,6 +331,19 @@ describe("Milestone 2 characterization", function()
   end)
 
   describe("A-FRAME-01 geometry", function()
+    it("applies an unscaled exact-pixel preset at scale 2 beyond usable screen bounds and supports undo", function()
+      driver:setScreenScale(screen, 2)
+      driver:triggerEntry()
+      driver:key("e")
+      assert.matches("^Exact pixels:", driver:lastMessage())
+      driver:key("1")
+      driver:advance(0.05)
+      assertFrame(frame(100, 100, 2560, 1440), window:frame())
+      driver:key("u")
+      driver:advance(0.05)
+      assertFrame(frame(100, 100, 800, 600), window:frame())
+    end)
+
     it("clamps a width preset and position to usable bounds", function()
       driver:setScreenFrame(screen, frame(10, 20, 1000, 700))
       driver:setWindowFrame(window, frame(900, 600, 800, 600))
@@ -654,7 +668,7 @@ describe("Milestone 2 characterization", function()
       assert.same({ 10, 11, 12 }, driver.runtime.taps[1]._state.events)
     end)
 
-    it("constructs all 54 menu items with frozen strings and order", function()
+    it("constructs all 57 menu items with frozen strings and order", function()
       local items = driver:menuItems()
       local titles = {}
       for _, item in ipairs(items) do
@@ -662,10 +676,13 @@ describe("Milestone 2 characterization", function()
       end
       assert.same({
         "Keyboard Mode: ctrl+alt+cmd+M",
-        "Modes: A Aspect · W Width · H Height · M Move · R Resize",
+        "Modes: E Exact pixels · A Aspect · W Width · H Height · M Move · R Resize",
         "Navigation: ⌫ = back/home · Esc = exit",
         "Undo Last Action [U]",
         "Reset Session [Shift+U]",
+        "-",
+        "Exact pixels [E then 1-1]",
+        "2560 x 1440 px [E 1]",
         "-",
         "Aspect [A then 1-5]",
         "16:9 [A 1]",
@@ -752,9 +769,10 @@ describe("Milestone 2 characterization", function()
           "Window mode:",
           "Current: 800 x 600",
           "",
-          "Choose a mode with A, W, H, M, or R",
+          "Choose a mode with E, A, W, H, M, or R",
           "",
           "Modes:",
+          "E = Exact pixels",
           "A = Aspect",
           "W = Width",
           "H = Height",
@@ -766,6 +784,17 @@ describe("Milestone 2 characterization", function()
         }, "\n"),
         driver:lastMessage()
       )
+    end)
+
+    it("renders the exact Exact pixels body", function()
+      driver:triggerEntry()
+      driver:key("e")
+      assertModal(driver, {
+        "Exact pixels:",
+        "Current: 800 x 600",
+        "",
+        "1 = 2560 x 1440 px",
+      })
     end)
 
     it("renders the exact Aspect body", function()

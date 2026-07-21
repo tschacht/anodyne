@@ -9,7 +9,7 @@ describe("Anodyne view", function()
     view = View.new(config, metadata)
   end)
 
-  it("preserves all 52 exact ordered Window Mode menu titles and adds Composition Mode", function()
+  it("preserves exact ordered Window Mode menu titles and adds Composition Mode", function()
     local items = view:menuItems({ active = false }, false)
     local titles = {}
     for _, item in ipairs(items) do
@@ -17,10 +17,13 @@ describe("Anodyne view", function()
     end
     assert.same({
       "Keyboard Mode: ctrl+alt+cmd+M",
-      "Modes: A Aspect · W Width · H Height · M Move · R Resize",
+      "Modes: E Exact pixels · A Aspect · W Width · H Height · M Move · R Resize",
       "Navigation: ⌫ = back/home · Esc = exit",
       "Undo Last Action [U]",
       "Reset Session [Shift+U]",
+      "-",
+      "Exact pixels [E then 1-1]",
+      "2560 x 1440 px [E 1]",
       "-",
       "Aspect [A then 1-5]",
       "16:9 [A 1]",
@@ -72,14 +75,16 @@ describe("Anodyne view", function()
       "Composition Mode: ctrl+alt+cmd+C",
     }, titles)
     assert.same({ type = "action", action = "undo" }, items[4].intent)
-    assert.same({ type = "action", action = "width", value = 1000 }, items[15].intent)
+    assert.same({ type = "action", action = "exact", value = config.exactPresets[1] }, items[8].intent)
+    assert.same({ type = "action", action = "width", value = 1000 }, items[18].intent)
     assert.is_true(items[5].disabled)
-    assert.same({ type = "composition", action = "enter" }, items[54].intent)
+    assert.same({ type = "composition", action = "enter" }, items[57].intent)
   end)
 
   it("renders exact bodies for every screen", function()
     local expectedBodies = {
-      home = { "Choose a mode with A, W, H, M, or R" },
+      home = { "Choose a mode with E, A, W, H, M, or R" },
+      exact = { "1 = 2560 x 1440 px" },
       aspect = { "1 = 16:9", "2 = 4:3", "3 = 3:2", "4 = 2:1", "5 = 3:1" },
       width = { "1 = 1000 px", "2 = 1200 px", "3 = 1400 px", "4 = 1600 px", "5 = 1800 px", "6 = 2000 px", "7 = 2200 px", "8 = 2400 px" },
       height = { "1 = 600 px", "2 = 700 px", "3 = 800 px", "4 = 1000 px", "5 = 1200 px", "6 = 1400 px", "7 = 1500 px", "8 = 1600 px" },
@@ -110,6 +115,21 @@ describe("Anodyne view", function()
       end
       assert.matches("Navigation: ⌫ = back/home · Esc = exit$", table.concat(lines, "\n"))
     end
+  end)
+
+  it("renders and routes multiple configured exact-pixel presets in order", function()
+    local customConfig, customMetadata = Config.build({
+      exactPresets = { { width = 3840, height = 2160 }, { width = 1920, height = 1080 } },
+    })
+    local customView = View.new(customConfig, customMetadata)
+    local lines = customView:modalLines({ screen = "exact" }, { width = 800, height = 600 })
+    assert.same({ "1 = 3840 x 2160 px", "2 = 1920 x 1080 px" }, { lines[4], lines[5] })
+    local items = customView:menuItems({ active = false }, false)
+    assert.are.equal("Exact pixels [E then 1-2]", items[7].title)
+    assert.are.equal("3840 x 2160 px [E 1]", items[8].title)
+    assert.are.equal("1920 x 1080 px [E 2]", items[9].title)
+    assert.are.equal(3840, items[8].intent.value.width)
+    assert.are.equal(1920, items[9].intent.value.width)
   end)
 
   it("renders status, missing size, and unknown mode fallback", function()

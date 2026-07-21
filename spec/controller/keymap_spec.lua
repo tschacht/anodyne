@@ -19,6 +19,7 @@ describe("Anodyne keymap", function()
     assert.same({ type = "exit" }, intent("move", "escape"))
     assert.same({ type = "action", action = "undo" }, intent("resize", "u"))
     assert.same({ type = "action", action = "reset" }, intent("resize", "u", { shift = true }))
+    assert.same({ type = "transition", screen = "exact" }, intent("move", "e"))
     assert.same({ type = "transition", screen = "aspect" }, intent("move", "a"))
     assert.same({ type = "transition", screen = "width" }, intent("home", "w"))
     assert.same({ type = "transition", screen = "height" }, intent("home", "h"))
@@ -69,7 +70,7 @@ describe("Anodyne keymap", function()
   end)
 
   it("uses exact unavailable intents for modified global keys, selectors, delete, and numbers", function()
-    local keys = { "escape", "u", "a", "w", "h", "m", "r", "delete", "1" }
+    local keys = { "escape", "u", "e", "a", "w", "h", "m", "r", "delete", "1" }
     local modifiers = { { shift = true }, { cmd = true }, { alt = true }, { ctrl = true }, { shift = true, cmd = true }, { fn = true } }
     for _, key in ipairs(keys) do
       for _, flags in ipairs(modifiers) do

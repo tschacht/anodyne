@@ -187,15 +187,19 @@ describe("Milestone 3 facade", function()
   it("deep-merges maps, replaces lists, does not alias, and freezes config", function()
     local override = {
       symbols = { left = "L" },
+      exactPresets = { { width = 1920, height = 1080 }, { width = 1280, height = 720 } },
       widthPresets = { 1111, 1222 },
       modalHotkey = { modifiers = { "alt" } },
     }
     local first = Anodyne.new({ hs = driver.hs, config = override, modules = { runtimeFactory = function() end } })
     local second = Anodyne.new({ hs = driver.hs })
     override.symbols.left = "changed"
+    override.exactPresets[1].width = 9
     override.widthPresets[1] = 9
     assert.are.equal("L", first.config.symbols.left)
     assert.are.equal("↑", first.config.symbols.up)
+    assert.same({ 1920, 1280 }, { first.config.exactPresets[1].width, first.config.exactPresets[2].width })
+    assert.are.equal(2560, second.config.exactPresets[1].width)
     assert.same({ 1111, 1222 }, { first.config.widthPresets[1], first.config.widthPresets[2] })
     assert.are.equal(1000, second.config.widthPresets[1])
     assert.has_error(function()
@@ -203,6 +207,9 @@ describe("Milestone 3 facade", function()
     end, "configuration is immutable")
     assert.has_error(function()
       first.config.symbols.left = "bad"
+    end, "configuration is immutable")
+    assert.has_error(function()
+      first.config.exactPresets[1].width = 1
     end, "configuration is immutable")
     assert.has_error(function()
       Anodyne.new({ hs = driver.hs, config = { unknown = true } })

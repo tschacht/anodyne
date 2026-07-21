@@ -85,6 +85,8 @@ function Controller:perform(intent)
     return self.actions:undoLastFrame()
   elseif action == "reset" then
     return self.actions:resetSessionFrame()
+  elseif action == "exact" then
+    return self.actions:applyExactPreset(intent.value)
   elseif action == "aspect" then
     return self.actions:applyAspectPreset(intent.value)
   elseif action == "width" then
@@ -111,7 +113,8 @@ function Controller:dispatch(intent)
     self:render(intent.status)
   elseif intent.type == "preset" then
     local screen = self.state.screen
-    local values = screen == "aspect" and self.config.aspectPresets
+    local values = screen == "exact" and self.config.exactPresets
+      or screen == "aspect" and self.config.aspectPresets
       or screen == "width" and self.config.widthPresets
       or screen == "height" and self.config.heightPresets
     if not values then
@@ -119,8 +122,7 @@ function Controller:dispatch(intent)
     elseif not values[intent.index] then
       self:render({ kind = "missing-preset", screen = screen, index = intent.index })
     else
-      local action = screen == "aspect" and "aspect" or screen
-      local success, failureMessage, successMessage = self:perform({ type = "action", action = action, value = values[intent.index] })
+      local success, failureMessage, successMessage = self:perform({ type = "action", action = screen, value = values[intent.index] })
       self:completeAction(success, failureMessage, successMessage)
     end
   elseif intent.type == "action" then

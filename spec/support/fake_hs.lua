@@ -211,7 +211,11 @@ function Fake.new(options)
   function windowMethods:frame(...)
     noExtra("window:frame", ...)
     live(self._state, "window")
-    if self._state.faults.readThrows or (self._state.faults.readThrowsAfterSet and self._state.writeCount > 0) then
+    if
+      self._state.faults.readThrows
+      or (self._state.faults.readThrowsAfterSet and self._state.writeCount > 0)
+      or (self._state.faults.readThrowsAfterFirstSet and self._state.writeCount == 1)
+    then
       error("injected frame readback failure")
     end
     if self._state.faults.invalidFrame then
@@ -241,7 +245,8 @@ function Fake.new(options)
       return self
     end
     if faults.coerceWrite and self._state.writeCount == 1 then
-      frame.w = frame.w + (faults.coerceBy or 1)
+      local field = faults.coerceField or "w"
+      frame[field] = frame[field] + (faults.coerceBy or 1)
     end
     if faults.stickyEdgeWrite and not usesWorkarounds and self._state.writeCount == 1 then
       local acceptedDelta = faults.stickyEdgeWrite == true and 2 or faults.stickyEdgeWrite
@@ -720,7 +725,7 @@ function Fake.new(options)
     return result
   end
 
-  local keyNames = { "a", "w", "h", "m", "r", "u", "escape", "delete", "left", "right", "up", "down", "c", "b", "g", "s" }
+  local keyNames = { "e", "a", "w", "h", "m", "r", "u", "escape", "delete", "left", "right", "up", "down", "c", "b", "g", "s" }
   for number = 0, 9 do
     table.insert(keyNames, tostring(number))
   end
@@ -769,7 +774,7 @@ function Fake.new(options)
   end
   function driver:setFault(object, name, value)
     object._state.faults[name] = value == nil and true or value
-    if name == "coerceWrite" or name == "stickyEdgeWrite" or name == "rollbackFails" or name == "readThrowsAfterSet" then
+    if name == "coerceWrite" or name == "stickyEdgeWrite" or name == "rollbackFails" or name == "readThrowsAfterSet" or name == "readThrowsAfterFirstSet" then
       object._state.writeCount = 0
     end
   end

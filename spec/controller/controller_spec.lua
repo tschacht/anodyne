@@ -7,7 +7,7 @@ describe("Anodyne controller", function()
   local controller, owner, state, actions, ports, timers, log, current
 
   before_each(function()
-    local config, metadata = Config.build()
+    local config, metadata = Config.build({ exactPresets = { { width = 2560, height = 1440 }, { width = 1920, height = 1080 } } })
     owner = {}
     state = { active = false, screen = "home" }
     timers = {}
@@ -29,6 +29,7 @@ describe("Anodyne controller", function()
     for _, name in ipairs({
       "undoLastFrame",
       "resetSessionFrame",
+      "applyExactPreset",
       "applyAspectPreset",
       "applyWidthPreset",
       "applyHeightPreset",
@@ -126,6 +127,8 @@ describe("Anodyne controller", function()
     assert.are.equal(renders, #log.renders)
     assert.is_true(controller:handleEvent("keyDown", "a", {}))
     assert.are.equal("aspect", state.screen)
+    assert.is_true(controller:handleEvent("keyDown", "e", {}))
+    assert.are.equal("exact", state.screen)
     current = false
     assert.is_false(controller:handleEvent("keyDown", "w", {}))
   end)
@@ -135,6 +138,7 @@ describe("Anodyne controller", function()
     controller:dispatch({ type = "preset", index = 1 })
     assert.matches("Number keys are not available", log.renders[#log.renders])
     for _, expected in ipairs({
+      { "exact", "applyExactPreset", 3, "No exact pixels preset 3" },
       { "aspect", "applyAspectPreset", 6, "No aspect preset preset 6" },
       { "width", "applyWidthPreset", 9, "No width preset preset 9" },
       { "height", "applyHeightPreset", 9, "No height preset preset 9" },
@@ -145,6 +149,9 @@ describe("Anodyne controller", function()
       controller:dispatch({ type = "preset", index = 1 })
       assert.are.equal(expected[2], log.calls[#log.calls][1])
     end
+    controller:transition("exact")
+    controller:dispatch({ type = "preset", index = 2 })
+    assert.same({ "applyExactPreset", { width = 1920, height = 1080 } }, log.calls[#log.calls])
     controller:dispatch({ type = "status", status = "hello" })
     assert.matches("Status: hello", log.renders[#log.renders])
     controller:dispatch({ type = "transition", screen = "bogus" })
@@ -157,6 +164,7 @@ describe("Anodyne controller", function()
     local intents = {
       { action = "undo" },
       { action = "reset" },
+      { action = "exact", value = {} },
       { action = "aspect", value = {} },
       { action = "width", value = 1 },
       { action = "height", value = 2 },
@@ -169,8 +177,8 @@ describe("Anodyne controller", function()
       intent.type = "action"
       assert.is_true(controller:perform(intent))
     end
-    assert.are.equal("Shrink to previous 50 px", log.calls[8][4])
-    assert.are.equal("Grow to next 50 px", log.calls[9][4])
+    assert.are.equal("Shrink to previous 50 px", log.calls[9][4])
+    assert.are.equal("Grow to next 50 px", log.calls[10][4])
     local ok, message = controller:perform({ action = "bogus" })
     assert.is_false(ok)
     assert.same({ kind = "unknown-action", action = "bogus" }, message)
