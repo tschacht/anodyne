@@ -133,8 +133,8 @@ function View:compositionHelpText(baseline, status, source)
   return table.concat(lines, "\n")
 end
 
-function View:cropClipboardText(result)
-  return string.format(
+function View:cropClipboardText(result, source)
+  local body = string.format(
     "Left: %d, Top: %d, Right: %d, Bottom: %d | Result: %d x %d | Scale: %s",
     result.left,
     result.top,
@@ -144,11 +144,20 @@ function View:cropClipboardText(result)
     result.resultHeight,
     tostring(result.scale)
   )
+  if source == nil then
+    return body
+  end
+  local label = captureSourceLabels[source]
+  return label and label .. " | " .. body or nil
 end
 
 function View:cropResultText(result, source)
   local text = self:cropClipboardText(result)
-  return source == nil and text or self:captureSourceLabel(source) .. "\n" .. text
+  if source == nil then
+    return text
+  end
+  local label = captureSourceLabels[source]
+  return label and label .. "\n" .. text or nil
 end
 
 function View:resizeLabel(action)

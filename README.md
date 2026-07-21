@@ -31,17 +31,30 @@ The `WI` menu-bar item exposes the same actions and a separate Composition Mode 
 
 Any positive-size current window frame is a valid Composition Mode baseline; its size and aspect ratio are copied verbatim. Entering Composition Mode never moves or resizes the window and never forces 16:9. If 16:9 is useful, optionally apply Window Mode's existing 16:9 preset first, exit Window Mode, and then enter Composition Mode.
 
-Press `ctrl+alt+cmd+C` with the target window focused. Anodyne locks that window's current frame in absolute screen coordinates, draws a click-through guide with a 1-point border, dims only the area outside the guide, and keeps a click-through Window-Mode-style help/status modal visible for the entire session. Manually enlarge and reposition the same window so it contains the locked guide, then press `Return` to Finish/Copy. The guide closes and the status modal shows the result for `obsCrop.resultDuration` (4 seconds by default). Pressing `Esc` while the guide is active cancels without copying; pressing it during the result linger dismisses the result early and never clears the clipboard.
+Press `ctrl+alt+cmd+C` with the target window focused. Anodyne locks that window's current frame in absolute screen coordinates, draws a click-through guide with a 1-point border, dims only the area outside the guide, and keeps a click-through Window-Mode-style help/status modal visible for the entire session. Every session defaults to Screen Capture. While the guide is active, unmodified lowercase `s` directly selects Screen Capture and `w` directly selects Window Capture; repeating either key is an idempotent no-op. The modal always shows `Selected source: Screen Capture` or `Selected source: Window Capture`, and switching sources neither moves nor recreates the guide.
 
-The clipboard contains exactly one line in this field order and format:
+Screen Capture crops are the four fixed distances from the frozen starting screen edges to the locked guide. Moving or resizing the pinned window changes the content underneath that fixed guide, but does not change the Screen Capture crop values. Window Capture is dynamic: at Finish, its crops are calculated from the window's final frame to the locked guide, so moving or resizing the window changes them.
+
+Press `Return` to Finish/Copy. On success, the guide closes and the status modal shows the selected source and result for `obsCrop.resultDuration` (4 seconds by default). Pressing `Esc` while the guide is active cancels without copying; pressing it during the result linger dismisses the result early and never clears the clipboard.
+
+The clipboard contains exactly one line prefixed by the selected source, followed by the crop values in the same field order. Screen Capture produces:
 
 ```text
-Left: L, Top: T, Right: R, Bottom: B | Result: W x H | Scale: S
+Screen Capture | Left: L, Top: T, Right: R, Bottom: B | Result: W x H | Scale: S
 ```
 
-In OBS, select the macOS Screen Capture source configured for Window Capture, open **Edit Transform**, and enter `L`, `T`, `R`, and `B` into **Crop Left**, **Crop Top**, **Crop Right**, and **Crop Bottom**, respectively. `Result: W x H` is the expected cropped source size. Anodyne does not inspect or modify OBS: there is no OBS IPC, WebSocket integration, source discovery, UI automation, or automatic transform update.
+Window Capture produces:
 
-Containment errors identify the locked-guide edge outside the final window, keep Composition Mode active, and copy nothing so the window can be corrected before retrying `Return`. A clipboard write failure likewise keeps the session active and reports the failure in the persistent status modal. A missing/replaced target or a change to the starting screen identity, full frame, or reported scale cancels stale geometry and copies nothing.
+```text
+Window Capture | Left: L, Top: T, Right: R, Bottom: B | Result: W x H | Scale: S
+```
+
+Use the workflow matching the macOS Screen Capture source's configured submode:
+
+- **Screen Capture:** Configure the OBS macOS Screen Capture source for Screen Capture and select the same display that contains the guide. Enter Composition Mode and leave Screen Capture selected (or press `s`). Reposition or resize the pinned window until the desired content is underneath the fixed guide, then press `Return`. Confirm the copied line begins with `Screen Capture | `. If the guide is outside the frozen screen, Composition Mode remains active and copies nothing; select Window Capture with `w` or cancel. In OBS, open **Edit Transform** and manually enter `L`, `T`, `R`, and `B` into **Crop Left**, **Crop Top**, **Crop Right**, and **Crop Bottom**. Confirm that the output edges and `Result: W x H` match the locked guide.
+- **Window Capture:** Configure the OBS macOS Screen Capture source for Window Capture and select the pinned target window. Enter Composition Mode, press `w`, then enlarge and reposition that same window so its final frame contains the locked guide. Press `Return` and confirm the copied line begins with `Window Capture | `. A containment error identifies the guide edge outside the final window, keeps Composition Mode active, and copies nothing; correct the window and retry `Return`. In OBS, open **Edit Transform**, manually enter the four copied values in the matching crop fields, and confirm that the output and result dimensions match the guide.
+
+For either workflow, a clipboard write failure keeps the session active so `Return` can be retried. A successful result lingers for the configured duration with its source label on a separate first line, while the clipboard remains the corresponding exact one-line source-prefixed payload shown above. A missing/replaced target, invalid source state, or a change to the starting screen identity, full frame, or reported scale cancels and copies nothing. Anodyne does not inspect or modify OBS: there is no OBS IPC, WebSocket integration, source discovery, UI automation, or automatic transform update; a person enters the copied crop values in OBS.
 
 ### Composition settings and scale calibration
 

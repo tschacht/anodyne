@@ -177,14 +177,18 @@ describe("Anodyne view", function()
     )
   end)
 
-  it("adds a source only to explicit lingering results and never to clipboard output", function()
+  it("prefixes explicit closed-source clipboard output and labels lingering results exactly once", function()
     local result = { left = 10, top = 20, right = 30, bottom = 40, resultWidth = 1280, resultHeight = 720, scale = 2 }
     local clipboard = "Left: 10, Top: 20, Right: 30, Bottom: 40 | Result: 1280 x 720 | Scale: 2"
     assert.are.equal(clipboard, view:cropClipboardText(result))
     assert.are.equal(clipboard, view:cropResultText(result))
+    assert.are.equal("Screen Capture | " .. clipboard, view:cropClipboardText(result, "screen"))
+    assert.are.equal("Window Capture | " .. clipboard, view:cropClipboardText(result, "window"))
     assert.are.equal("Screen Capture\n" .. clipboard, view:cropResultText(result, "screen"))
     assert.are.equal("Window Capture\n" .. clipboard, view:cropResultText(result, "window"))
-    assert.are.equal("Unknown capture source\n" .. clipboard, view:cropResultText(result, "bogus"))
+    assert.is_nil(view:cropClipboardText(result, "bogus"))
+    assert.is_nil(view:cropResultText(result, "bogus"))
+    assert.is_nil(view:cropClipboardText(result, "screen"):match("\n"))
   end)
 
   it("renders exact source-specific containment recovery text", function()

@@ -16,7 +16,20 @@ describe("OBS crop controller", function()
     screen = { id = "display-a", fullFrame = rect(-100, 0, 1920, 1080), scale = 2 }
     target.screen = screen
     current = true
-    log = { alerts = {}, renders = {}, presentations = {}, copies = {}, closes = 0, frameReads = 0, screenReads = 0, scaleReads = 0 }
+    log = {
+      alerts = {},
+      renders = {},
+      presentations = {},
+      copies = {},
+      closes = 0,
+      copyCalls = 0,
+      windowIdReads = 0,
+      frameReads = 0,
+      screenReads = 0,
+      identityReads = 0,
+      fullFrameReads = 0,
+      scaleReads = 0,
+    }
     ports = {
       currentGeneration = function()
         return current
@@ -25,6 +38,7 @@ describe("OBS crop controller", function()
         return target
       end,
       windowId = function(window)
+        log.windowIdReads = log.windowIdReads + 1
         return window.id
       end,
       windowFrame = function(window)
@@ -36,9 +50,11 @@ describe("OBS crop controller", function()
         return window.screen
       end,
       screenIdentity = function(value)
+        log.identityReads = log.identityReads + 1
         return value.id
       end,
       screenFullFrame = function(value)
+        log.fullFrameReads = log.fullFrameReads + 1
         return value.fullFrame
       end,
       screenScale = function(value)
@@ -54,6 +70,7 @@ describe("OBS crop controller", function()
         return true
       end,
       copy = function(value)
+        log.copyCalls = log.copyCalls + 1
         log.copies[#log.copies + 1] = value
         return true
       end,
@@ -208,11 +225,11 @@ describe("OBS crop controller", function()
     local generation = enter()
     target.frame = rect(50, 40, 900, 520)
     assert.is_true(controller:finish(generation))
-    assert.are.equal("Left: 400, Top: 160, Right: 1886, Bottom: 1136 | Result: 1554 x 864 | Scale: 2", log.copies[1])
+    assert.are.equal("Screen Capture | Left: 400, Top: 160, Right: 1886, Bottom: 1136 | Result: 1554 x 864 | Scale: 2", log.copies[1])
     assert.are.equal(1, log.frameReads)
     assert.are.equal(1, log.closes)
     assert.same({ kind = "inactive" }, controller:currentState())
-    assert.are.equal("Screen Capture\n" .. log.copies[1], log.alerts[#log.alerts][1])
+    assert.are.equal("Screen Capture\nLeft: 400, Top: 160, Right: 1886, Bottom: 1136 | Result: 1554 x 864 | Scale: 2", log.alerts[#log.alerts][1])
     assert.is_false(controller:finish(generation))
     assert.is_false(controller:cancel(generation))
     assert.are.equal(1, log.closes)
@@ -229,6 +246,8 @@ describe("OBS crop controller", function()
       outputs[#outputs + 1] = log.copies[#log.copies]
     end
     assert.are.equal(outputs[1], outputs[2])
+    assert.are.equal(outputs[1], outputs[3])
+    assert.are.equal("Screen Capture | Left: 400, Top: 160, Right: 1886, Bottom: 1136 | Result: 1554 x 864 | Scale: 2", outputs[1])
     assert.are.equal(3, log.frameReads)
   end)
 
@@ -241,8 +260,8 @@ describe("OBS crop controller", function()
       end
       target.frame = rect(50, 40, 900, 520)
       assert.is_true(controller:finish(generation))
-      assert.are.equal("Left: 100, Top: 80, Right: 146, Bottom: 96 | Result: 1554 x 864 | Scale: 2", log.copies[#log.copies])
-      assert.are.equal("Window Capture\n" .. log.copies[#log.copies], log.alerts[#log.alerts][1])
+      assert.are.equal("Window Capture | Left: 100, Top: 80, Right: 146, Bottom: 96 | Result: 1554 x 864 | Scale: 2", log.copies[#log.copies])
+      assert.are.equal("Window Capture\nLeft: 100, Top: 80, Right: 146, Bottom: 96 | Result: 1554 x 864 | Scale: 2", log.alerts[#log.alerts][1])
     end
     assert.are.equal(3, log.closes)
   end)
@@ -287,6 +306,55 @@ describe("OBS crop controller", function()
       return true
     end
     assert.is_true(controller:finish(generation))
+    assert.are.equal("Window Capture | Left: 100, Top: 80, Right: 146, Bottom: 96 | Result: 1554 x 864 | Scale: 2", log.copies[1])
+  end)
+
+  it("cancels an invalid or missing active source before copying and retries failed teardown", function()
+    for _, source in ipairs({ "invalid", false }) do
+      local generation = enter()
+      local expectedIo = {
+        copyCalls = log.copyCalls,
+        windowIdReads = log.windowIdReads,
+        frameReads = log.frameReads,
+        screenReads = log.screenReads,
+        identityReads = log.identityReads,
+        fullFrameReads = log.fullFrameReads,
+        scaleReads = log.scaleReads,
+      }
+      local function assertNoFinishIo()
+        assert.same(expectedIo, {
+          copyCalls = log.copyCalls,
+          windowIdReads = log.windowIdReads,
+          frameReads = log.frameReads,
+          screenReads = log.screenReads,
+          identityReads = log.identityReads,
+          fullFrameReads = log.fullFrameReads,
+          scaleReads = log.scaleReads,
+        })
+      end
+      controller:currentState().captureSource = source == false and nil or source
+      ports.close = function()
+        log.closes = log.closes + 1
+        return false
+      end
+
+      local ok, failure = controller:finish(generation)
+      assert.is_false(ok)
+      assert.same({ kind = "teardown-failed" }, failure)
+      assert.is_true(controller:isActive())
+      assert.are.equal(0, #log.copies)
+      assertNoFinishIo()
+
+      ports.close = function()
+        log.closes = log.closes + 1
+        return true
+      end
+      assert.is_true(controller:finish(generation))
+      assert.same({ kind = "inactive" }, controller:currentState())
+      assert.are.equal(0, #log.copies)
+      assertNoFinishIo()
+    end
+    assert.are.equal(4, log.closes)
   end)
 
   it("cancels untrustworthy target replacements and copies nothing", function()

@@ -736,7 +736,7 @@ describe("Milestone 2 characterization", function()
       driver:setWindowFrame(window, frame(50, 50, 900, 700))
       assert.is_true(driver:triggerModalHotkey({}, "return"))
       local expected = "Left: 50, Top: 50, Right: 50, Bottom: 50 | Result: 800 x 600 | Scale: 1"
-      assert.are.equal(expected, driver:clipboardContents())
+      assert.are.equal("Window Capture | " .. expected, driver:clipboardContents())
       assert.are.equal("Window Capture\n" .. expected, driver:canvasElements(_G.Anodyne.compositionStatusCanvas)[2].text)
       assert.is_true(canvas._state.deleted)
       assert.is_true(_G.Anodyne.compositionMode._state.active)

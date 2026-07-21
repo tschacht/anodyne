@@ -209,6 +209,9 @@ function Controller:finish(expectedGeneration)
     return false, { kind = "stale-generation" }
   end
   local state = self.state
+  if not captureSources[state.captureSource] then
+    return self:cancelStale({ kind = "invalid-source", source = state.captureSource })
+  end
   local idOk, windowId = call(self.ports.windowId, state.window)
   if not idOk or windowId ~= state.windowId then
     return self:cancelStale({ kind = "stale-target" })
@@ -246,7 +249,7 @@ function Controller:finish(expectedGeneration)
     return self:cancelStale(result.error)
   end
 
-  local output = self.view:cropClipboardText(result)
+  local output = self.view:cropClipboardText(result, state.captureSource)
   local copied = call(self.ports.copy, output)
   if not copied then
     self:alert({ kind = "copy-failed" })
