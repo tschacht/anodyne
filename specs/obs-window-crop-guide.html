@@ -386,41 +386,41 @@
     </div>
 
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone 6: Capture-Source Contracts and Screen Math</h3>
+      <h3><code class="status">[x]</code> Milestone 6: Capture-Source Contracts and Screen Math</h3>
       <p>Prove that the shipped pure calculator already accepts a generic source rectangle, add only missing frozen-screen fixtures, and prepare source-aware presentation without changing the active controller or adapter behavior.</p>
       <p><strong>Validation goal:</strong> retain the existing Window Capture math suite unchanged, avoid redundant fixtures, and add exact screen-edge cases across coordinate and scale variants.</p>
 
       <h4>6.1 Primary-agent extension preflight</h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> Record the starting SHA and <code>git status --short</code>; preserve unrelated changes and stop on overlap with any extension packet.</li>
-        <li><code class="status">[]</code> Run <code>make verify</code> before extension edits. If the baseline is red, diagnose and repair it in a separate commit before Milestone 6 work, preserving the earlier baseline-first policy.</li>
-        <li><code class="status">[]</code> Inventory the exact shipped Window Capture controller, adapter, clipboard, resource-count, and manual expectations that Milestone 7 must preserve; the extension is not permission to refactor that path.</li>
+        <li><code class="status">[x]</code> Record the starting SHA and <code>git status --short</code>; preserve unrelated changes and stop on overlap with any extension packet.</li>
+        <li><code class="status">[x]</code> Run <code>make verify</code> before extension edits. If the baseline is red, diagnose and repair it in a separate commit before Milestone 6 work, preserving the earlier baseline-first policy.</li>
+        <li><code class="status">[x]</code> Inventory the exact shipped Window Capture controller, adapter, clipboard, resource-count, and manual expectations that Milestone 7 must preserve; the extension is not permission to refactor that path.</li>
       </ul>
 
       <h4><span class="tag packet">WP-08</span> Frozen-screen source fixtures</h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> Owner: crop-math worker. Touch only <code>Anodyne/core/obs_crop.lua</code> and <code>spec/core/obs_crop_spec.lua</code>; production changes are permitted only if a missing generic source-rectangle seam is proven.</li>
-        <li><code class="status">[]</code> Audit and reuse the shipped exact cases for scale 1/2, fractional and negative coordinates, asymmetric crops, tolerance behavior, containment edges, and result-size invariants; do not duplicate them under a new label.</li>
-        <li><code class="status">[]</code> Add only missing Screen Capture fixtures by supplying the frozen screen <code>fullFrame()</code> as the source rectangle and proving screen-to-guide near-edge crops plus rounded far-edge derivation.</li>
-        <li><code class="status">[]</code> Cover normal and negative-origin screens, guide touching screen edges, representative fractional/scale cases, and guide-outside-screen errors where existing generic fixtures do not already prove the behavior.</li>
+        <li><code class="status">[x]</code> Owner: crop-math worker. Touch only <code>Anodyne/core/obs_crop.lua</code> and <code>spec/core/obs_crop_spec.lua</code>; production changes are permitted only if a missing generic source-rectangle seam is proven.</li>
+        <li><code class="status">[x]</code> Audit and reuse the shipped exact cases for scale 1/2, fractional and negative coordinates, asymmetric crops, tolerance behavior, containment edges, and result-size invariants; do not duplicate them under a new label.</li>
+        <li><code class="status">[x]</code> Add only missing Screen Capture fixtures by supplying the frozen screen <code>fullFrame()</code> as the source rectangle and proving screen-to-guide near-edge crops plus rounded far-edge derivation.</li>
+        <li><code class="status">[x]</code> Cover normal and negative-origin screens, guide touching screen edges, representative fractional/scale cases, and guide-outside-screen errors where existing generic fixtures do not already prove the behavior.</li>
       </ul>
 
       <h4><span class="tag packet">WP-09</span> Capture-source presentation model</h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> Owner: view worker in parallel with WP-08. Touch only <code>Anodyne/view.lua</code> and <code>spec/controller/view_spec.lua</code>.</li>
-        <li><code class="status">[]</code> Add deterministic labels for <code>screen</code> and <code>window</code>. Explicit-source help shows the current selection and documents <code>S</code>/<code>W</code>, <code>Return</code>, and <code>Esc</code>; legacy calls without a source retain the shipped text until WP-10 wires selection, keeping the Milestone 6 commit behaviorally coherent.</li>
-        <li><code class="status">[]</code> Allow the lingering result formatter to show an explicitly supplied source while keeping legacy calls and <code>cropClipboardText</code> byte-for-byte compatible with the existing output.</li>
-        <li><code class="status">[]</code> Add concise source-specific containment text: Window Capture may be corrected by resizing/repositioning; Screen Capture may switch to <code>W</code> or cancel when the frozen guide lies outside the screen.</li>
+        <li><code class="status">[x]</code> Owner: view worker in parallel with WP-08. Touch only <code>Anodyne/view.lua</code> and <code>spec/controller/view_spec.lua</code>.</li>
+        <li><code class="status">[x]</code> Add deterministic labels for <code>screen</code> and <code>window</code>. Explicit-source help shows the current selection and documents <code>S</code>/<code>W</code>, <code>Return</code>, and <code>Esc</code>; legacy calls without a source retain the shipped text until WP-10 wires selection, keeping the Milestone 6 commit behaviorally coherent.</li>
+        <li><code class="status">[x]</code> Allow the lingering result formatter to show an explicitly supplied source while keeping legacy calls and <code>cropClipboardText</code> byte-for-byte compatible with the existing output.</li>
+        <li><code class="status">[x]</code> Add concise source-specific containment text: Window Capture may be corrected by resizing/repositioning; Screen Capture may switch to <code>W</code> or cancel when the frozen guide lies outside the screen.</li>
       </ul>
 
       <h4>6.3 Testing Strategy</h4>
       <p>The primary agent runs both non-overlapping packets in parallel, integrates them without changing controller or adapter behavior, and sends the combined milestone to an independent reviewer focused on nonredundant screen fixtures and exact output compatibility.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>make test-core</code> — proves the unchanged existing math suite plus targeted frozen-screen cases.</li>
-        <li><code class="status">[]</code> <code>make test-controller</code> — proves explicit source labels while the active controller behavior remains unchanged.</li>
-        <li><code class="status">[]</code> <code>make coverage</code> and <code>make format-check</code> — preserve enforced raw floors and formatting.</li>
-        <li><code class="status">[]</code> Independent reviewer approval — confirms screen cases are additive, nonredundant, and do not alter Window Capture arithmetic or clipboard output.</li>
-        <li><code class="status">[]</code> Commit Milestone 6 as one attributable, fully green commit only after all preceding checks pass.</li>
+        <li><code class="status">[x]</code> <code>make test-core</code> — proves the unchanged existing math suite plus targeted frozen-screen cases.</li>
+        <li><code class="status">[x]</code> <code>make test-controller</code> — proves explicit source labels while the active controller behavior remains unchanged.</li>
+        <li><code class="status">[x]</code> <code>make coverage</code> and <code>make format-check</code> — preserve enforced raw floors and formatting.</li>
+        <li><code class="status">[x]</code> Independent reviewer approval — confirms screen cases are additive, nonredundant, and do not alter Window Capture arithmetic or clipboard output.</li>
+        <li><code class="status">[x]</code> Commit Milestone 6 as one attributable, fully green commit only after all preceding checks pass.</li>
       </ul>
       <div class="loop">🔁 <strong>Do not advance until Screen Capture math is source-rectangle exact without duplicating or changing the shipped Window math suite.</strong></div>
     </div>

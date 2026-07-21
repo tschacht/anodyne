@@ -157,6 +157,58 @@ describe("Anodyne view", function()
     assert.is_nil(view:cropClipboardText(result):match("\n"))
   end)
 
+  it("renders exact closed capture-source labels and explicit-source help", function()
+    assert.are.equal("Screen Capture", view:captureSourceLabel("screen"))
+    assert.are.equal("Window Capture", view:captureSourceLabel("window"))
+    assert.are.equal("Unknown capture source", view:captureSourceLabel("bogus"))
+    assert.are.equal("Unknown capture source", view:captureSourceLabel(nil))
+
+    assert.are.equal(
+      "Composition Mode:\nLocked baseline: 1280 x 720\nSelected source: Screen Capture\nS = Screen Capture · W = Window Capture\nReturn = Finish/Copy\nEsc = Cancel",
+      view:compositionHelpText({ width = 1280, height = 720 }, nil, "screen")
+    )
+    assert.are.equal(
+      "Composition Mode:\nLocked baseline: 1280 x 720\nSelected source: Window Capture\nS = Screen Capture · W = Window Capture\nReturn = Finish/Copy\nEsc = Cancel\nStatus: failed",
+      view:compositionHelpText({ width = 1280, height = 720 }, "failed", "window")
+    )
+    assert.are.equal(
+      "Composition Mode:\nLocked baseline: 1280 x 720\nSelected source: Unknown capture source\nS = Screen Capture · W = Window Capture\nReturn = Finish/Copy\nEsc = Cancel",
+      view:compositionHelpText({ width = 1280, height = 720 }, nil, "bogus")
+    )
+  end)
+
+  it("adds a source only to explicit lingering results and never to clipboard output", function()
+    local result = { left = 10, top = 20, right = 30, bottom = 40, resultWidth = 1280, resultHeight = 720, scale = 2 }
+    local clipboard = "Left: 10, Top: 20, Right: 30, Bottom: 40 | Result: 1280 x 720 | Scale: 2"
+    assert.are.equal(clipboard, view:cropClipboardText(result))
+    assert.are.equal(clipboard, view:cropResultText(result))
+    assert.are.equal("Screen Capture\n" .. clipboard, view:cropResultText(result, "screen"))
+    assert.are.equal("Window Capture\n" .. clipboard, view:cropResultText(result, "window"))
+    assert.are.equal("Unknown capture source\n" .. clipboard, view:cropResultText(result, "bogus"))
+  end)
+
+  it("renders exact source-specific containment recovery text", function()
+    assert.are.equal(
+      "The locked guide is outside the final window at the left edge; resize or reposition the window",
+      view:statusText({ code = "outside_final", edge = "left" }, "window")
+    )
+    assert.are.equal("The locked guide is outside the final window; resize or reposition the window", view:statusText({ code = "outside_final" }, "window"))
+    assert.are.equal(
+      "The locked guide is outside the frozen screen at the bottom edge; press W for Window Capture or Esc to cancel",
+      view:statusText({ code = "outside_final", edge = "bottom" }, "screen")
+    )
+    assert.are.equal(
+      "The locked guide is outside the frozen screen; press W for Window Capture or Esc to cancel",
+      view:statusText({ code = "outside_final" }, "screen")
+    )
+    assert.are.equal("Unknown capture source", view:statusText({ code = "outside_final", edge = "left" }, "bogus"))
+    assert.are.equal("Unknown capture source", view:statusText({ code = "invalid-source", source = "bogus" }))
+    assert.matches(
+      "Status: The locked guide is outside the frozen screen at the right edge; press W for Window Capture or Esc to cancel$",
+      view:compositionHelpText({ width = 800, height = 600 }, { code = "outside_final", edge = "right" }, "screen")
+    )
+  end)
+
   it("identifies Composition Mode crop, stale, and copy failures", function()
     local expected = {
       { { code = "outside_final", edge = "left" }, "The locked guide is outside the final window at the left edge" },

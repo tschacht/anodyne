@@ -1,6 +1,11 @@
 local View = {}
 View.__index = View
 
+local captureSourceLabels = {
+  screen = "Screen Capture",
+  window = "Window Capture",
+}
+
 local function append(target, source)
   for _, item in ipairs(source) do
     target[#target + 1] = item
@@ -45,7 +50,11 @@ function View:formatKey(key, flags)
   return #modifiers > 0 and table.concat(modifiers, "+") .. "+" .. label or label
 end
 
-function View:statusText(status)
+function View:captureSourceLabel(source)
+  return captureSourceLabels[source] or "Unknown capture source"
+end
+
+function View:statusText(status, source)
   if type(status) ~= "table" then
     return status
   end
@@ -68,7 +77,19 @@ function View:statusText(status)
     return "Unknown action " .. tostring(status.action)
   elseif code == "outside_final" then
     local edge = ({ left = "left", top = "top", right = "right", bottom = "bottom" })[status.edge]
+    local captureSource = source or status.source
+    if captureSource == "window" then
+      local location = edge and (" at the " .. edge .. " edge") or ""
+      return "The locked guide is outside the final window" .. location .. "; resize or reposition the window"
+    elseif captureSource == "screen" then
+      local location = edge and (" at the " .. edge .. " edge") or ""
+      return "The locked guide is outside the frozen screen" .. location .. "; press W for Window Capture or Esc to cancel"
+    elseif captureSource ~= nil then
+      return "Unknown capture source"
+    end
     return edge and ("The locked guide is outside the final window at the " .. edge .. " edge") or "The locked guide is outside the final window"
+  elseif code == "invalid-source" then
+    return "Unknown capture source"
   elseif code == "invalid_rect" then
     local rect = ({ final = "final window", guide = "locked guide" })[status.rect]
     return rect and ("Invalid " .. rect .. " geometry") or "Invalid crop geometry"
@@ -97,16 +118,17 @@ function View:failureText(message)
   return "WI action failed\n" .. (message and self:statusText(message) or "The action could not be completed")
 end
 
-function View:compositionHelpText(baseline, status)
+function View:compositionHelpText(baseline, status, source)
   local dimensions = baseline and string.format("%d x %d", math.floor(baseline.width + 0.5), math.floor(baseline.height + 0.5)) or "unavailable"
-  local lines = {
-    "Composition Mode:",
-    "Locked baseline: " .. dimensions,
-    "Return = Finish/Copy",
-    "Esc = Cancel",
-  }
+  local lines = { "Composition Mode:", "Locked baseline: " .. dimensions }
+  if source ~= nil then
+    lines[#lines + 1] = "Selected source: " .. self:captureSourceLabel(source)
+    lines[#lines + 1] = "S = Screen Capture · W = Window Capture"
+  end
+  lines[#lines + 1] = "Return = Finish/Copy"
+  lines[#lines + 1] = "Esc = Cancel"
   if status then
-    lines[#lines + 1] = "Status: " .. self:statusText(status)
+    lines[#lines + 1] = "Status: " .. self:statusText(status, source)
   end
   return table.concat(lines, "\n")
 end
@@ -124,8 +146,9 @@ function View:cropClipboardText(result)
   )
 end
 
-function View:cropResultText(result)
-  return self:cropClipboardText(result)
+function View:cropResultText(result, source)
+  local text = self:cropClipboardText(result)
+  return source == nil and text or self:captureSourceLabel(source) .. "\n" .. text
 end
 
 function View:resizeLabel(action)

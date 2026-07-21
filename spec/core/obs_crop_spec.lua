@@ -22,6 +22,24 @@ describe("core OBS crop", function()
     assert.same({ 1600, 1000, 1200, 800 }, { result.sourceWidth, result.sourceHeight, result.resultWidth, result.resultHeight })
   end)
 
+  it("calculates a frozen normal-origin screen source near its edges", function()
+    local screenFullFrame = { x = 0, y = 0, w = 1728, h = 1117 }
+    local guideRect = { x = 7, y = 0, w = 1721, h = 1104 }
+    local result = ObsCrop.calculate(screenFullFrame, guideRect, 1)
+    assert.same({ 7, 0, 0, 13 }, { result.left, result.top, result.right, result.bottom })
+    assert.same({ 1728, 1117, 1721, 1104 }, { result.sourceWidth, result.sourceHeight, result.resultWidth, result.resultHeight })
+  end)
+
+  it("derives frozen negative-origin screen far edges from rounded dimensions", function()
+    local screenFullFrame = { x = -1512.25, y = -100.25, w = 1512.5, h = 982.5 }
+    local guideRect = { x = -1512.25, y = -87.75, w = 1500.25, h = 970 }
+    local result = ObsCrop.calculate(screenFullFrame, guideRect, 2)
+    assert.same({ 0, 25, 24, 0 }, { result.left, result.top, result.right, result.bottom })
+    assert.same({ 3025, 1965, 3001, 1940 }, { result.sourceWidth, result.sourceHeight, result.resultWidth, result.resultHeight })
+    assert.are.equal(result.resultWidth, result.sourceWidth - result.left - result.right)
+    assert.are.equal(result.resultHeight, result.sourceHeight - result.top - result.bottom)
+  end)
+
   it("rounds the source, relative origin, and guide size as pixel rectangles", function()
     local finalRect = { x = -20.2, y = 9.1, w = 500.49, h = 300.51 }
     local guideRect = { x = 30.05, y = 59.35, w = 300.49, h = 100.51 }
