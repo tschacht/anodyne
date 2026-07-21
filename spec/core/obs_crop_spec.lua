@@ -114,6 +114,11 @@ describe("core OBS crop", function()
     assert.same({ ok = true, rect = { x = -20, y = 21, w = 201, h = 101 } }, ObsCrop.toPixelRect({ x = -10.2, y = 10.4, w = 100.3, h = 50.4 }, 2))
   end)
 
+  it("rejects invalid point rectangles and scales during pixel conversion", function()
+    assert.same({ ok = false, error = { code = "invalid_rect", rect = "rect", field = "w" } }, ObsCrop.toPixelRect({ x = 0, y = 0, w = 0, h = 1 }, 1))
+    assert.same({ ok = false, error = { code = "invalid_scale" } }, ObsCrop.toPixelRect({ x = 0, y = 0, w = 1, h = 1 }, 0))
+  end)
+
   it("reports every guide edge outside the final rectangle beyond tolerance", function()
     local tolerance = ObsCrop.POINT_TOLERANCE
     local finalRect = { x = 10, y = 20, w = 100, h = 80 }

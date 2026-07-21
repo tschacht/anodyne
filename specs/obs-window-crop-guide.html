@@ -341,27 +341,34 @@
     </div>
 
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone 5: Tooling, Documentation, and End-to-End Proof</h3>
+      <h3><code class="status">[x]</code> Milestone 5: Tooling, Documentation, and End-to-End Proof</h3>
       <p>Close the feature with enforceable architecture/coverage expectations, user documentation, and a real OBS calibration at the owner's native EasyRes mode.</p>
       <p><strong>Validation goal:</strong> pass the complete repository gate and reproduce a correct manual OBS crop at the owner's native display mode, with scale override retained only as a documented fallback.</p>
 
       <h4><span class="tag packet">WP-07</span> Repository gates and documentation</h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> Owner: worker agent after WP-06. Touch <code>tools/check_architecture.lua</code>, <code>tools/check_coverage.lua</code>, their specs if required, and <code>README.md</code>.</li>
-        <li><code class="status">[]</code> Add the new production paths to architecture expectations; preserve the rule that only the Hammerspoon adapter accesses raw <code>hs</code>.</li>
-        <li><code class="status">[]</code> Enforce at least 95% raw line coverage for <code>Anodyne/core/obs_crop.lua</code> and 90% for <code>Anodyne/obs_crop_controller.lua</code>, while retaining the overall 85% gate.</li>
-        <li><code class="status">[]</code> Document Anodyne's two top-level modes side by side: Window Mode at <code>ctrl+alt+cmd+M</code> and Composition Mode at <code>ctrl+alt+cmd+C</code>. Document <code>Return</code> Finish/Copy, <code>Esc</code> Cancel, OBS Edit Transform field order, clipboard format, auto scale, override semantics, containment errors, and the fact that Composition Mode never resizes or changes the baseline aspect ratio.</li>
-        <li><code class="status">[]</code> Document that any current window frame is a valid baseline. Present 16:9 only as an optional example: the owner may first use Window Mode's existing 16:9 preset, exit Window Mode, then enter Composition Mode.</li>
-        <li><code class="status">[]</code> Document one-time calibration: at native EasyRes mode, confirm reported scale is <code>1</code>, enter copied crops in OBS, and verify the cropped source matches the arbitrary locked guide. If values are uniformly doubled/halved, use the explicit override and record the observation rather than adding IPC.</li>
+        <li><code class="status">[x]</code> Owner: worker agent after WP-06. Touch <code>tools/check_architecture.lua</code>, <code>tools/check_coverage.lua</code>, their specs if required, and <code>README.md</code>.</li>
+        <li><code class="status">[x]</code> Add the new production paths to architecture expectations; preserve the rule that only the Hammerspoon adapter accesses raw <code>hs</code>.</li>
+        <li><code class="status">[x]</code> Enforce at least 95% raw line coverage for <code>Anodyne/core/obs_crop.lua</code> and 90% for <code>Anodyne/obs_crop_controller.lua</code>, while retaining the overall 85% gate.</li>
+        <li><code class="status">[x]</code> Document Anodyne's two top-level modes side by side: Window Mode at <code>ctrl+alt+cmd+M</code> and Composition Mode at <code>ctrl+alt+cmd+C</code>. Document <code>Return</code> Finish/Copy, <code>Esc</code> Cancel, OBS Edit Transform field order, clipboard format, auto scale, override semantics, containment errors, and the fact that Composition Mode never resizes or changes the baseline aspect ratio.</li>
+        <li><code class="status">[x]</code> Document that any current window frame is a valid baseline. Present 16:9 only as an optional example: the owner may first use Window Mode's existing 16:9 preset, exit Window Mode, then enter Composition Mode.</li>
+        <li><code class="status">[x]</code> Document one-time calibration: at native EasyRes mode, confirm reported scale is <code>1</code>, enter copied crops in OBS, and verify the cropped source matches the arbitrary locked guide. If values are uniformly doubled/halved, use the explicit override and record the observation rather than adding IPC.</li>
+      </ul>
+
+      <h4><span class="tag packet">WP-07A</span> Crop coverage-gap regression proof</h4>
+      <ul class="checklist">
+        <li><code class="status">[x]</code> Owner: separate coverage-gap worker after WP-07. Touch only <code>spec/core/obs_crop_spec.lua</code>.</li>
+        <li><code class="status">[x]</code> Cover the public pixel-conversion exits for invalid point rectangles and invalid scales, preserving structured error metadata and lifting raw <code>obs_crop.lua</code> coverage above its 95% floor.</li>
+        <li><code class="status">[x]</code> <code>make test-core</code> and <code>make coverage</code> — prove the focused regression and its unrounded per-file threshold.</li>
       </ul>
 
       <h4>5.2 Testing Strategy</h4>
       <p>The primary agent integrates WP-07, runs the full gate, then performs the owner's real workflow and requests a final independent review. No completion claim is made from unit tests alone because OBS source-pixel behavior is an external boundary.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>make verify</code> — proves formatting, all offline suites, raw coverage floors, and architecture.</li>
-        <li><code class="status">[]</code> <code>hs -c 'local m=hs.screen.mainScreen():currentMode(); return tostring(m.w).."x"..tostring(m.h).." scale="..tostring(m.scale)'</code> — records the native display mode when Hammerspoon IPC is already available; otherwise use the Hammerspoon Console without enabling new IPC.</li>
-        <li><code class="status">[]</code> Manual OBS workflow — establish a window at any chosen size/aspect, enter Composition Mode, enlarge/reposition it, press <code>Return</code>, paste values into Edit Transform, and verify all four edges plus output dimensions. Repeat once with a different aspect ratio.</li>
-        <li><code class="status">[]</code> Reload Hammerspoon with an active guide and confirm no stale mask, hotkey, clipboard callback, or old-generation action survives.</li>
+        <li><code class="status">[x]</code> <code>make verify</code> — proves formatting, all offline suites, raw coverage floors, and architecture.</li>
+        <li><code class="status">[x]</code> <code>hs -c 'local m=hs.screen.mainScreen():currentMode(); return tostring(m.w).."x"..tostring(m.h).." scale="..tostring(m.scale)'</code> — records the native display mode when Hammerspoon IPC is already available; otherwise use the Hammerspoon Console without enabling new IPC.</li>
+        <li><code class="status">[x]</code> Manual OBS workflow — establish a window at any chosen size/aspect, enter Composition Mode, enlarge/reposition it, press <code>Return</code>, paste values into Edit Transform, and verify all four edges plus output dimensions. Repeat once with a different aspect ratio.</li>
+        <li><code class="status">[x]</code> Reload Hammerspoon with an active guide and confirm no stale mask, hotkey, clipboard callback, or old-generation action survives.</li>
       </ul>
       <div class="loop">🔁 <strong>The feature is complete only when the full offline gate, native Hammerspoon interaction, and manual OBS crop comparison all pass.</strong> Repair any mismatch and repeat the relevant narrow and global gates.</div>
     </div>
@@ -371,14 +378,14 @@
     <h2>Global Validation Commands</h2>
     <p>Execute these from the repository root after all milestones:</p>
     <ul class="checklist">
-      <li><code class="status">[]</code> <code>make format-check</code> — all Lua follows the pinned StyLua format.</li>
-      <li><code class="status">[]</code> <code>make test-core</code> — crop math and configuration pass independently.</li>
-      <li><code class="status">[]</code> <code>make test-controller</code> — crop state machine and text/menu models pass independently.</li>
-      <li><code class="status">[]</code> <code>make test-adapter</code> — strict native signatures, hotkeys, canvas, clipboard, alerts, and cleanup pass.</li>
-      <li><code class="status">[]</code> <code>make test-characterization</code> — existing Anodyne and reload contracts remain intact.</li>
-      <li><code class="status">[]</code> <code>make coverage</code> — new per-file and overall raw coverage floors pass.</li>
-      <li><code class="status">[]</code> <code>make architecture</code> — native access remains isolated and dependencies remain acyclic.</li>
-      <li><code class="status">[]</code> <code>make verify</code> — final aggregate offline proof passes from a clean process.</li>
+      <li><code class="status">[x]</code> <code>make format-check</code> — all Lua follows the pinned StyLua format.</li>
+      <li><code class="status">[x]</code> <code>make test-core</code> — crop math and configuration pass independently.</li>
+      <li><code class="status">[x]</code> <code>make test-controller</code> — crop state machine and text/menu models pass independently.</li>
+      <li><code class="status">[x]</code> <code>make test-adapter</code> — strict native signatures, hotkeys, canvas, clipboard, alerts, and cleanup pass.</li>
+      <li><code class="status">[x]</code> <code>make test-characterization</code> — existing Anodyne and reload contracts remain intact.</li>
+      <li><code class="status">[x]</code> <code>make coverage</code> — new per-file and overall raw coverage floors pass.</li>
+      <li><code class="status">[x]</code> <code>make architecture</code> — native access remains isolated and dependencies remain acyclic.</li>
+      <li><code class="status">[x]</code> <code>make verify</code> — final aggregate offline proof passes from a clean process.</li>
     </ul>
     <div class="loop">🔁 <strong>The plan is not complete until every box is checked and every command passes.</strong> If a native/manual step is impossible, mark it <code>[f]</code>, preserve evidence, and do not claim OBS calibration.</div>
   </section>

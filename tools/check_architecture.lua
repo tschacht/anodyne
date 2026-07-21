@@ -5,10 +5,12 @@ local expectedPaths = {
   "Anodyne/config.lua",
   "Anodyne/window_actions.lua",
   "Anodyne/controller.lua",
+  "Anodyne/obs_crop_controller.lua",
   "Anodyne/view.lua",
   "Anodyne/core/geometry.lua",
   "Anodyne/core/history.lua",
   "Anodyne/core/keymap.lua",
+  "Anodyne/core/obs_crop.lua",
   "Anodyne/adapter/hammerspoon.lua",
 }
 

@@ -102,6 +102,8 @@ if milestone >= 6 then
   require_file("Anodyne/view.lua", 0.85)
 end
 if milestone >= 7 then
+  require_file("Anodyne/core/obs_crop.lua", 0.95)
+  require_file("Anodyne/obs_crop_controller.lua", 0.90)
   require_file("Anodyne/adapter/hammerspoon.lua", 0.75)
 end
 

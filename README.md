@@ -1,12 +1,21 @@
 # Anodyne
 
-Anodyne is a Hammerspoon window manager for moving and resizing the focused macOS window. Its Lua logic is separated from the Hammerspoon API boundary and covered by an offline unit, characterization, architecture, and coverage suite.
+Anodyne is a Hammerspoon window manager with a separate Composition Mode for calculating OBS window crops. Its Lua logic is separated from the Hammerspoon API boundary and covered by an offline unit, characterization, architecture, and coverage suite.
 
 ## Using Anodyne
 
 Place the repository at `~/.hammerspoon` and reload the Hammerspoon configuration. The root `init.lua` starts Anodyne and publishes the running instance as `_G.Anodyne`.
 
-The default entry shortcut is `ctrl+alt+cmd+M`. While the modal is open:
+Anodyne has two mutually exclusive top-level modes:
+
+| Mode | Default shortcut | Purpose | Exit |
+| --- | --- | --- | --- |
+| Window Mode | `ctrl+alt+cmd+M` | Move, resize, and restore the focused window. | `escape` exits; the modal also uses `modalDuration` (8 seconds by default). |
+| Composition Mode | `ctrl+alt+cmd+C` | Lock the current window frame as an OBS crop guide without moving or resizing it. | `Return` finishes and copies; `Esc` cancels. The active guide has no timeout. |
+
+Only one mode can be active. Entering one cleanly exits or cancels the other.
+
+While Window Mode is open:
 
 - `A` selects an aspect-ratio preset.
 - `W` or `H` selects an exact width or height preset.
@@ -16,7 +25,37 @@ The default entry shortcut is `ctrl+alt+cmd+M`. While the modal is open:
 - `shift+U` restores the window frame captured when the modal opened.
 - `delete` returns to the previous screen; `escape` exits.
 
-The `WI` menu-bar item exposes the same actions. Defaults, including presets, minimum dimensions, step sizes, shortcut, undo depth, and modal duration, are defined in `Anodyne/config.lua`.
+The `WI` menu-bar item exposes the same actions and a separate Composition Mode entry. Defaults, including presets, minimum dimensions, step sizes, shortcuts, undo depth, and modal duration, are defined in `Anodyne/config.lua`.
+
+## Composition Mode and OBS
+
+Any positive-size current window frame is a valid Composition Mode baseline; its size and aspect ratio are copied verbatim. Entering Composition Mode never moves or resizes the window and never forces 16:9. If 16:9 is useful, optionally apply Window Mode's existing 16:9 preset first, exit Window Mode, and then enter Composition Mode.
+
+Press `ctrl+alt+cmd+C` with the target window focused. Anodyne locks that window's current frame in absolute screen coordinates, draws a click-through guide with a 1-point border, dims only the area outside the guide, and keeps a click-through Window-Mode-style help/status modal visible for the entire session. Manually enlarge and reposition the same window so it contains the locked guide, then press `Return` to Finish/Copy. The guide closes and the status modal shows the result for `obsCrop.resultDuration` (4 seconds by default). Pressing `Esc` while the guide is active cancels without copying; pressing it during the result linger dismisses the result early and never clears the clipboard.
+
+The clipboard contains exactly one line in this field order and format:
+
+```text
+Left: L, Top: T, Right: R, Bottom: B | Result: W x H | Scale: S
+```
+
+In OBS, select the macOS Screen Capture source configured for Window Capture, open **Edit Transform**, and enter `L`, `T`, `R`, and `B` into **Crop Left**, **Crop Top**, **Crop Right**, and **Crop Bottom**, respectively. `Result: W x H` is the expected cropped source size. Anodyne does not inspect or modify OBS: there is no OBS IPC, WebSocket integration, source discovery, UI automation, or automatic transform update.
+
+Containment errors identify the locked-guide edge outside the final window, keep Composition Mode active, and copy nothing so the window can be corrected before retrying `Return`. A clipboard write failure likewise keeps the session active and reports the failure in the persistent status modal. A missing/replaced target or a change to the starting screen identity, full frame, or reported scale cancels stale geometry and copies nothing.
+
+### Composition settings and scale calibration
+
+The immutable configuration is built from these defaults in `Anodyne/config.lua`:
+
+| Key | Default | Meaning |
+| --- | ---: | --- |
+| `compositionHotkey.modifiers` / `compositionHotkey.key` | `{ "ctrl", "alt", "cmd" }` / `"c"` | Composition Mode entry shortcut. |
+| `obsCrop.scaleOverride` | `0` | `0` automatically freezes the starting screen's finite positive `screen:currentMode().scale`; a finite positive value overrides it verbatim for the session. |
+| `obsCrop.resultDuration` | `4` | Seconds that a successful result remains visible; must be finite and positive. |
+| `obsCrop.dimAlpha` | `0.45` | Exterior dim opacity; greater than zero and at most one. |
+| `obsCrop.guideStrokeWidth` | `1` | Click-through guide border width in points; must be finite and positive. |
+
+Calibrate once at the native EasyRes display mode. Confirm that Hammerspoon reports `scale=1` (use `screen:currentMode().scale` in the Hammerspoon Console), lock an arbitrary current frame, enlarge/reposition the window, copy the crops, enter all four values in OBS Edit Transform, and verify that all four cropped edges and `Result: W x H` match the locked guide. Repeat with a different baseline aspect ratio. If every crop value and result dimension is uniformly doubled or halved, set the explicit positive `obsCrop.scaleOverride` fallback (`0.5` or `2`, respectively), record the observed native-mode behavior, and repeat the comparison. Do not enable or add OBS IPC or automation for calibration.
 
 Reloading is atomic from the loader's perspective: the current Anodyne instance is stopped before its replacement starts, and `_G.Anodyne` is updated only after replacement succeeds. Cleanup is ordered, retry-safe, and generation-guarded so callbacks from an older instance cannot affect the replacement.
 
@@ -26,7 +65,9 @@ Reloading is atomic from the loader's perspective: the current Anodyne instance 
 init.lua
   -> Anodyne/init.lua             facade, configuration, lifecycle
        -> Anodyne/config.lua      immutable defaults and metadata
-       -> Anodyne/core/*          pure geometry, history, key interpretation
+       -> Anodyne/core/*          pure geometry, history, key interpretation, crop math
+       -> Anodyne/obs_crop_controller.lua
+                                  Composition session state machine
        -> Anodyne/adapter/hammerspoon.lua
             -> window_actions.lua
             -> controller.lua
@@ -77,7 +118,7 @@ make format-check
 make architecture
 ```
 
-`make coverage` writes the line report to `coverage/luacov.report.out` and raw totals to `coverage/summary.json`. Coverage floors use unrounded ratios: config and geometry 95%; history and keymap 95%; window actions and controller 90%; view 85%; adapter 75%; and all production code under `Anodyne/` 85%.
+`make coverage` writes the line report to `coverage/luacov.report.out` and raw totals to `coverage/summary.json`. Coverage floors use unrounded ratios: config, geometry, history, keymap, and OBS crop math 95%; window actions, controller, and OBS crop controller 90%; view 85%; adapter 75%; and all production code under `Anodyne/` 85%.
 
 ## Native smoke test
 
