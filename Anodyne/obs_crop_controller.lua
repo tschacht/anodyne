@@ -3,6 +3,11 @@ local ObsCrop = require("Anodyne.core.obs_crop")
 local Controller = {}
 Controller.__index = Controller
 
+local captureSources = {
+  screen = true,
+  window = true,
+}
+
 local function copyRect(rect)
   return { x = rect.x, y = rect.y, w = rect.w, h = rect.h }
 end
@@ -48,8 +53,8 @@ function Controller:isCurrentSession(expectedGeneration)
   return self:isApplicationCurrent() and expectedGeneration ~= nil and self:isActive() and self.state.generation == expectedGeneration
 end
 
-function Controller:alert(status, duration)
-  local text = self.view:statusText(status)
+function Controller:alert(status, duration, source)
+  local text = self.view:statusText(status, source)
   pcall(self.ports.alert, text, duration)
 end
 
@@ -108,7 +113,8 @@ function Controller:enter()
   end
 
   local guideFrame = copyRect(frame)
-  local help = self.view:compositionHelpText({ width = guideFrame.w, height = guideFrame.h })
+  local captureSource = "screen"
+  local help = self.view:compositionHelpText({ width = guideFrame.w, height = guideFrame.h }, nil, captureSource)
   local rendered = call(self.ports.renderGuide, screen, screenSnapshot.fullFrame, guideFrame, help)
   if not rendered then
     self:alert("Composition Mode could not start")
@@ -125,9 +131,31 @@ function Controller:enter()
     screenFullFrame = screenSnapshot.fullFrame,
     screenScale = screenSnapshot.scale,
     scale = chosenScale,
+    captureSource = captureSource,
     generation = self.nextGeneration,
   }
   return true, self.state.generation
+end
+
+function Controller:selectSource(source, expectedGeneration)
+  if not captureSources[source] then
+    return false, { code = "invalid-source", source = source }
+  end
+  if not self:isCurrentSession(expectedGeneration) then
+    return false, { kind = "stale-generation" }
+  end
+  if self.state.captureSource == source then
+    return true
+  end
+
+  local state = self.state
+  local help = self.view:compositionHelpText({ width = state.guideFrame.w, height = state.guideFrame.h }, nil, source)
+  local presented = call(self.ports.refreshPresentation, help)
+  if not presented then
+    return false, { kind = "presentation-failed" }
+  end
+  state.captureSource = source
+  return true
 end
 
 function Controller:teardown(status, successText)
@@ -185,9 +213,16 @@ function Controller:finish(expectedGeneration)
   if not idOk or windowId ~= state.windowId then
     return self:cancelStale({ kind = "stale-target" })
   end
-  local frameOk, finalFrame = call(self.ports.windowFrame, state.window)
+  local finalFrame
+  if state.captureSource == "window" then
+    local frameOk
+    frameOk, finalFrame = call(self.ports.windowFrame, state.window)
+    if not frameOk then
+      return self:cancelStale({ kind = "stale-target" })
+    end
+  end
   local screenOk, screen = call(self.ports.windowScreen, state.window)
-  if not frameOk or not screenOk then
+  if not screenOk then
     return self:cancelStale({ kind = "stale-target" })
   end
   local currentScreen, staleKind = self:readScreen(screen)
@@ -201,10 +236,11 @@ function Controller:finish(expectedGeneration)
     return self:cancelStale({ kind = "stale-scale" })
   end
 
-  local result = self.crop.calculate(finalFrame, state.guideFrame, state.scale)
+  local sourceFrame = state.captureSource == "screen" and state.screenFullFrame or finalFrame
+  local result = self.crop.calculate(sourceFrame, state.guideFrame, state.scale)
   if not result.ok then
     if result.error.code == "outside_final" then
-      self:alert(result.error)
+      self:alert(result.error, nil, state.captureSource)
       return false, result.error
     end
     return self:cancelStale(result.error)
@@ -216,7 +252,7 @@ function Controller:finish(expectedGeneration)
     self:alert({ kind = "copy-failed" })
     return false, { kind = "copy-failed" }
   end
-  return self:teardown(nil, self.view:cropResultText(result))
+  return self:teardown(nil, self.view:cropResultText(result, state.captureSource))
 end
 
 return Controller

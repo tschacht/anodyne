@@ -121,6 +121,8 @@ describe("Milestone 2 characterization", function()
       local oldCanvas = manager.compositionCanvas
       local oldStatus = manager.compositionStatusCanvas
       local oldFinish = oldModal._state.bindings[1].callback
+      local oldScreen = oldModal._state.bindings[3].callback
+      local oldWindow = oldModal._state.bindings[4].callback
 
       driver:load()
       assert.is_true(oldModal._state.deleted)
@@ -129,6 +131,8 @@ describe("Milestone 2 characterization", function()
       assert.is_nil(_G.Anodyne.compositionCanvas)
       assert.is_nil(_G.Anodyne.compositionStatusCanvas)
       oldFinish()
+      oldScreen()
+      oldWindow()
       assert.is_nil(driver:clipboardContents())
       assert.same({ timers = 0, menus = 1, hotkeys = 2, modals = 2, filters = 2, taps = 0, canvases = 0 }, driver:activeCounts())
 
@@ -724,14 +728,16 @@ describe("Milestone 2 characterization", function()
       assert.are.equal(1, driver:canvasElements(canvas)[5].strokeWidth)
       local status = _G.Anodyne.compositionStatusCanvas
       assert.matches("Locked baseline: 800 x 600", driver:canvasElements(status)[2].text)
+      assert.matches("Selected source: Screen Capture", driver:canvasElements(status)[2].text)
       assert.matches("Return = Finish/Copy", driver:canvasElements(status)[2].text)
       assert.matches("Esc = Cancel", driver:canvasElements(status)[2].text)
       assert.is_nil(_G.Anodyne.compositionResultTimer)
+      assert.is_true(driver:triggerModalHotkey({}, "w"))
       driver:setWindowFrame(window, frame(50, 50, 900, 700))
       assert.is_true(driver:triggerModalHotkey({}, "return"))
       local expected = "Left: 50, Top: 50, Right: 50, Bottom: 50 | Result: 800 x 600 | Scale: 1"
       assert.are.equal(expected, driver:clipboardContents())
-      assert.are.equal(expected, driver:canvasElements(_G.Anodyne.compositionStatusCanvas)[2].text)
+      assert.are.equal("Window Capture\n" .. expected, driver:canvasElements(_G.Anodyne.compositionStatusCanvas)[2].text)
       assert.is_true(canvas._state.deleted)
       assert.is_true(_G.Anodyne.compositionMode._state.active)
       driver:advance(4)

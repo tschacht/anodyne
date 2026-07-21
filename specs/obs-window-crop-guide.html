@@ -426,40 +426,40 @@
     </div>
 
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone 7: Session Selection and Native Routing</h3>
+      <h3><code class="status">[x]</code> Milestone 7: Session Selection and Native Routing</h3>
       <p>Add the source submode to the pure controller and wire its modal-local selectors in the same milestone so the default change never lands without a usable Window Capture path.</p>
       <p><strong>Validation goal:</strong> Screen Capture is the default; <code>S</code>/<code>W</code> selection is direct and idempotent; both native Finish routes work; and every commit passes the full repository gate with the shipped Window behavior intact.</p>
 
       <h4><span class="tag packet">WP-10</span> Controller capture-source state</h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> Owner: controller worker after WP-08 and WP-09. Touch only <code>Anodyne/obs_crop_controller.lua</code> and <code>spec/controller/obs_crop_controller_spec.lua</code>.</li>
-        <li><code class="status">[]</code> Add a closed capture-source value with exactly <code>screen</code> and <code>window</code>; every successful Enter stores <code>screen</code> by default.</li>
-        <li><code class="status">[]</code> Add a generation-guarded selection transition through a narrow presentation port with no native handles. Selecting the current source is a successful no-op; selecting the other source updates presentation transactionally without recreating the guide, changing generation, or resnapshotting window/screen/scale.</li>
-        <li><code class="status">[]</code> On Screen Capture Finish, retain all existing generation, pinned target, screen identity/full-frame, and scale-stability checks, but use the frozen screen full frame—not the final window frame—as the crop source.</li>
-        <li><code class="status">[]</code> On Window Capture Finish, execute the shipped target read, final-frame containment, crop calculation, copy, teardown, and result-linger behavior unchanged.</li>
-        <li><code class="status">[]</code> Prove Screen Capture output is identical before and after arbitrary window movement/resizing, since final window geometry is excluded from that branch.</li>
-        <li><code class="status">[]</code> Add routing compatibility cases for explicit <code>W</code>, <code>S→W</code>, and repeated <code>W</code>, asserting the exact prior crops/clipboard plus containment retention, pasteboard retry, teardown, and result behavior.</li>
-        <li><code class="status">[]</code> Cover invalid source values, inactive/repeated/stale-generation selection, presentation exceptions/false returns, target destruction, display/scale staleness, screen-containment failure, teardown retry, and cross-mode cancellation.</li>
+        <li><code class="status">[x]</code> Owner: controller worker after WP-08 and WP-09. Touch only <code>Anodyne/obs_crop_controller.lua</code> and <code>spec/controller/obs_crop_controller_spec.lua</code>.</li>
+        <li><code class="status">[x]</code> Add a closed capture-source value with exactly <code>screen</code> and <code>window</code>; every successful Enter stores <code>screen</code> by default.</li>
+        <li><code class="status">[x]</code> Add a generation-guarded selection transition through a narrow presentation port with no native handles. Selecting the current source is a successful no-op; selecting the other source updates presentation transactionally without recreating the guide, changing generation, or resnapshotting window/screen/scale.</li>
+        <li><code class="status">[x]</code> On Screen Capture Finish, retain all existing generation, pinned target, screen identity/full-frame, and scale-stability checks, but use the frozen screen full frame—not the final window frame—as the crop source.</li>
+        <li><code class="status">[x]</code> On Window Capture Finish, execute the shipped target read, final-frame containment, crop calculation, copy, teardown, and result-linger behavior unchanged.</li>
+        <li><code class="status">[x]</code> Prove Screen Capture output is identical before and after arbitrary window movement/resizing, since final window geometry is excluded from that branch.</li>
+        <li><code class="status">[x]</code> Add routing compatibility cases for explicit <code>W</code>, <code>S→W</code>, and repeated <code>W</code>, asserting the exact prior crops/clipboard plus containment retention, pasteboard retry, teardown, and result behavior.</li>
+        <li><code class="status">[x]</code> Cover invalid source values, inactive/repeated/stale-generation selection, presentation exceptions/false returns, target destruction, display/scale staleness, screen-containment failure, teardown retry, and cross-mode cancellation.</li>
       </ul>
 
       <h4><span class="tag packet">WP-11</span> Adapter bindings and lifecycle integration</h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> Owner: adapter worker after WP-10 and before the Milestone 7 commit. Touch <code>Anodyne/adapter/hammerspoon.lua</code>, <code>spec/adapter/hammerspoon_spec.lua</code>, <code>spec/characterization/anodyne_spec.lua</code>, and <code>spec/facade/anodyne_facade_spec.lua</code>; touch <code>spec/support/fake_hs.lua</code> only if a strict missing seam is proven.</li>
-        <li><code class="status">[]</code> Bind unmodified lowercase <code>s</code> and <code>w</code> inside the already-retained Composition modal only, route both through the current generation, validate each bind acquisition, and rely on the modal's established ownership/deletion policy rather than adding a second cleanup owner.</li>
-        <li><code class="status">[]</code> Enter with Screen Capture visibly selected. Repeated <code>S</code> or <code>W</code> is idempotent; switching refreshes the persistent status without replacing the guide or changing its geometry.</li>
-        <li><code class="status">[]</code> Ignore source selectors during result linger, preserve <code>Esc</code> early dismissal, and add both bindings to startup rollback, stop/reload cleanup, resource-count, stale-callback, and fault-injection matrices.</li>
-        <li><code class="status">[]</code> Add adapter-boundary compatibility cases for <code>W</code>, <code>S→W</code>, and repeated <code>W</code>: same final-frame reads, exact crops/clipboard, containment recovery, pasteboard retry, timer, canvas order, and cleanup calls as the shipped path.</li>
+        <li><code class="status">[x]</code> Owner: adapter worker after WP-10 and before the Milestone 7 commit. Touch <code>Anodyne/adapter/hammerspoon.lua</code>, <code>spec/adapter/hammerspoon_spec.lua</code>, <code>spec/characterization/anodyne_spec.lua</code>, and <code>spec/facade/anodyne_facade_spec.lua</code>; touch <code>spec/support/fake_hs.lua</code> only if a strict missing seam is proven.</li>
+        <li><code class="status">[x]</code> Bind unmodified lowercase <code>s</code> and <code>w</code> inside the already-retained Composition modal only, route both through the current generation, validate each bind acquisition, and rely on the modal's established ownership/deletion policy rather than adding a second cleanup owner.</li>
+        <li><code class="status">[x]</code> Enter with Screen Capture visibly selected. Repeated <code>S</code> or <code>W</code> is idempotent; switching refreshes the persistent status without replacing the guide or changing its geometry.</li>
+        <li><code class="status">[x]</code> Ignore source selectors during result linger, preserve <code>Esc</code> early dismissal, and add both bindings to startup rollback, stop/reload cleanup, resource-count, stale-callback, and fault-injection matrices.</li>
+        <li><code class="status">[x]</code> Add adapter-boundary compatibility cases for <code>W</code>, <code>S→W</code>, and repeated <code>W</code>: same final-frame reads, exact crops/clipboard, containment recovery, pasteboard retry, timer, canvas order, and cleanup calls as the shipped path.</li>
       </ul>
 
       <h4>7.3 Testing Strategy</h4>
       <p>The primary integrates WP-10 and WP-11 before any commit. Controller and native suites prove the complete transition/routing matrix; an independent reviewer audits transaction order and Window compatibility at the boundary actually changed.</p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>make test-controller</code> — validates defaulting, selection, both source routes, fixed Screen output, and Window compatibility.</li>
-        <li><code class="status">[]</code> <code>make test-adapter</code>, <code>make test-characterization</code>, and <code>make test-facade</code> — prove native selectors, resource ownership, rollback, reload, and shipped Window behavior.</li>
-        <li><code class="status">[]</code> <code>make test-core</code> and <code>make architecture</code> — revalidate the unchanged crop dependency and native isolation.</li>
-        <li><code class="status">[]</code> <code>make verify</code> — prevents a commit where the controller defaults to Screen before native integration and all existing tests are adapted.</li>
-        <li><code class="status">[]</code> Independent reviewer approval — validates explicit Window routing parity, transactional selection failures, and a fully green integration state.</li>
-        <li><code class="status">[]</code> Commit Milestone 7 as one attributable commit only after WP-10, WP-11, and every preceding check pass.</li>
+        <li><code class="status">[x]</code> <code>make test-controller</code> — validates defaulting, selection, both source routes, fixed Screen output, and Window compatibility.</li>
+        <li><code class="status">[x]</code> <code>make test-adapter</code>, <code>make test-characterization</code>, and <code>make test-facade</code> — prove native selectors, resource ownership, rollback, reload, and shipped Window behavior.</li>
+        <li><code class="status">[x]</code> <code>make test-core</code> and <code>make architecture</code> — revalidate the unchanged crop dependency and native isolation.</li>
+        <li><code class="status">[x]</code> <code>make verify</code> — prevents a commit where the controller defaults to Screen before native integration and all existing tests are adapted.</li>
+        <li><code class="status">[x]</code> Independent reviewer approval — validates explicit Window routing parity, transactional selection failures, and a fully green integration state.</li>
+        <li><code class="status">[x]</code> Commit Milestone 7 as one attributable commit only after WP-10, WP-11, and every preceding check pass.</li>
       </ul>
       <div class="loop">🔁 <strong>Do not advance or commit until both native source routes work and every existing Window Capture controller/adapter behavior remains identical.</strong></div>
     </div>

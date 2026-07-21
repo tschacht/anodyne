@@ -275,6 +275,8 @@ describe("Milestone 3 facade", function()
       { "hotkey.bind", 1 },
       { "modal.bind", 1 },
       { "modal.bind", 2 },
+      { "modal.bind", 3 },
+      { "modal.bind", 4 },
       { "hotkey.bind", 2 },
     }
     for _, stage in ipairs(stages) do

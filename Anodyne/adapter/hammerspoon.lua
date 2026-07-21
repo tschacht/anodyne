@@ -22,6 +22,8 @@ local cleanupStages = {
   { "modalCanvas", "delete" },
   { "compositionCanvas", "hide" },
   { "compositionCanvas", "delete" },
+  { "compositionStatusCandidateCanvas", "hide" },
+  { "compositionStatusCandidateCanvas", "delete" },
   { "compositionStatusCanvas", "hide" },
   { "compositionStatusCanvas", "delete" },
   { "menu", "delete" },
@@ -44,7 +46,10 @@ local function cleanup(owner, progress)
         record = { object = object, done = {} }
         progress[field] = record
       end
-      local isCanvas = field == "modalCanvas" or field == "compositionCanvas" or field == "compositionStatusCanvas"
+      local isCanvas = field == "modalCanvas"
+        or field == "compositionCanvas"
+        or field == "compositionStatusCandidateCanvas"
+        or field == "compositionStatusCanvas"
       local blockedByHide = isCanvas and method == "delete" and not record.done.hide
       if not record.done[method] and not blockedByHide then
         local memberOk, member = pcall(function()
@@ -129,6 +134,7 @@ function Adapter:start()
       or compositionGeneration ~= nil
       or owner.compositionResultTimer ~= nil
       or owner.compositionCanvas ~= nil
+      or owner.compositionStatusCandidateCanvas ~= nil
       or owner.compositionStatusCanvas ~= nil
   end
 
@@ -224,6 +230,27 @@ function Adapter:start()
     end)
     if deleted then
       owner.compositionStatusCanvas = nil
+      return true
+    end
+    return false, deleteError
+  end
+
+  local function closeCompositionStatusCandidate()
+    local canvas = owner.compositionStatusCandidateCanvas
+    if not canvas then
+      return true
+    end
+    local hidden, hideError = pcall(function()
+      canvas:hide()
+    end)
+    if not hidden then
+      return false, hideError
+    end
+    local deleted, deleteError = pcall(function()
+      canvas:delete()
+    end)
+    if deleted then
+      owner.compositionStatusCandidateCanvas = nil
       return true
     end
     return false, deleteError
@@ -397,6 +424,132 @@ function Adapter:start()
       frame = { x = 20, y = 14, w = width - 40, h = height - 28 },
     }
     canvas:show()
+    return true
+  end
+
+  local function refreshCompositionStatus(message)
+    local retainedClosed, retainedError = closeCompositionStatusCandidate()
+    if not retainedClosed then
+      return false, retainedError
+    end
+
+    local candidate
+    local built, buildError = pcall(function()
+      local screenFrame = hs.screen.mainScreen():frame()
+      local lines = hs.fnutils.split(message, "\n")
+      local longestLine = 0
+      for _, line in ipairs(lines) do
+        longestLine = math.max(longestLine, #line)
+      end
+
+      local width = math.min(math.max(280, longestLine * 12 + 48), math.floor(screenFrame.w * 0.8))
+      local height = math.min(math.max(90, #lines * 28 + 36), math.floor(screenFrame.h * 0.7))
+      local frame = {
+        x = math.floor(screenFrame.x + (screenFrame.w - width) / 2),
+        y = math.floor(screenFrame.y + 60),
+        w = width,
+        h = height,
+      }
+
+      candidate = hs.canvas.new(frame)
+      if not candidate then
+        error("Failed to create composition status canvas")
+      end
+      candidate:level(hs.canvas.windowLevels.overlay)
+      candidate:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces)
+      candidate:mouseCallback(nil)
+      candidate[1] = {
+        type = "rectangle",
+        action = "fill",
+        fillColor = { red = 0.08, green = 0.08, blue = 0.08, alpha = 0.92 },
+        roundedRectRadii = { xRadius = 12, yRadius = 12 },
+      }
+      candidate[2] = {
+        type = "text",
+        text = message,
+        textSize = 20,
+        textColor = { white = 1, alpha = 1 },
+        textFont = "Menlo",
+        textAlignment = "left",
+        frame = { x = 20, y = 14, w = width - 40, h = height - 28 },
+      }
+    end)
+
+    local function discardCandidate()
+      if candidate then
+        local hidden = pcall(function()
+          candidate:hide()
+        end)
+        if not hidden then
+          owner.compositionStatusCandidateCanvas = candidate
+          return
+        end
+        local deleted = pcall(function()
+          candidate:delete()
+        end)
+        if not deleted then
+          owner.compositionStatusCandidateCanvas = candidate
+        end
+      end
+    end
+
+    if not built then
+      discardCandidate()
+      return false, buildError
+    end
+
+    local previous = owner.compositionStatusCanvas
+    if previous then
+      local hidden, hideError = pcall(function()
+        previous:hide()
+      end)
+      if not hidden then
+        discardCandidate()
+        return false, hideError
+      end
+      local shown, showError = pcall(function()
+        candidate:show()
+      end)
+      if not shown then
+        pcall(function()
+          previous:show()
+        end)
+        discardCandidate()
+        return false, showError
+      end
+      local deleted, deleteError = pcall(function()
+        previous:delete()
+      end)
+      if not deleted then
+        local candidateHidden = pcall(function()
+          candidate:hide()
+        end)
+        pcall(function()
+          previous:show()
+        end)
+        if candidateHidden then
+          local candidateDeleted = pcall(function()
+            candidate:delete()
+          end)
+          if not candidateDeleted then
+            owner.compositionStatusCandidateCanvas = candidate
+          end
+        else
+          owner.compositionStatusCandidateCanvas = candidate
+        end
+        return false, deleteError
+      end
+    else
+      local shown, showError = pcall(function()
+        candidate:show()
+      end)
+      if not shown then
+        discardCandidate()
+        return false, showError
+      end
+    end
+
+    owner.compositionStatusCanvas = candidate
     return true
   end
 
@@ -604,6 +757,13 @@ function Adapter:start()
         end
         return rendered, renderError
       end,
+      refreshPresentation = function(help)
+        local rendered, renderError = refreshCompositionStatus(help)
+        if rendered then
+          compositionHelp = help
+        end
+        return rendered, renderError
+      end,
       copy = function(value)
         return hs.pasteboard.setContents(value)
       end,
@@ -690,6 +850,10 @@ function Adapter:start()
     compositionTeardownPending = true
     local timerStopped = stopCompositionResultTimer()
     if not timerStopped then
+      return false
+    end
+    local candidateClosed = closeCompositionStatusCandidate()
+    if not candidateClosed then
       return false
     end
     local guideClosed = closeCompositionGuide()
@@ -831,6 +995,22 @@ function Adapter:start()
   end)
   if not cancelBinding then
     error("Failed to create Composition Cancel binding")
+  end
+  local screenBinding = compositionMode:bind({}, "s", function()
+    if currentGeneration() and cropController:isActive() and not compositionLinger then
+      return cropController:selectSource("screen", compositionGeneration)
+    end
+  end)
+  if not screenBinding then
+    error("Failed to create Composition Screen Capture binding")
+  end
+  local windowBinding = compositionMode:bind({}, "w", function()
+    if currentGeneration() and cropController:isActive() and not compositionLinger then
+      return cropController:selectSource("window", compositionGeneration)
+    end
+  end)
+  if not windowBinding then
+    error("Failed to create Composition Window Capture binding")
   end
   owner.entryHotkey = hs.hotkey.bind(config.modalHotkey.modifiers, config.modalHotkey.key, function()
     requestWindowMode()

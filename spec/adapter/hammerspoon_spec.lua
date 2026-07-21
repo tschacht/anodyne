@@ -70,13 +70,17 @@ describe("Hammerspoon adapter", function()
     assert.are.equal("m", owner.entryHotkey._state.key)
     assert.same({ "ctrl", "alt", "cmd" }, owner.compositionEntryHotkey._state.modifiers)
     assert.are.equal("c", owner.compositionEntryHotkey._state.key)
-    assert.same({ {}, {} }, {
+    assert.same({ {}, {}, {}, {} }, {
       owner.compositionMode._state.bindings[1].modifiers,
       owner.compositionMode._state.bindings[2].modifiers,
+      owner.compositionMode._state.bindings[3].modifiers,
+      owner.compositionMode._state.bindings[4].modifiers,
     })
-    assert.same({ "return", "escape" }, {
+    assert.same({ "return", "escape", "s", "w" }, {
       owner.compositionMode._state.bindings[1].key,
       owner.compositionMode._state.bindings[2].key,
+      owner.compositionMode._state.bindings[3].key,
+      owner.compositionMode._state.bindings[4].key,
     })
     assert.is_false(owner.windowFilter._state.global)
     assert.is_true(owner.historyWindowFilter._state.global)
@@ -196,6 +200,8 @@ describe("Hammerspoon adapter", function()
       { "hotkey.bind", 2 },
       { "modal.bind", 1 },
       { "modal.bind", 2 },
+      { "modal.bind", 3 },
+      { "modal.bind", 4 },
     }
     for _, stage in ipairs(stages) do
       local candidate = FakeHs.new()
@@ -262,6 +268,8 @@ describe("Hammerspoon adapter", function()
       { "hotkey.bind", 2, "Failed to create/enable entry hotkey", false },
       { "modal.bind", 1, "Failed to create Composition Finish/Copy binding", false },
       { "modal.bind", 2, "Failed to create Composition Cancel binding", false },
+      { "modal.bind", 3, "Failed to create Composition Screen Capture binding", false },
+      { "modal.bind", 4, "Failed to create Composition Window Capture binding", false },
       { "timer.doAfter", 1, "Failed to create timer", true },
       { "eventtap.new", 1, "Failed to create modal key guard", true },
       { "canvas.new", 1, "Failed to create modal canvas", true },
@@ -284,13 +292,23 @@ describe("Hammerspoon adapter", function()
     end
   end)
 
-  it("rejects a false modal binding acquisition and rolls back to zero", function()
-    driver:setLifecycleReturn("modal.bind", 2, false)
-    assert.has_error(function()
-      start()
-    end, "Failed to create Composition Cancel binding")
-    assert.is_nil(adapter:stop())
-    assertNoResources(driver)
+  it("rejects every false modal binding acquisition and rolls back to zero", function()
+    for invocation, message in ipairs({
+      "Failed to create Composition Finish/Copy binding",
+      "Failed to create Composition Cancel binding",
+      "Failed to create Composition Screen Capture binding",
+      "Failed to create Composition Window Capture binding",
+    }) do
+      driver = FakeHs.new()
+      driver:setLifecycleReturn("modal.bind", invocation, false)
+      assert.has_error(function()
+        start()
+      end, message)
+      assert.is_nil(adapter:stop())
+      assertNoResources(driver)
+      driver:shutdown()
+      adapter = nil
+    end
   end)
 
   it("renders a masked click-through guide and finishes through the pinned window", function()
@@ -316,9 +334,10 @@ describe("Hammerspoon adapter", function()
       maskArea = maskArea + frame.w * frame.h
     end
     assert.are.equal(1920 * 1080 - 800 * 600, maskArea)
-    local help = "Composition Mode:\nLocked baseline: 800 x 600\nReturn = Finish/Copy\nEsc = Cancel"
+    local help =
+      "Composition Mode:\nLocked baseline: 800 x 600\nSelected source: Screen Capture\nS = Screen Capture · W = Window Capture\nReturn = Finish/Copy\nEsc = Cancel"
     local helpCanvas = owner.compositionStatusCanvas
-    assert.same({ x = 780, y = 60, w = 360, h = 148 }, driver:canvasFrame(helpCanvas))
+    assert.same({ x = 696, y = 60, w = 528, h = 204 }, driver:canvasFrame(helpCanvas))
     assert.are.equal("overlay", helpCanvas._state.level)
     assert.are.equal("canJoinAllSpaces", helpCanvas._state.behavior)
     assert.is_true(helpCanvas._state.mouseCallbackSet)
@@ -336,20 +355,21 @@ describe("Hammerspoon adapter", function()
         textColor = { white = 1, alpha = 1 },
         textFont = "Menlo",
         textAlignment = "left",
-        frame = { x = 20, y = 14, w = 320, h = 120 },
+        frame = { x = 20, y = 14, w = 488, h = 176 },
       },
     }, driver:canvasElements(helpCanvas))
     assert.is_nil(owner.compositionResultTimer)
     assert.are.equal(0, #driver:alerts())
     assert.same({ timers = 0, menus = 1, hotkeys = 2, modals = 2, filters = 2, taps = 0, canvases = 2 }, driver:activeCounts())
 
+    assert.is_true(driver:triggerModalHotkey({}, "w"))
     driver:setWindowFrame(window, { x = 50, y = 40, w = 900, h = 700 })
     assert.is_true(driver:triggerModalHotkey({}, "return"))
     local expected = "Left: 50, Top: 60, Right: 50, Bottom: 40 | Result: 800 x 600 | Scale: 1"
     assert.are.equal(expected, driver:clipboardContents())
     local resultCanvas = owner.compositionStatusCanvas
     assert.is_true(helpCanvas._state.deleted)
-    assert.are.equal(expected, driver:canvasElements(resultCanvas)[2].text)
+    assert.are.equal("Window Capture\n" .. expected, driver:canvasElements(resultCanvas)[2].text)
     assert.is_true(owner.compositionResultTimer._state.active)
     assert.is_true(owner.compositionMode._state.active)
     assert.is_true(canvas._state.deleted)
@@ -364,6 +384,273 @@ describe("Hammerspoon adapter", function()
     assert.is_nil(owner.compositionResultTimer)
     assert.is_nil(owner.compositionStatusCanvas)
     assert.are.equal(expected, driver:clipboardContents())
+  end)
+
+  it("defaults visibly to Screen and refreshes only status for idempotent S/W selection", function()
+    start()
+    local target = driver.runtime.focused
+    driver:triggerHotkey({ "ctrl", "alt", "cmd" }, "c")
+    local guide = owner.compositionCanvas
+    local guideFrame = driver:canvasFrame(guide)
+    local guideElements = driver:canvasElements(guide)
+    local screenStatus = owner.compositionStatusCanvas
+    local frameReads = #target._state.frameReads
+    assert.matches("Selected source: Screen Capture", driver:canvasElements(screenStatus)[2].text)
+
+    assert.is_true(driver:triggerModalHotkey({}, "s"))
+    assert.are.equal(screenStatus, owner.compositionStatusCanvas)
+    assert.are.equal(guide, owner.compositionCanvas)
+    assert.are.equal(frameReads, #target._state.frameReads)
+
+    assert.is_true(driver:triggerModalHotkey({}, "w"))
+    local windowStatus = owner.compositionStatusCanvas
+    assert.is_true(screenStatus._state.deleted)
+    assert.matches("Selected source: Window Capture", driver:canvasElements(windowStatus)[2].text)
+    assert.are.equal(guide, owner.compositionCanvas)
+    assert.same(guideFrame, driver:canvasFrame(guide))
+    assert.same(guideElements, driver:canvasElements(guide))
+    assert.are.equal(frameReads, #target._state.frameReads)
+
+    assert.is_true(driver:triggerModalHotkey({}, "w"))
+    assert.are.equal(windowStatus, owner.compositionStatusCanvas)
+    assert.are.equal(guide, owner.compositionCanvas)
+    assert.are.equal(frameReads, #target._state.frameReads)
+
+    assert.is_true(driver:triggerModalHotkey({}, "s"))
+    assert.matches("Selected source: Screen Capture", driver:canvasElements(owner.compositionStatusCanvas)[2].text)
+    assert.are.equal(guide, owner.compositionCanvas)
+    assert.are.equal(frameReads, #target._state.frameReads)
+  end)
+
+  it("rolls back every status refresh stage without changing the visible Window selection", function()
+    local faults = {
+      { operation = "canvas.new", returnsNil = true },
+      { operation = "canvas.level" },
+      { operation = "canvas.behavior" },
+      { operation = "canvas.mouseCallback" },
+      { operation = "canvas.element" },
+      { operation = "canvas.show" },
+      { operation = "canvas.hide" },
+      { operation = "canvas.delete" },
+    }
+    for _, fault in ipairs(faults) do
+      driver = FakeHs.new()
+      start()
+      local target = driver.runtime.focused
+      driver:triggerHotkey({ "ctrl", "alt", "cmd" }, "c")
+      assert.is_true(driver:triggerModalHotkey({}, "w"))
+      local guide = owner.compositionCanvas
+      local windowStatus = owner.compositionStatusCanvas
+      local windowText = driver:canvasElements(windowStatus)[2].text
+      local canvasCount = #driver.runtime.canvases
+      local invocation = (driver.runtime.invocationCounts[fault.operation] or 0) + 1
+      if fault.returnsNil then
+        driver:setLifecycleReturn(fault.operation, invocation, nil)
+      else
+        driver:setLifecycleFault(fault.operation, invocation)
+      end
+
+      assert.is_true(driver:triggerModalHotkey({}, "s"))
+      assert.are.equal(windowStatus, owner.compositionStatusCanvas)
+      assert.is_true(windowStatus._state.visible)
+      assert.is_not_true(windowStatus._state.deleted)
+      assert.are.equal(windowText, driver:canvasElements(windowStatus)[2].text)
+      assert.matches("Selected source: Window Capture", windowText)
+      assert.are.equal(guide, owner.compositionCanvas)
+      assert.same({ timers = 0, menus = 1, hotkeys = 2, modals = 2, filters = 2, taps = 0, canvases = 2 }, driver:activeCounts())
+      if #driver.runtime.canvases > canvasCount then
+        assert.is_true(driver.runtime.canvases[#driver.runtime.canvases]._state.deleted)
+      end
+
+      driver:clearLifecycleFaults()
+      driver:clearLifecycleReturns()
+      assert.is_true(driver:triggerModalHotkey({}, "w"))
+      assert.are.equal(windowStatus, owner.compositionStatusCanvas)
+      assert.is_true(driver:triggerModalHotkey({}, "s"))
+      assert.matches("Selected source: Screen Capture", driver:canvasElements(owner.compositionStatusCanvas)[2].text)
+      assert.is_true(driver:triggerModalHotkey({}, "w"))
+      driver:setWindowFrame(target, { x = 50, y = 40, w = 900, h = 700 })
+      assert.is_true(driver:triggerModalHotkey({}, "return"))
+      local expected = "Left: 50, Top: 60, Right: 50, Bottom: 40 | Result: 800 x 600 | Scale: 1"
+      assert.are.equal(expected, driver:clipboardContents())
+      assert.are.equal("Window Capture\n" .. expected, driver:canvasElements(owner.compositionStatusCanvas)[2].text)
+      assert.is_nil(adapter:stop())
+      assertNoResources(driver)
+      driver:shutdown()
+      adapter = nil
+    end
+  end)
+
+  it("retires a retained status candidate on Escape or top-level replacement before re-entry", function()
+    for _, dismissal in ipairs({ "escape", "window" }) do
+      driver = FakeHs.new()
+      start()
+      driver:triggerHotkey({ "ctrl", "alt", "cmd" }, "c")
+      assert.is_true(driver:triggerModalHotkey({}, "w"))
+      local guide = owner.compositionCanvas
+      local status = owner.compositionStatusCanvas
+      driver:setPersistentLifecycleFault("canvas.delete")
+      assert.is_true(driver:triggerModalHotkey({}, "s"))
+      local candidate = owner.compositionStatusCandidateCanvas
+      assert.is_not_nil(candidate)
+      assert.is_false(candidate._state.visible)
+      assert.are.equal(guide, owner.compositionCanvas)
+      assert.are.equal(status, owner.compositionStatusCanvas)
+      assert.is_true(status._state.visible)
+      assert.matches("Selected source: Window Capture", driver:canvasElements(status)[2].text)
+
+      driver:clearLifecycleFaults()
+      if dismissal == "escape" then
+        assert.is_true(driver:triggerModalHotkey({}, "escape"))
+        assert.is_false(owner.compositionMode._state.active)
+        assert.are.equal(0, driver:activeCounts().canvases)
+      else
+        driver:triggerEntry()
+        assert.is_false(owner.compositionMode._state.active)
+        assert.is_true(owner.windowMode._state.active)
+        assert.are.equal(1, driver:activeCounts().canvases)
+        assert.is_true(driver:key("escape"))
+        assert.are.equal(0, driver:activeCounts().canvases)
+      end
+      assert.is_true(candidate._state.deleted)
+      assert.is_nil(owner.compositionStatusCandidateCanvas)
+
+      driver:triggerHotkey({ "ctrl", "alt", "cmd" }, "c")
+      assert.is_true(owner.compositionMode._state.active)
+      assert.is_not_nil(owner.compositionCanvas)
+      assert.is_true(driver:triggerModalHotkey({}, "escape"))
+      assert.is_nil(adapter:stop())
+      assertNoResources(driver)
+      driver:shutdown()
+      adapter = nil
+    end
+  end)
+
+  it("never deletes a selector candidate whose hide failed and retries every cleanup path", function()
+    for _, dismissal in ipairs({ "escape", "window", "stop" }) do
+      driver = FakeHs.new()
+      start()
+      driver:triggerHotkey({ "ctrl", "alt", "cmd" }, "c")
+      assert.is_true(driver:triggerModalHotkey({}, "w"))
+      local guide = owner.compositionCanvas
+      local status = owner.compositionStatusCanvas
+      local deletesBefore = driver.runtime.invocationCounts["canvas.delete"] or 0
+      driver:setPersistentLifecycleFault("canvas.hide")
+      assert.is_true(driver:triggerModalHotkey({}, "s"))
+      local candidate = owner.compositionStatusCandidateCanvas
+      assert.is_not_nil(candidate)
+      assert.is_not_true(candidate._state.visible)
+      assert.are.equal(deletesBefore, driver.runtime.invocationCounts["canvas.delete"] or 0)
+      assert.are.equal(guide, owner.compositionCanvas)
+      assert.are.equal(status, owner.compositionStatusCanvas)
+      assert.is_true(status._state.visible)
+      assert.matches("Selected source: Window Capture", driver:canvasElements(status)[2].text)
+
+      driver:clearLifecycleFaults()
+      assert.is_true(driver:triggerModalHotkey({}, "w"))
+      assert.are.equal(candidate, owner.compositionStatusCandidateCanvas)
+      assert.is_not_true(candidate._state.visible)
+      assert.are.equal(status, owner.compositionStatusCanvas)
+      assert.is_true(status._state.visible)
+      assert.matches("Selected source: Window Capture", driver:canvasElements(status)[2].text)
+      if dismissal == "stop" then
+        assert.is_nil(adapter:stop())
+        assertNoResources(driver)
+      else
+        if dismissal == "escape" then
+          assert.is_true(driver:triggerModalHotkey({}, "escape"))
+          assert.is_false(owner.compositionMode._state.active)
+          assert.are.equal(0, driver:activeCounts().canvases)
+        else
+          driver:triggerEntry()
+          assert.is_true(owner.windowMode._state.active)
+          assert.are.equal(1, driver:activeCounts().canvases)
+          assert.is_true(driver:key("escape"))
+        end
+        assert.is_true(candidate._state.deleted)
+        assert.is_nil(owner.compositionStatusCandidateCanvas)
+        driver:triggerHotkey({ "ctrl", "alt", "cmd" }, "c")
+        assert.is_true(owner.compositionMode._state.active)
+        assert.is_true(driver:triggerModalHotkey({}, "escape"))
+        assert.is_nil(adapter:stop())
+        assertNoResources(driver)
+      end
+      driver:shutdown()
+      adapter = nil
+    end
+  end)
+
+  it("keeps W, S-to-W, and repeated W on the identical shipped Window boundary", function()
+    local expected = "Left: 50, Top: 60, Right: 50, Bottom: 40 | Result: 800 x 600 | Scale: 1"
+    local expectedFinishLog = {
+      "screen.currentMode#2",
+      "pasteboard.setContents#1",
+      "canvas.hide#2",
+      "canvas.delete#2",
+      "canvas.hide#3",
+      "canvas.delete#3",
+      "canvas.new#4",
+      "canvas.level#4",
+      "canvas.behavior#3",
+      "canvas.mouseCallback#4",
+      "canvas.element#10",
+      "canvas.element#11",
+      "canvas.show#4",
+      "timer.doAfter#1",
+    }
+    for _, route in ipairs({ { "w" }, { "s", "w" }, { "w", "w" } }) do
+      driver = FakeHs.new()
+      start()
+      local target = driver.runtime.focused
+      driver:triggerHotkey({ "ctrl", "alt", "cmd" }, "c")
+      local guide = owner.compositionCanvas
+      for _, key in ipairs(route) do
+        assert.is_true(driver:triggerModalHotkey({}, key))
+      end
+      driver:setWindowFrame(target, { x = 50, y = 40, w = 900, h = 700 })
+      local readsBeforeFinish = #target._state.frameReads
+      driver:clearCallLog()
+      assert.is_true(driver:triggerModalHotkey({}, "return"))
+      assert.are.equal(readsBeforeFinish + 1, #target._state.frameReads)
+      assert.are.equal(expected, driver:clipboardContents())
+      assert.are.equal("Window Capture\n" .. expected, driver:canvasElements(owner.compositionStatusCanvas)[2].text)
+      assert.is_true(guide._state.deleted)
+      assert.is_true(owner.compositionResultTimer._state.active)
+      assert.same(expectedFinishLog, driver:callLog())
+      assert.is_nil(adapter:stop())
+      assertNoResources(driver)
+      driver:shutdown()
+      adapter = nil
+    end
+  end)
+
+  it("finishes Screen from the frozen display without a final window-frame read", function()
+    start()
+    local target = driver.runtime.focused
+    driver:triggerHotkey({ "ctrl", "alt", "cmd" }, "c")
+    local readsBeforeFinish = #target._state.frameReads
+    driver:setWindowFrame(target, { x = -700, y = 900, w = 3200, h = 25 })
+    assert.is_true(driver:triggerModalHotkey({}, "return"))
+    local expected = "Left: 100, Top: 100, Right: 1020, Bottom: 380 | Result: 800 x 600 | Scale: 1"
+    assert.are.equal(readsBeforeFinish, #target._state.frameReads)
+    assert.are.equal(expected, driver:clipboardContents())
+    assert.are.equal("Screen Capture\n" .. expected, driver:canvasElements(owner.compositionStatusCanvas)[2].text)
+  end)
+
+  it("keeps selectors inert during result linger while Escape still dismisses early", function()
+    start()
+    driver:triggerHotkey({ "ctrl", "alt", "cmd" }, "c")
+    assert.is_true(driver:triggerModalHotkey({}, "return"))
+    local status = owner.compositionStatusCanvas
+    local timer = owner.compositionResultTimer
+    assert.is_true(driver:triggerModalHotkey({}, "s"))
+    assert.is_true(driver:triggerModalHotkey({}, "w"))
+    assert.are.equal(status, owner.compositionStatusCanvas)
+    assert.are.equal(timer, owner.compositionResultTimer)
+    assert.is_true(driver:triggerModalHotkey({}, "escape"))
+    assert.is_false(owner.compositionMode._state.active)
+    assert.is_false(timer._state.active)
+    assert.is_true(status._state.deleted)
   end)
 
   it("uses the configured guide stroke width override", function()
@@ -444,43 +731,55 @@ describe("Hammerspoon adapter", function()
     end
   end)
 
-  it("keeps recoverable containment, pasteboard, and guide-close errors persistent without timers", function()
-    for _, failure in ipairs({ "containment", "pasteboard", "close" }) do
-      driver = FakeHs.new()
-      start()
-      local target = driver.runtime.focused
-      driver:triggerHotkey({ "ctrl", "alt", "cmd" }, "c")
-      if failure == "containment" then
-        driver:setWindowFrame(target, { x = 101, y = 100, w = 900, h = 700 })
-      else
-        driver:setWindowFrame(target, { x = 50, y = 50, w = 900, h = 700 })
-      end
-      if failure == "pasteboard" then
-        driver:setLifecycleReturn("pasteboard.setContents", 1, false)
-      elseif failure == "close" then
-        driver:setLifecycleFault("canvas.delete", 1)
-      end
+  it("recovers containment, pasteboard, and guide-close failures identically for every Window selector route", function()
+    for _, route in ipairs({ { "w" }, { "s", "w" }, { "w", "w" } }) do
+      for _, failure in ipairs({ "containment", "pasteboard", "close" }) do
+        driver = FakeHs.new()
+        start()
+        local target = driver.runtime.focused
+        driver:triggerHotkey({ "ctrl", "alt", "cmd" }, "c")
+        for _, key in ipairs(route) do
+          assert.is_true(driver:triggerModalHotkey({}, key))
+        end
+        if failure == "containment" then
+          driver:setWindowFrame(target, { x = 101, y = 100, w = 900, h = 700 })
+        else
+          driver:setWindowFrame(target, { x = 50, y = 50, w = 900, h = 700 })
+        end
+        if failure == "pasteboard" then
+          driver:setLifecycleReturn("pasteboard.setContents", 1, false)
+        elseif failure == "close" then
+          driver:setLifecycleFault("canvas.delete", (driver.runtime.invocationCounts["canvas.delete"] or 0) + 1)
+        end
 
-      assert.is_true(driver:triggerModalHotkey({}, "return"))
-      local text = driver:canvasElements(owner.compositionStatusCanvas)[2].text
-      if failure == "containment" then
-        assert.matches("outside the final window", text)
-      elseif failure == "pasteboard" then
-        assert.matches("Could not copy OBS crop values", text)
-      else
-        assert.matches("could not close", text)
+        assert.is_true(driver:triggerModalHotkey({}, "return"))
+        local text = driver:canvasElements(owner.compositionStatusCanvas)[2].text
+        if failure == "containment" then
+          assert.matches("outside the final window", text)
+          driver:setWindowFrame(target, { x = 50, y = 50, w = 900, h = 700 })
+        elseif failure == "pasteboard" then
+          assert.matches("Could not copy OBS crop values", text)
+        else
+          assert.matches("could not close", text)
+        end
+        assert.matches("Selected source: Window Capture", text)
+        assert.matches("Locked baseline: 800 x 600", text)
+        assert.matches("Return = Finish/Copy", text)
+        assert.matches("Esc = Cancel", text)
+        assert.is_true(owner.compositionMode._state.active)
+        assert.is_not_nil(owner.compositionCanvas)
+        assert.is_nil(owner.compositionResultTimer)
+
+        assert.is_true(driver:triggerModalHotkey({}, "return"))
+        assert.are.equal("Left: 50, Top: 50, Right: 50, Bottom: 50 | Result: 800 x 600 | Scale: 1", driver:clipboardContents())
+        assert.is_true(owner.compositionResultTimer._state.active)
+        assert.is_nil(owner.compositionCanvas)
+        assert.is_true(driver:triggerModalHotkey({}, "escape"))
+        assert.is_nil(adapter:stop())
+        assertNoResources(driver)
+        driver:shutdown()
+        adapter = nil
       end
-      assert.matches("Locked baseline: 800 x 600", text)
-      assert.matches("Return = Finish/Copy", text)
-      assert.matches("Esc = Cancel", text)
-      assert.is_true(owner.compositionMode._state.active)
-      assert.is_not_nil(owner.compositionCanvas)
-      assert.is_nil(owner.compositionResultTimer)
-      assert.is_true(driver:triggerModalHotkey({}, "escape"))
-      assert.is_nil(adapter:stop())
-      assertNoResources(driver)
-      driver:shutdown()
-      adapter = nil
     end
   end)
 
@@ -985,10 +1284,12 @@ describe("Hammerspoon adapter", function()
     end
   end)
 
-  it("does not let inactive Composition bindings swallow Return or Escape", function()
+  it("does not let inactive Composition bindings swallow Return, Escape, S, or W", function()
     start()
     assert.is_false(driver:triggerModalHotkey({}, "return"))
     assert.is_false(driver:triggerModalHotkey({}, "escape"))
+    assert.is_false(driver:triggerModalHotkey({}, "s"))
+    assert.is_false(driver:triggerModalHotkey({}, "w"))
     driver:triggerHotkey({ "ctrl", "alt", "cmd" }, "c")
     assert.is_true(driver:triggerModalHotkey({}, "escape"))
     assert.is_false(driver:triggerModalHotkey({}, "escape"))

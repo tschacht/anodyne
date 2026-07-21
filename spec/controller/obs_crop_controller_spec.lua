@@ -16,7 +16,7 @@ describe("OBS crop controller", function()
     screen = { id = "display-a", fullFrame = rect(-100, 0, 1920, 1080), scale = 2 }
     target.screen = screen
     current = true
-    log = { alerts = {}, renders = {}, copies = {}, closes = 0 }
+    log = { alerts = {}, renders = {}, presentations = {}, copies = {}, closes = 0, frameReads = 0, screenReads = 0, scaleReads = 0 }
     ports = {
       currentGeneration = function()
         return current
@@ -28,9 +28,11 @@ describe("OBS crop controller", function()
         return window.id
       end,
       windowFrame = function(window)
+        log.frameReads = log.frameReads + 1
         return window.frame
       end,
       windowScreen = function(window)
+        log.screenReads = log.screenReads + 1
         return window.screen
       end,
       screenIdentity = function(value)
@@ -40,10 +42,15 @@ describe("OBS crop controller", function()
         return value.fullFrame
       end,
       screenScale = function(value)
+        log.scaleReads = log.scaleReads + 1
         return value.scale
       end,
       renderGuide = function(...)
         log.renders[#log.renders + 1] = { ... }
+        return true
+      end,
+      refreshPresentation = function(value)
+        log.presentations[#log.presentations + 1] = value
         return true
       end,
       copy = function(value)
@@ -78,13 +85,84 @@ describe("OBS crop controller", function()
     assert.are.equal("display-a", state.screenIdentity)
     assert.same(screen.fullFrame, state.screenFullFrame)
     assert.are.equal(2, state.scale)
+    assert.are.equal("screen", state.captureSource)
     assert.are.equal(generation, state.generation)
     assert.are.equal(target, ports.selectWindow())
     assert.are.equal(original, target.frame)
-    assert.same(
-      { screen, screen.fullFrame, state.guideFrame, "Composition Mode:\nLocked baseline: 777 x 432\nReturn = Finish/Copy\nEsc = Cancel" },
-      log.renders[1]
+    assert.same({
+      screen,
+      screen.fullFrame,
+      state.guideFrame,
+      "Composition Mode:\nLocked baseline: 777 x 432\nSelected source: Screen Capture\nS = Screen Capture · W = Window Capture\nReturn = Finish/Copy\nEsc = Cancel",
+    }, log.renders[1])
+  end)
+
+  it("selects only closed sources transactionally without replacing session snapshots", function()
+    local generation = enter()
+    local state = controller:currentState()
+    local snapshots = {
+      window = state.window,
+      guideFrame = state.guideFrame,
+      screenFullFrame = state.screenFullFrame,
+      scale = state.scale,
+    }
+
+    assert.is_true(controller:selectSource("screen", generation))
+    assert.are.equal(0, #log.presentations)
+    assert.is_true(controller:selectSource("window", generation))
+    assert.are.equal("window", state.captureSource)
+    assert.are.equal(generation, state.generation)
+    assert.are.equal(snapshots.window, state.window)
+    assert.are.equal(snapshots.guideFrame, state.guideFrame)
+    assert.are.equal(snapshots.screenFullFrame, state.screenFullFrame)
+    assert.are.equal(snapshots.scale, state.scale)
+    assert.are.equal(1, #log.renders)
+    assert.are.equal(1, log.frameReads)
+    assert.are.equal(1, log.screenReads)
+    assert.are.equal(1, log.scaleReads)
+    assert.are.equal(
+      "Composition Mode:\nLocked baseline: 777 x 432\nSelected source: Window Capture\nS = Screen Capture · W = Window Capture\nReturn = Finish/Copy\nEsc = Cancel",
+      log.presentations[1]
     )
+    assert.is_true(controller:selectSource("window", generation))
+    assert.are.equal(1, #log.presentations)
+    assert.is_true(controller:selectSource("screen", generation))
+    assert.are.equal("screen", state.captureSource)
+    assert.are.equal(2, #log.presentations)
+  end)
+
+  it("rejects invalid, inactive, and stale source selections", function()
+    local ok, failure = controller:selectSource("display", 1)
+    assert.is_false(ok)
+    assert.same({ code = "invalid-source", source = "display" }, failure)
+    assert.is_false(controller:selectSource(nil, 1))
+    assert.is_false(controller:selectSource("window", 1))
+
+    local generation = enter()
+    assert.is_false(controller:selectSource("window"))
+    assert.is_false(controller:selectSource("window", generation + 1))
+    current = false
+    assert.is_false(controller:selectSource("window", generation))
+    assert.are.equal("screen", controller:currentState().captureSource)
+    assert.are.equal(0, #log.presentations)
+  end)
+
+  it("does not commit selection when presentation fails or raises", function()
+    local generation = enter()
+    for _, failure in ipairs({ false, "raise" }) do
+      ports.refreshPresentation = function()
+        if failure == "raise" then
+          error("presentation")
+        end
+        return false
+      end
+      local ok, reason = controller:selectSource("window", generation)
+      assert.is_false(ok)
+      assert.same({ kind = "presentation-failed" }, reason)
+      assert.are.equal("screen", controller:currentState().captureSource)
+      assert.are.equal(generation, controller:currentState().generation)
+      assert.are.equal(1, #log.renders)
+    end
   end)
 
   it("uses a positive override while still freezing the native screen scale", function()
@@ -126,22 +204,52 @@ describe("OBS crop controller", function()
     assert.are.equal(1, #log.renders)
   end)
 
-  it("finishes, copies exact formatted output, tears down, and reports success", function()
+  it("finishes Screen Capture from the frozen display without reading final window geometry", function()
     local generation = enter()
     target.frame = rect(50, 40, 900, 520)
     assert.is_true(controller:finish(generation))
-    assert.are.equal("Left: 100, Top: 80, Right: 146, Bottom: 96 | Result: 1554 x 864 | Scale: 2", log.copies[1])
+    assert.are.equal("Left: 400, Top: 160, Right: 1886, Bottom: 1136 | Result: 1554 x 864 | Scale: 2", log.copies[1])
+    assert.are.equal(1, log.frameReads)
     assert.are.equal(1, log.closes)
     assert.same({ kind = "inactive" }, controller:currentState())
-    assert.are.equal(log.copies[1], log.alerts[#log.alerts][1])
+    assert.are.equal("Screen Capture\n" .. log.copies[1], log.alerts[#log.alerts][1])
     assert.is_false(controller:finish(generation))
     assert.is_false(controller:cancel(generation))
     assert.are.equal(1, log.closes)
     assert.are.equal(1, #log.copies)
   end)
 
+  it("keeps Screen Capture output invariant under arbitrary window movement and resizing", function()
+    local outputs = {}
+    for _, finalFrame in ipairs({ rect(100, 80, 777, 432), rect(-500, -400, 1, 1), rect(800, 700, 3000, 2400) }) do
+      target.frame = rect(100, 80, 777, 432)
+      local generation = enter()
+      target.frame = finalFrame
+      assert.is_true(controller:finish(generation))
+      outputs[#outputs + 1] = log.copies[#log.copies]
+    end
+    assert.are.equal(outputs[1], outputs[2])
+    assert.are.equal(3, log.frameReads)
+  end)
+
+  it("routes explicit W, S to W, and repeated W through the shipped Window Capture output", function()
+    for _, route in ipairs({ { "window" }, { "screen", "window" }, { "window", "window" } }) do
+      target.frame = rect(100, 80, 777, 432)
+      local generation = enter()
+      for _, source in ipairs(route) do
+        assert.is_true(controller:selectSource(source, generation))
+      end
+      target.frame = rect(50, 40, 900, 520)
+      assert.is_true(controller:finish(generation))
+      assert.are.equal("Left: 100, Top: 80, Right: 146, Bottom: 96 | Result: 1554 x 864 | Scale: 2", log.copies[#log.copies])
+      assert.are.equal("Window Capture\n" .. log.copies[#log.copies], log.alerts[#log.alerts][1])
+    end
+    assert.are.equal(3, log.closes)
+  end)
+
   it("keeps outside-edge failures active and copies nothing", function()
     local generation = enter()
+    assert.is_true(controller:selectSource("window", generation))
     target.frame = rect(101, 80, 900, 520)
     local ok, failure = controller:finish(generation)
     assert.is_false(ok)
@@ -149,10 +257,24 @@ describe("OBS crop controller", function()
     assert.is_true(controller:isActive())
     assert.are.equal(0, #log.copies)
     assert.are.equal(0, log.closes)
+    assert.matches("final window", log.alerts[#log.alerts][1])
+  end)
+
+  it("keeps frozen-screen containment failures active with source-specific recovery", function()
+    target.frame = rect(-101, 80, 777, 432)
+    local generation = enter()
+    local ok, failure = controller:finish(generation)
+    assert.is_false(ok)
+    assert.same({ code = "outside_final", edge = "left" }, failure)
+    assert.is_true(controller:isActive())
+    assert.are.equal(0, #log.copies)
+    assert.are.equal(0, log.closes)
+    assert.matches("frozen screen", log.alerts[#log.alerts][1])
   end)
 
   it("keeps pasteboard failures active for retry", function()
     local generation = enter()
+    assert.is_true(controller:selectSource("window", generation))
     target.frame = rect(50, 40, 900, 520)
     ports.copy = function()
       error("pasteboard")
@@ -209,6 +331,7 @@ describe("OBS crop controller", function()
 
   it("cancels invalid final geometry rather than copying", function()
     local generation = enter()
+    assert.is_true(controller:selectSource("window", generation))
     target.frame.w = 0
     assert.is_true(controller:finish(generation))
     assert.are.equal(0, #log.copies)
@@ -241,6 +364,7 @@ describe("OBS crop controller", function()
     assert.are.equal(1, log.closes)
     assert.are.equal(0, #log.copies)
 
+    assert.is_true(controller:selectSource("window", newGeneration))
     assert.is_true(controller:finish(newGeneration))
     assert.are.equal(2, log.closes)
     assert.are.equal(1, #log.copies)
@@ -279,6 +403,7 @@ describe("OBS crop controller", function()
 
   it("retains all active state when teardown fails and retries it once per action", function()
     local generation = enter()
+    assert.is_true(controller:selectSource("window", generation))
     local active = controller:currentState()
     ports.close = function()
       log.closes = log.closes + 1
