@@ -13,6 +13,7 @@ local cleanupStages = {
   { "modalRefreshTimer", "stop" },
   { "menuFailureTimer", "stop" },
   { "modalKeyGuard", "stop" },
+  { "compositionResultTimer", "stop" },
   { "entryHotkey", "delete" },
   { "compositionEntryHotkey", "delete" },
   { "windowMode", "delete" },
@@ -21,6 +22,8 @@ local cleanupStages = {
   { "modalCanvas", "delete" },
   { "compositionCanvas", "hide" },
   { "compositionCanvas", "delete" },
+  { "compositionStatusCanvas", "hide" },
+  { "compositionStatusCanvas", "delete" },
   { "menu", "delete" },
   { "windowFilter", "unsubscribeAll" },
   { "historyWindowFilter", "unsubscribeAll" },
@@ -41,7 +44,7 @@ local function cleanup(owner, progress)
         record = { object = object, done = {} }
         progress[field] = record
       end
-      local isCanvas = field == "modalCanvas" or field == "compositionCanvas"
+      local isCanvas = field == "modalCanvas" or field == "compositionCanvas" or field == "compositionStatusCanvas"
       local blockedByHide = isCanvas and method == "delete" and not record.done.hide
       if not record.done[method] and not blockedByHide then
         local memberOk, member = pcall(function()
@@ -60,7 +63,11 @@ local function cleanup(owner, progress)
           end
         end
       end
-      local needsStop = field == "modalTimer" or field == "modalRefreshTimer" or field == "menuFailureTimer" or field == "modalKeyGuard"
+      local needsStop = field == "modalTimer"
+        or field == "modalRefreshTimer"
+        or field == "menuFailureTimer"
+        or field == "modalKeyGuard"
+        or field == "compositionResultTimer"
       local needsHide = isCanvas
       local needsDelete = field == "entryHotkey"
         or field == "compositionEntryHotkey"
@@ -107,8 +114,23 @@ function Adapter:start()
   local compositionMode
   local cropController
   local compositionGeneration
+  local compositionHelp
   local compositionExitPending = false
+  local compositionLinger = false
+  local compositionTeardownPending = false
   local exitCompositionMode
+  local dismissCompositionPresentation
+  local startCompositionLinger
+
+  local function compositionPresentationPending()
+    return compositionTeardownPending
+      or compositionLinger
+      or compositionExitPending
+      or compositionGeneration ~= nil
+      or owner.compositionResultTimer ~= nil
+      or owner.compositionCanvas ~= nil
+      or owner.compositionStatusCanvas ~= nil
+  end
 
   owner.modalState = {
     active = false,
@@ -184,6 +206,42 @@ function Adapter:start()
       return true
     end
     return false, deleteError
+  end
+
+  local function closeCompositionStatus()
+    local canvas = owner.compositionStatusCanvas
+    if not canvas then
+      return true
+    end
+    local hidden, hideError = pcall(function()
+      canvas:hide()
+    end)
+    if not hidden then
+      return false, hideError
+    end
+    local deleted, deleteError = pcall(function()
+      canvas:delete()
+    end)
+    if deleted then
+      owner.compositionStatusCanvas = nil
+      return true
+    end
+    return false, deleteError
+  end
+
+  local function stopCompositionResultTimer()
+    local timer = owner.compositionResultTimer
+    if not timer then
+      return true
+    end
+    local stopped, stopError = pcall(function()
+      timer:stop()
+    end)
+    if stopped then
+      owner.compositionResultTimer = nil
+      return true
+    end
+    return false, stopError
   end
 
   local function stopMenuFailureTimer()
@@ -265,6 +323,81 @@ function Adapter:start()
       frame = { x = 20, y = 14, w = width - 40, h = height - 28 },
     }
     canvas:show()
+  end
+
+  local function showWindowFailure(message)
+    modalAlert(message)
+    local timer
+    local created, timerOrError = pcall(function()
+      return hs.timer.doAfter(config.menuFailureDuration, function()
+        if not currentGeneration() or owner.menuFailureTimer ~= timer then
+          return
+        end
+        owner.menuFailureTimer = nil
+        closeModalOverlay()
+      end)
+    end)
+    if created then
+      timer = timerOrError
+    end
+    if not created or not timer then
+      local closed, closeError = closeModalOverlay()
+      if not closed then
+        error(closeError, 0)
+      end
+      error(created and "Failed to create timer" or timerOrError, 0)
+    end
+    owner.menuFailureTimer = timer
+    return true
+  end
+
+  local function compositionStatus(message)
+    local closed, closeError = closeCompositionStatus()
+    if not closed then
+      return false, closeError
+    end
+
+    local screenFrame = hs.screen.mainScreen():frame()
+    local lines = hs.fnutils.split(message, "\n")
+    local longestLine = 0
+    for _, line in ipairs(lines) do
+      longestLine = math.max(longestLine, #line)
+    end
+
+    local width = math.min(math.max(280, longestLine * 12 + 48), math.floor(screenFrame.w * 0.8))
+    local height = math.min(math.max(90, #lines * 28 + 36), math.floor(screenFrame.h * 0.7))
+    local frame = {
+      x = math.floor(screenFrame.x + (screenFrame.w - width) / 2),
+      y = math.floor(screenFrame.y + 60),
+      w = width,
+      h = height,
+    }
+
+    local canvas = hs.canvas.new(frame)
+    if not canvas then
+      error("Failed to create composition status canvas")
+    end
+    owner.compositionStatusCanvas = canvas
+    canvas:level(hs.canvas.windowLevels.overlay)
+    canvas:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces)
+    canvas:mouseCallback(nil)
+    canvas[1] = {
+      type = "rectangle",
+      action = "fill",
+      fillColor = { red = 0.08, green = 0.08, blue = 0.08, alpha = 0.92 },
+      roundedRectRadii = { xRadius = 12, yRadius = 12 },
+    }
+    canvas[2] = {
+      type = "text",
+      text = message,
+      textSize = 20,
+      textColor = { white = 1, alpha = 1 },
+      textFont = "Menlo",
+      textAlignment = "left",
+      frame = { x = 20, y = 14, w = width - 40, h = height - 28 },
+    }
+    canvas:show()
+    return true
   end
 
   local ports = {
@@ -431,14 +564,21 @@ function Adapter:start()
           },
         }
         canvas:show()
-        return hs.alert.show(help, config.obsCrop.resultDuration)
+        local rendered, renderError = compositionStatus(help)
+        if rendered then
+          compositionHelp = help
+        end
+        return rendered, renderError
       end,
       copy = function(value)
         return hs.pasteboard.setContents(value)
       end,
       close = closeCompositionGuide,
       alert = function(message, duration)
-        return hs.alert.show(message, duration or config.menuFailureDuration)
+        if cropController:isActive() then
+          return compositionStatus((compositionHelp and (compositionHelp .. "\n") or "") .. "Status: " .. message)
+        end
+        return startCompositionLinger(message, duration or config.obsCrop.resultDuration)
       end,
     },
   })
@@ -472,8 +612,8 @@ function Adapter:start()
     controller:onDestroyed(win)
     local state = cropController:currentState()
     local closed = cropController:onDestroyed(win, state.generation)
-    if closed and not cropController:isActive() and compositionGeneration ~= nil then
-      exitCompositionMode()
+    if closed and not cropController:isActive() and compositionGeneration ~= nil and not compositionLinger then
+      dismissCompositionPresentation()
     end
   end)
 
@@ -504,18 +644,65 @@ function Adapter:start()
       compositionMode:exit()
     end)
     if not exited then
-      pcall(hs.alert.show, "Composition Mode could not close; retry entry", config.menuFailureDuration)
+      compositionLinger = true
+      pcall(compositionStatus, "Composition Mode could not close; retry entry")
       return false
     end
     compositionExitPending = false
     compositionGeneration = nil
     return true
   end
+  dismissCompositionPresentation = function()
+    compositionTeardownPending = true
+    local timerStopped = stopCompositionResultTimer()
+    if not timerStopped then
+      return false
+    end
+    local guideClosed = closeCompositionGuide()
+    if not guideClosed then
+      return false
+    end
+    local statusClosed = closeCompositionStatus()
+    if not statusClosed then
+      return false
+    end
+    if not exitCompositionMode() then
+      return false
+    end
+    compositionLinger = false
+    compositionHelp = nil
+    compositionTeardownPending = false
+    return true
+  end
+  startCompositionLinger = function(message, duration)
+    local timerStopped, timerError = stopCompositionResultTimer()
+    if not timerStopped then
+      return false, timerError
+    end
+    compositionLinger = true
+    local rendered, renderError = compositionStatus(message)
+    if not rendered then
+      return false, renderError
+    end
+    local timer
+    timer = hs.timer.doAfter(duration, function()
+      if not currentGeneration() or owner.compositionResultTimer ~= timer or not compositionLinger then
+        return
+      end
+      owner.compositionResultTimer = nil
+      dismissCompositionPresentation()
+    end)
+    if not timer then
+      error("Failed to create composition result timer")
+    end
+    owner.compositionResultTimer = timer
+    return true
+  end
   function compositionMode:entered()
     local entered, generation = cropController:enter()
     if entered then
       compositionGeneration = generation
-    else
+    elseif not compositionLinger then
       exitCompositionMode()
     end
   end
@@ -534,16 +721,13 @@ function Adapter:start()
     if not currentGeneration() then
       return
     end
-    if compositionExitPending and not exitCompositionMode() then
-      return
-    end
     if cropController:isActive() then
       if not cropController:crossMode(compositionGeneration) then
         return
       end
     end
-    if compositionGeneration ~= nil then
-      if not exitCompositionMode() then
+    if compositionPresentationPending() then
+      if not dismissCompositionPresentation() then
         return
       end
     end
@@ -554,8 +738,13 @@ function Adapter:start()
     if not currentGeneration() then
       return
     end
-    if compositionExitPending and not exitCompositionMode() then
+    if cropController:isActive() then
       return
+    end
+    if compositionPresentationPending() then
+      if not dismissCompositionPresentation() then
+        return
+      end
     end
     local function windowResourcesRemain()
       return owner.modalTimer ~= nil
@@ -574,13 +763,11 @@ function Adapter:start()
         end)
       end
       if modalState.active or windowResourcesRemain() then
-        pcall(hs.alert.show, "Window Mode could not close; Composition Mode was not started", config.menuFailureDuration)
+        pcall(showWindowFailure, "Window Mode could not close; Composition Mode was not started")
         return
       end
     end
-    if not cropController:isActive() then
-      compositionMode:enter()
-    end
+    compositionMode:enter()
   end
 
   owner.compositionEntryHotkey = hs.hotkey.bind(config.compositionHotkey.modifiers, config.compositionHotkey.key, function()
@@ -592,9 +779,7 @@ function Adapter:start()
   local finishBinding = compositionMode:bind({}, "return", function()
     if currentGeneration() and cropController:isActive() then
       local finished = cropController:finish(compositionGeneration)
-      if finished and not cropController:isActive() then
-        exitCompositionMode()
-      end
+      return finished
     end
   end)
   if not finishBinding then
@@ -604,8 +789,10 @@ function Adapter:start()
     if currentGeneration() and cropController:isActive() then
       local cancelled = cropController:cancel(compositionGeneration)
       if cancelled then
-        exitCompositionMode()
+        dismissCompositionPresentation()
       end
+    elseif currentGeneration() and compositionPresentationPending() then
+      dismissCompositionPresentation()
     end
   end)
   if not cancelBinding then

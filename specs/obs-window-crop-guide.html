@@ -292,25 +292,25 @@
     </div>
 
     <div class="phase">
-      <h3><code class="status">[wip]</code> Milestone 3A: Persistent Composition Status and Result Modal</h3>
+      <h3><code class="status">[x]</code> Milestone 3A: Persistent Composition Status and Result Modal</h3>
       <p>Replace Composition Mode's transient native alerts with an Anodyne-owned, click-through status modal that matches Window Mode's dark rounded presentation. This amendment is a dependency gate before exterior dimming.</p>
       <p><strong>Validation goal:</strong> keep authoritative help and recoverable failure status visible for the entire guide session, then retain the copied result for the configured additional duration without changing clipboard contents.</p>
 
       <h4><span class="tag packet">WP-05B</span> Persistent status/result presentation</h4>
       <ul class="checklist">
-        <li><code class="status">[wip]</code> Owner: the WP-05 adapter worker as a sequential follow-up. Touch <code>Anodyne/adapter/hammerspoon.lua</code>, <code>spec/adapter/hammerspoon_spec.lua</code>, and <code>spec/characterization/anodyne_spec.lua</code>; extend the strict fake only if a missing native lifecycle seam is proven.</li>
-        <li><code class="status">[]</code> Render a separate click-through Composition status canvas using the same dark rounded rectangle, Menlo text, spacing, and sizing policy as Window Mode; keep baseline/control help visible with no timeout while the guide is active.</li>
-        <li><code class="status">[]</code> Route containment, pasteboard, stale, and teardown status through the Composition canvas instead of <code>hs.alert.show</code>, preserving recoverable active-session behavior.</li>
-        <li><code class="status">[]</code> After successful <code>Return</code>, close the guide, preserve the clipboard, replace help with the formatted result, and keep the native Composition modal/status canvas alive for exactly <code>obsCrop.resultDuration</code> additional seconds.</li>
-        <li><code class="status">[]</code> During the lingering-result phase, <code>Esc</code> stops the result timer, closes the status canvas, exits the native modal, and leaves clipboard contents unchanged. Timer expiry performs the same UI teardown.</li>
-        <li><code class="status">[]</code> Entering either top-level mode during result linger cleanly tears down the old result resources before acquisition. Stop/reload owns the result timer and status canvas with hide-before-delete, retained-handle retry, failure aggregation, and stale-callback guards.</li>
+        <li><code class="status">[x]</code> Owner: the WP-05 adapter worker as a sequential follow-up. Touch <code>Anodyne/adapter/hammerspoon.lua</code>, <code>spec/adapter/hammerspoon_spec.lua</code>, and <code>spec/characterization/anodyne_spec.lua</code>; extend the strict fake only if a missing native lifecycle seam is proven.</li>
+        <li><code class="status">[x]</code> Render a separate click-through Composition status canvas using the same dark rounded rectangle, Menlo text, spacing, and sizing policy as Window Mode; keep baseline/control help visible with no timeout while the guide is active.</li>
+        <li><code class="status">[x]</code> Route containment, pasteboard, stale, and teardown status through the Composition canvas instead of <code>hs.alert.show</code>, preserving recoverable active-session behavior.</li>
+        <li><code class="status">[x]</code> After successful <code>Return</code>, close the guide, preserve the clipboard, replace help with the formatted result, and keep the native Composition modal/status canvas alive for exactly <code>obsCrop.resultDuration</code> additional seconds.</li>
+        <li><code class="status">[x]</code> During the lingering-result phase, <code>Esc</code> stops the result timer, closes the status canvas, exits the native modal, and leaves clipboard contents unchanged. Timer expiry performs the same UI teardown.</li>
+        <li><code class="status">[x]</code> Entering either top-level mode during result linger cleanly tears down the old result resources before acquisition. Stop/reload owns the result timer and status canvas with hide-before-delete, retained-handle retry, failure aggregation, and stale-callback guards.</li>
       </ul>
 
       <h4>3A.2 Testing Strategy</h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>make test-adapter</code> — proves persistent help, modal-local dismissal, exact timer duration, clipboard retention, cross-mode behavior, and retry-safe native ownership.</li>
-        <li><code class="status">[]</code> <code>make test-characterization</code> and <code>make test-facade</code> — prove reload/startup rollback and established Window Mode presentation remain unchanged.</li>
-        <li><code class="status">[]</code> Manual Hammerspoon check: confirm the Composition status modal visually matches Window Mode, remains for the guide session, changes to the copied result after <code>Return</code>, dismisses early with <code>Esc</code>, and does not clear the clipboard.</li>
+        <li><code class="status">[x]</code> <code>make test-adapter</code> — proves persistent help, modal-local dismissal, exact timer duration, clipboard retention, cross-mode behavior, and retry-safe native ownership.</li>
+        <li><code class="status">[x]</code> <code>make test-characterization</code> and <code>make test-facade</code> — prove reload/startup rollback and established Window Mode presentation remain unchanged.</li>
+        <li><code class="status">[x]</code> Manual Hammerspoon check: confirm the Composition status modal visually matches Window Mode, remains for the guide session, changes to the copied result after <code>Return</code>, dismisses early with <code>Esc</code>, and does not clear the clipboard.</li>
       </ul>
       <div class="loop">🔁 <strong>Do not start exterior dimming until persistent presentation, timed result linger, early dismissal, cleanup retry, and native visual behavior all pass independent review.</strong></div>
     </div>
