@@ -169,6 +169,7 @@ describe("Anodyne controller", function()
       { action = "width", value = 1 },
       { action = "height", value = 2 },
       { action = "move", value = "left" },
+      { action = "shortMove", value = "right" },
       { action = "corner", value = "topleft" },
       { action = "resize", value = { label = "Shrink Width", deltaWidth = -50, deltaHeight = 0 } },
       { action = "resize", value = { label = "Grow Height", deltaWidth = 0, deltaHeight = 50 } },
@@ -177,8 +178,10 @@ describe("Anodyne controller", function()
       intent.type = "action"
       assert.is_true(controller:perform(intent))
     end
-    assert.are.equal("Shrink to previous 50 px", log.calls[9][4])
-    assert.are.equal("Grow to next 50 px", log.calls[10][4])
+    assert.same({ "moveByStep", "left", 50 }, log.calls[7])
+    assert.same({ "moveByStep", "right", 5 }, log.calls[8])
+    assert.are.equal("Shrink to previous 50 px", log.calls[10][4])
+    assert.are.equal("Grow to next 50 px", log.calls[11][4])
     local ok, message = controller:perform({ action = "bogus" })
     assert.is_false(ok)
     assert.same({ kind = "unknown-action", action = "bogus" }, message)

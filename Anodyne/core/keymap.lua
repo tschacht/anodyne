@@ -13,6 +13,10 @@ local function isShifted(key, flags)
   return flags.shift == true and not flags.cmd and not flags.alt and not flags.ctrl and (isArrowKey(key) or not flags.fn)
 end
 
+local function isAltArrow(key, flags)
+  return isArrowKey(key) and flags.alt == true and not flags.cmd and not flags.ctrl and not flags.shift
+end
+
 local function find(items, predicate)
   for _, item in ipairs(items) do
     if predicate(item) then
@@ -78,6 +82,9 @@ function Keymap:interpret(screen, key, flags)
       if step then
         return { type = "action", action = "move", value = step.direction }, true
       end
+    end
+    if isAltArrow(key, flags) then
+      return { type = "action", action = "shortMove", value = key }, true
     end
   elseif screen == "move_bottom" then
     if plain and key == "b" then

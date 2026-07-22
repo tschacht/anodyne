@@ -326,6 +326,18 @@ describe("Milestone 5 transactional window actions", function()
     assert.same({ false, "Unknown move direction: nowhere" }, { actions:moveByStep("nowhere") })
   end)
 
+  it("uses the selected origin-relative move step with shared status and history semantics", function()
+    driver:setWindowFrame(window, frame(103, 107, 800, 600))
+    assert.same({ true, nil, "Move left 5 px" }, { actions:moveByStep("left", 5) })
+    assert.same(frame(100, 107, 800, 600), window:frame())
+    assert.same(frame(103, 107, 800, 600), entries[1][1].before)
+    assert.same(frame(100, 107, 800, 600), entries[1][1].after)
+
+    assert.same({ true, nil, "Move down 50 px" }, { actions:moveByStep("down", 50) })
+    assert.same(frame(100, 150, 800, 600), window:frame())
+    assert.are.equal(2, #entries[1])
+  end)
+
   it("clamps snapped resizes to configured minima and usable-screen maxima", function()
     driver:setWindowFrame(window, frame(100, 100, 505, 605))
     assert.is_true(actions:resize(-50, 0, "Shrink Width"))

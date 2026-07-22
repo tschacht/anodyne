@@ -39,6 +39,7 @@ describe("configuration", function()
       heightPresets = { 600, 700, 800, 1000, 1200, 1400, 1500, 1600 },
       growStep = 50,
       moveStep = 50,
+      shortMoveStep = 5,
       undoDepth = 3,
     }, plain(config))
     local source = assert(io.open("Anodyne/config.lua")):read("*a")
@@ -115,6 +116,9 @@ describe("configuration", function()
       Config.build({ moveStep = "50" })
     end, "invalid config type for moveStep: expected number")
     assert.has_error(function()
+      Config.build({ shortMoveStep = "5" })
+    end, "invalid config type for shortMoveStep: expected number")
+    assert.has_error(function()
       Config.build({ symbols = "bad" })
     end, "invalid config type for symbols: expected table")
     assert.has_error(function()
@@ -123,6 +127,19 @@ describe("configuration", function()
     assert.has_error(function()
       Config.build({ exactPresets = { "bad" } })
     end, "invalid config type for exactPresets[1]: expected table")
+  end)
+
+  it("requires positive integer movement steps", function()
+    for _, name in ipairs({ "moveStep", "shortMoveStep" }) do
+      for _, value in ipairs({ 0, -1, 1.5, 1e20, math.huge }) do
+        assert.has_error(function()
+          Config.build({ [name] = value })
+        end, "CONFIG." .. name .. " must be a positive integer")
+      end
+    end
+    local config = Config.build({ moveStep = 25, shortMoveStep = 2 })
+    assert.are.equal(25, config.moveStep)
+    assert.are.equal(2, config.shortMoveStep)
   end)
 
   it("rejects malformed sparse lists", function()

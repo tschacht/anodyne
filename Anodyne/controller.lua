@@ -94,7 +94,9 @@ function Controller:perform(intent)
   elseif action == "height" then
     return self.actions:applyHeightPreset(intent.value)
   elseif action == "move" then
-    return self.actions:moveByStep(intent.value)
+    return self.actions:moveByStep(intent.value, self.config.moveStep)
+  elseif action == "shortMove" then
+    return self.actions:moveByStep(intent.value, self.config.shortMoveStep)
   elseif action == "corner" then
     return self.actions:moveToCorner(intent.value)
   elseif action == "resize" then

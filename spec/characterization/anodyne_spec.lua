@@ -472,7 +472,7 @@ describe("Milestone 2 characterization", function()
 
     it("snaps right to the next 50 pixel grid line", function()
       driver:setWindowFrame(window, frame(111, 100, 800, 600))
-      click(driver, "Right 50 px [M →]")
+      click(driver, "Right 50 px [M: → · ⌥→ 5 px]")
       assert.are.equal(150, window:frame().x)
     end)
 
@@ -743,6 +743,32 @@ describe("Milestone 2 characterization", function()
       assert.matches("Fn%+B is not available in Move", driver:lastMessage())
     end)
 
+    it("routes configured normal and Option movement through snapping, status, history, and undo", function()
+      _G.Anodyne = require("Anodyne").replace({
+        hs = driver.hs,
+        previous = _G.Anodyne,
+        config = { moveStep = 37, shortMoveStep = 7 },
+      })
+      driver:setWindowFrame(window, frame(111, 100, 800, 600))
+      driver:triggerEntry()
+      driver:key("m")
+
+      assert.is_true(driver:key("right", { alt = true, fn = true }))
+      driver:advance(0.05)
+      assert.are.equal(112, window:frame().x)
+      assert.are.equal("Status: Move right 7 px", driver:lastMessage():match("([^\n]+)$"))
+
+      driver:key("u")
+      driver:advance(0.05)
+      assertFrame(frame(111, 100, 800, 600), window:frame())
+      assert.are.equal("Status: Undid last action (800 x 600)", driver:lastMessage():match("([^\n]+)$"))
+
+      driver:key("right")
+      driver:advance(0.05)
+      assert.are.equal(148, window:frame().x)
+      assert.are.equal("Status: Move right 37 px", driver:lastMessage():match("([^\n]+)$"))
+    end)
+
     it("routes shifted arrows before ordinary movement", function()
       driver:key("m")
       driver:key("left", { shift = true })
@@ -815,10 +841,10 @@ describe("Milestone 2 characterization", function()
         "1600 px [H 8]",
         "-",
         "Move [M then arrows / C / B]",
-        "Left 50 px [M ←]",
-        "Right 50 px [M →]",
-        "Up 50 px [M ↑]",
-        "Down 50 px [M ↓]",
+        "Left 50 px [M: ← · ⌥← 5 px]",
+        "Right 50 px [M: → · ⌥→ 5 px]",
+        "Up 50 px [M: ↑ · ⌥↑ 5 px]",
+        "Down 50 px [M: ↓ · ⌥↓ 5 px]",
         "Top Left [M shift + ←]",
         "Center Top [M C]",
         "Top Right [M shift + →]",
@@ -961,10 +987,10 @@ describe("Milestone 2 characterization", function()
         "Move:",
         "Current: 800 x 600",
         "",
-        "← = Left 50 px",
-        "→ = Right 50 px",
-        "↑ = Up 50 px",
-        "↓ = Down 50 px",
+        "← = Left 50 px · ⌥← 5 px",
+        "→ = Right 50 px · ⌥→ 5 px",
+        "↑ = Up 50 px · ⌥↑ 5 px",
+        "↓ = Down 50 px · ⌥↓ 5 px",
         "shift + ← = Top Left",
         "C = Center Top",
         "shift + → = Top Right",

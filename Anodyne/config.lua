@@ -43,6 +43,7 @@ local DEFAULTS = {
   heightPresets = { 600, 700, 800, 1000, 1200, 1400, 1500, 1600 },
   growStep = 50,
   moveStep = 50,
+  shortMoveStep = 5,
   undoDepth = 3,
 }
 
@@ -222,6 +223,12 @@ function Config.build(overrides)
   end
   if values.growStep < 1 or values.growStep == math.huge or values.growStep ~= math.floor(values.growStep) then
     error("CONFIG.growStep must be a positive integer", 2)
+  end
+  for _, name in ipairs({ "moveStep", "shortMoveStep" }) do
+    local value = values[name]
+    if value < 1 or value > math.maxinteger or value ~= math.floor(value) then
+      error("CONFIG." .. name .. " must be a positive integer", 2)
+    end
   end
   if values.compositionHotkey.key == "" then
     error("CONFIG.compositionHotkey.key must not be empty", 2)

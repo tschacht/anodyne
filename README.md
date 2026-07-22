@@ -20,13 +20,13 @@ While Window Mode is open:
 - `E`, then a number, applies an exact width-and-height preset. Exact presets are not clamped to the usable screen and may extend off-screen.
 - `A` selects an aspect-ratio preset.
 - `W` or `H` selects an exact width or height preset.
-- `M` opens movement and screen-position actions.
+- `M` opens movement and screen-position actions. Arrow keys move to the next `moveStep` grid line (50 px by default); `⌥`+arrow moves to the next `shortMoveStep` grid line (5 px by default).
 - `R` resizes the selected dimension or dimensions toward the next or previous grid boundary (50 px by default).
 - `U` undoes the most recent action for the active window.
 - `shift+U` restores the window frame captured when the modal opened.
 - `delete` returns to the previous screen; `escape` exits.
 
-The `WI` menu-bar item exposes the same actions and a separate Composition Mode entry. Defaults, including presets, minimum dimensions, step sizes, shortcuts, undo depth, and modal duration, are defined in `Anodyne/config.lua`.
+The `WI` menu-bar item exposes the normal actions and a separate Composition Mode entry. Each movement item also advertises its `⌥`+arrow fine-move shortcut; clicking the item performs the normal move, while fine movement remains keyboard-only. Defaults, including presets, minimum dimensions, step sizes, shortcuts, undo depth, and modal duration, are defined in `Anodyne/config.lua`.
 
 Exact-pixel presets are configured as an ordered list of one to nine entries, matching the modal's single-digit selection keys. The defaults provide `2560 x 1440` and `1920 x 1080`:
 

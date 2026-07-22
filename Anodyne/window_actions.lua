@@ -342,18 +342,19 @@ function WindowActions:resize(deltaWidth, deltaHeight, label)
   return self:applyFrame(window, self.geometry.resizeTarget(frame, deltaWidth, deltaHeight), label, { showSize = true })
 end
 
-function WindowActions:moveByStep(direction)
+function WindowActions:moveByStep(direction, step)
   local window, message = self:getFocusedWindow()
   if not window then
     return failure(message)
   end
+  step = step or self.config.moveStep
   local frame = self.ports.windowFrame(window)
   local screen = self.ports.windowScreen(window)
-  local target = self.geometry.stepTarget(frame, self.ports.screenFrame(screen), self.config.moveStep, direction)
+  local target = self.geometry.stepTarget(frame, self.ports.screenFrame(screen), step, direction)
   if not target then
     return failure("Unknown move direction: " .. tostring(direction))
   end
-  return self:applyFrame(window, target, string.format("Move %s %d px", direction, self.config.moveStep))
+  return self:applyFrame(window, target, string.format("Move %s %d px", direction, step))
 end
 
 function WindowActions:forgetWindow(window)

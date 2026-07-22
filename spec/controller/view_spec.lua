@@ -54,10 +54,10 @@ describe("Anodyne view", function()
       "1600 px [H 8]",
       "-",
       "Move [M then arrows / C / B]",
-      "Left 50 px [M ←]",
-      "Right 50 px [M →]",
-      "Up 50 px [M ↑]",
-      "Down 50 px [M ↓]",
+      "Left 50 px [M: ← · ⌥← 5 px]",
+      "Right 50 px [M: → · ⌥→ 5 px]",
+      "Up 50 px [M: ↑ · ⌥↑ 5 px]",
+      "Down 50 px [M: ↓ · ⌥↓ 5 px]",
       "Top Left [M shift + ←]",
       "Center Top [M C]",
       "Top Right [M shift + →]",
@@ -90,10 +90,10 @@ describe("Anodyne view", function()
       width = { "1 = 1000 px", "2 = 1200 px", "3 = 1400 px", "4 = 1600 px", "5 = 1800 px", "6 = 2000 px", "7 = 2200 px", "8 = 2400 px" },
       height = { "1 = 600 px", "2 = 700 px", "3 = 800 px", "4 = 1000 px", "5 = 1200 px", "6 = 1400 px", "7 = 1500 px", "8 = 1600 px" },
       move = {
-        "← = Left 50 px",
-        "→ = Right 50 px",
-        "↑ = Up 50 px",
-        "↓ = Down 50 px",
+        "← = Left 50 px · ⌥← 5 px",
+        "→ = Right 50 px · ⌥→ 5 px",
+        "↑ = Up 50 px · ⌥↑ 5 px",
+        "↓ = Down 50 px · ⌥↓ 5 px",
         "shift + ← = Top Left",
         "C = Center Top",
         "shift + → = Top Right",
@@ -115,6 +115,31 @@ describe("Anodyne view", function()
         assert.are.equal(line, lines[index + 3])
       end
       assert.matches("Navigation: ⌫ = back/home · Esc = exit$", table.concat(lines, "\n"))
+    end
+  end)
+
+  it("shows configured normal and short move steps without changing WI move intents", function()
+    local customConfig, customMetadata = Config.build({ moveStep = 60, shortMoveStep = 7 })
+    local customView = View.new(customConfig, customMetadata)
+    local lines = customView:modalLines({ screen = "move" }, { width = 800, height = 600 })
+    assert.same({
+      "← = Left 60 px · ⌥← 7 px",
+      "→ = Right 60 px · ⌥→ 7 px",
+      "↑ = Up 60 px · ⌥↑ 7 px",
+      "↓ = Down 60 px · ⌥↓ 7 px",
+    }, { lines[4], lines[5], lines[6], lines[7] })
+
+    local items = customView:menuItems({ active = false }, false)
+    local expected = {
+      { "Left 60 px [M: ← · ⌥← 7 px]", "left" },
+      { "Right 60 px [M: → · ⌥→ 7 px]", "right" },
+      { "Up 60 px [M: ↑ · ⌥↑ 7 px]", "up" },
+      { "Down 60 px [M: ↓ · ⌥↓ 7 px]", "down" },
+    }
+    for offset, expectation in ipairs(expected) do
+      local item = items[38 + offset]
+      assert.are.equal(expectation[1], item.title)
+      assert.same({ type = "action", action = "move", value = expectation[2] }, item.intent)
     end
   end)
 

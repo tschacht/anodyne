@@ -40,6 +40,8 @@ describe("Anodyne keymap", function()
     assert.same({ type = "transition", screen = "move_bottom" }, intent("move", "b"))
     for _, direction in ipairs({ "left", "right", "up", "down" }) do
       assert.same({ type = "action", action = "move", value = direction }, intent("move", direction))
+      assert.same({ type = "action", action = "shortMove", value = direction }, intent("move", direction, { alt = true }))
+      assert.same({ type = "action", action = "shortMove", value = direction }, intent("move", direction, { alt = true, fn = true }))
     end
     assert.same({ type = "action", action = "corner", value = "topleft" }, intent("move", "left", { shift = true }))
     assert.same({ type = "action", action = "corner", value = "centertop" }, intent("move", "c"))
@@ -100,7 +102,8 @@ describe("Anodyne keymap", function()
   it("rejects move and resize commands with independently enumerated modifiers", function()
     for _, case in ipairs({
       { "move", "left", { cmd = true } },
-      { "move", "right", { alt = true } },
+      { "move", "right", { alt = true, shift = true } },
+      { "move", "right", { alt = true, cmd = true } },
       { "move", "up", { ctrl = true } },
       { "move", "c", { shift = true } },
       { "move_bottom", "c", { fn = true } },

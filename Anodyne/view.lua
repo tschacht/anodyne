@@ -192,6 +192,10 @@ function View:moveLabel(action)
   return string.format("%s %d px", capitalize(action.direction), self.config.moveStep)
 end
 
+function View:shortMoveShortcut(action)
+  return string.format("⌥%s %d px", action.symbol, self.config.shortMoveStep)
+end
+
 function View:navigationLine()
   local labels = {}
   for _, selector in ipairs(self.metadata.modeSelectors) do
@@ -235,7 +239,7 @@ function View:modalLines(state, currentSize, status)
     end
   elseif screen == "move" then
     for _, action in ipairs(self.metadata.moveStepActions) do
-      lines[#lines + 1] = string.format("%s = %s", action.symbol, self:moveLabel(action))
+      lines[#lines + 1] = string.format("%s = %s · %s", action.symbol, self:moveLabel(action), self:shortMoveShortcut(action))
     end
     for _, action in ipairs(self.metadata.cornerActions) do
       if action.screen == "move" then
@@ -311,8 +315,10 @@ function View:menuItems(state, sessionScreenChanged)
   end
   append(items, { { title = "-" }, { title = "Move [M then arrows / C / B]", disabled = true } })
   for _, action in ipairs(self.metadata.moveStepActions) do
-    items[#items + 1] =
-      { title = string.format("%s [M %s]", self:moveLabel(action), action.symbol), intent = { type = "action", action = "move", value = action.direction } }
+    items[#items + 1] = {
+      title = string.format("%s [M: %s · %s]", self:moveLabel(action), action.symbol, self:shortMoveShortcut(action)),
+      intent = { type = "action", action = "move", value = action.direction },
+    }
   end
   for _, action in ipairs(self.metadata.cornerActions) do
     local shortcut = action.screen == "move_bottom" and "M B " .. action.shortcut or "M " .. action.shortcut
