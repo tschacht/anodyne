@@ -555,40 +555,40 @@
     </div>
 
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone 10: Live Controller and Native Edge Labels</h3>
+      <h3><code class="status">[x]</code> Milestone 10: Live Controller and Native Edge Labels</h3>
       <p>Wire the signed model into the active Composition session, update Window values every configured interval, and render four adaptive click-through labels on the existing guide canvas.</p>
       <p><strong>Validation goal:</strong> fixed Screen and dynamic Window labels switch immediately, remain visually actionable during invalid containment, and introduce no clipboard, Finish, or lifecycle regression.</p>
 
       <h4><span class="tag packet">WP-15</span> Controller preview state and transitions</h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> Owner: controller worker after WP-13 and WP-14. Touch only <code>Anodyne/obs_crop_controller.lua</code> and <code>spec/controller/obs_crop_controller_spec.lua</code>.</li>
-        <li><code class="status">[]</code> Compute and retain the Screen preview from the frozen screen/guide/scale during Enter; include it in initial guide rendering without changing the session's frozen snapshots.</li>
-        <li><code class="status">[]</code> Add a generation-guarded preview tick. Screen returns the cached preview without a window-frame read; Window reads only the pinned window's current frame and calculates a fresh signed preview.</li>
-        <li><code class="status">[]</code> Deduplicate unchanged ticks so no canvas refresh occurs. A transient frame-read, preview, or presentation failure keeps the session/source active, retains the last complete labels, touches no clipboard, and remains retryable.</li>
-        <li><code class="status">[]</code> Make a real <code>S</code>/<code>W</code> transition calculate its candidate preview and refresh source status plus all labels as one transactional presentation step before committing the source. Repeated current-source selection remains a successful no-op.</li>
-        <li><code class="status">[]</code> Keep Finish isolated from cached/last preview data: it re-reads and revalidates through the existing source-specific path, then formats, copies, tears down, and lingers exactly as before.</li>
-        <li><code class="status">[]</code> Cover stale app/session generation, invalid source, target destruction, window-read failure, render exception/false return, deduplication, rapid source switching, negative-to-valid recovery, and preview/Finish disagreement where Finish remains authoritative.</li>
+        <li><code class="status">[x]</code> Owner: controller worker after WP-13 and WP-14. Touch only <code>Anodyne/obs_crop_controller.lua</code> and <code>spec/controller/obs_crop_controller_spec.lua</code>.</li>
+        <li><code class="status">[x]</code> Compute and retain the Screen preview from the frozen screen/guide/scale during Enter; include it in initial guide rendering without changing the session's frozen snapshots.</li>
+        <li><code class="status">[x]</code> Add a generation-guarded preview tick. Screen returns the cached preview without a window-frame read; Window reads only the pinned window's current frame and calculates a fresh signed preview.</li>
+        <li><code class="status">[x]</code> Deduplicate unchanged ticks so no canvas refresh occurs. A transient frame-read, preview, or presentation failure keeps the session/source active, retains the last complete labels, touches no clipboard, and remains retryable.</li>
+        <li><code class="status">[x]</code> Make a real <code>S</code>/<code>W</code> transition calculate its candidate preview and refresh source status plus all labels as one transactional presentation step before committing the source. Repeated current-source selection remains a successful no-op.</li>
+        <li><code class="status">[x]</code> Keep Finish isolated from cached/last preview data: it re-reads and revalidates through the existing source-specific path, then formats, copies, tears down, and lingers exactly as before.</li>
+        <li><code class="status">[x]</code> Cover stale app/session generation, invalid source, target destruction, window-read failure, render exception/false return, deduplication, rapid source switching, negative-to-valid recovery, and preview/Finish disagreement where Finish remains authoritative.</li>
       </ul>
 
       <h4><span class="tag packet">WP-16</span> Repeating timer and guide-canvas labels</h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> Owner: native integration worker after WP-15. Touch <code>Anodyne/adapter/hammerspoon.lua</code>, <code>spec/support/fake_hs.lua</code>, <code>spec/adapter/hammerspoon_spec.lua</code>, <code>spec/characterization/anodyne_spec.lua</code>, and <code>spec/facade/anodyne_facade_spec.lua</code>.</li>
-        <li><code class="status">[]</code> Extend the strict fake only with the exact repeating-timer seam and deterministic tick control needed by production; retain signature checks, fault injection, active-resource counts, and stale-callback access.</li>
-        <li><code class="status">[]</code> Retain one <code>compositionLiveTimer</code> at <code>obsCrop.liveRefreshInterval</code> only while the guide is active. Guard callbacks by app generation, session generation, selected source, and timer identity; Window ticks invoke controller refresh while Screen ticks perform no native frame read or canvas write.</li>
-        <li><code class="status">[]</code> Treat repeating-timer acquisition as part of Composition entry: acquire it only after the initial Screen labels and status render, and if acquisition fails, cancel/close the new session and leave no guide, label, status, modal, or timer half-state.</li>
-        <li><code class="status">[]</code> Add four dark rounded label pills and text elements above the masks and guide border. Anchor each at its edge midpoint, prefer exterior placement, flip inward when required, clamp to the full-screen canvas, and preserve <code>mouseCallback(nil)</code>.</li>
-        <li><code class="status">[]</code> Render edges with a false invalid flag in the normal label palette and every invalid edge's guaranteed-negative signed value in red. Update only label value/style elements in place; do not recreate or move the guide, masks, border, status canvas, or modal.</li>
-        <li><code class="status">[]</code> Implement source-change presentation atomically: snapshot the four retained label elements, apply candidate labels, then use the existing candidate-status swap; if either side fails, restore the prior labels/status so the controller can keep the prior selected source.</li>
-        <li><code class="status">[]</code> Stop/release the timer and labels on successful Finish, Cancel, cross-mode switch, destruction, stop/reload, and rollback before result linger. Add the timer to ordered retained-handle cleanup and retry matrices; stale ticks are no-ops.</li>
-        <li><code class="status">[]</code> Prove exact label element order/frames/colors for normal, negative-origin, guide-at-screen-edge, inward-flip, and multiple-invalid-edge cases, plus timer acquisition/stop failures, teardown retry, pasteboard retry, source switching, resource counts, and reload.</li>
+        <li><code class="status">[x]</code> Owner: native integration worker after WP-15. Touch <code>Anodyne/adapter/hammerspoon.lua</code>, <code>spec/support/fake_hs.lua</code>, <code>spec/adapter/hammerspoon_spec.lua</code>, <code>spec/characterization/anodyne_spec.lua</code>, and <code>spec/facade/anodyne_facade_spec.lua</code>.</li>
+        <li><code class="status">[x]</code> Extend the strict fake only with the exact repeating-timer seam and deterministic tick control needed by production; retain signature checks, fault injection, active-resource counts, and stale-callback access.</li>
+        <li><code class="status">[x]</code> Retain one <code>compositionLiveTimer</code> at <code>obsCrop.liveRefreshInterval</code> only while the guide is active. Guard callbacks by app generation, session generation, selected source, and timer identity; Window ticks invoke controller refresh while Screen ticks perform no native frame read or canvas write.</li>
+        <li><code class="status">[x]</code> Treat repeating-timer acquisition as part of Composition entry: acquire it only after the initial Screen labels and status render, and if acquisition fails, cancel/close the new session and leave no guide, label, status, modal, or timer half-state.</li>
+        <li><code class="status">[x]</code> Add four dark rounded label pills and text elements above the masks and guide border. Anchor each at its edge midpoint, prefer exterior placement, flip inward when required, clamp to the full-screen canvas, and preserve <code>mouseCallback(nil)</code>.</li>
+        <li><code class="status">[x]</code> Render edges with a false invalid flag in the normal label palette and every invalid edge's guaranteed-negative signed value in red. Update only label value/style elements in place; do not recreate or move the guide, masks, border, status canvas, or modal.</li>
+        <li><code class="status">[x]</code> Implement source-change presentation atomically: snapshot the four retained label elements, apply candidate labels, then use the existing candidate-status swap; if either side fails, restore the prior labels/status so the controller can keep the prior selected source.</li>
+        <li><code class="status">[x]</code> Stop/release the timer and labels on successful Finish, Cancel, cross-mode switch, destruction, stop/reload, and rollback before result linger. Add the timer to ordered retained-handle cleanup and retry matrices; stale ticks are no-ops.</li>
+        <li><code class="status">[x]</code> Prove exact label element order/frames/colors for normal, negative-origin, guide-at-screen-edge, inward-flip, and multiple-invalid-edge cases, plus timer acquisition/stop failures, teardown retry, pasteboard retry, source switching, resource counts, and reload.</li>
       </ul>
 
       <h4>10.3 Testing Strategy</h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>make test-controller test-adapter test-characterization test-facade</code> — proves preview transitions, native placement, repeating lifecycle, rollback, and reload behavior.</li>
-        <li><code class="status">[]</code> <code>make test-core coverage architecture format-check verify</code> — revalidates pure equivalence, enforced coverage, native isolation, formatting, and the full repository gate.</li>
-        <li><code class="status">[]</code> Independent reviewer approval — audits timer/resource ownership, transactional source refresh, Window Finish non-regression, negative styling, callback guards, and exact touch attribution.</li>
-        <li><code class="status">[]</code> Commit Milestone 10 as one attributable, fully green commit only after WP-15, WP-16, and every reviewer finding are resolved.</li>
+        <li><code class="status">[x]</code> <code>make test-controller test-adapter test-characterization test-facade</code> — proves preview transitions, native placement, repeating lifecycle, rollback, and reload behavior.</li>
+        <li><code class="status">[x]</code> <code>make test-core coverage architecture format-check verify</code> — revalidates pure equivalence, enforced coverage, native isolation, formatting, and the full repository gate.</li>
+        <li><code class="status">[x]</code> Independent reviewer approval — audits timer/resource ownership, transactional source refresh, Window Finish non-regression, negative styling, callback guards, and exact touch attribution.</li>
+        <li><code class="status">[x]</code> Commit Milestone 10 as one attributable, fully green commit only after WP-15, WP-16, and every reviewer finding are resolved.</li>
       </ul>
       <div class="loop">🔁 <strong>Do not advance until the existing guide owns exactly four correct live labels and one leak-free active-session timer.</strong></div>
     </div>

@@ -13,6 +13,7 @@ local cleanupStages = {
   { "modalRefreshTimer", "stop" },
   { "menuFailureTimer", "stop" },
   { "modalKeyGuard", "stop" },
+  { "compositionLiveTimer", "stop" },
   { "compositionResultTimer", "stop" },
   { "entryHotkey", "delete" },
   { "compositionEntryHotkey", "delete" },
@@ -72,6 +73,7 @@ local function cleanup(owner, progress)
         or field == "modalRefreshTimer"
         or field == "menuFailureTimer"
         or field == "modalKeyGuard"
+        or field == "compositionLiveTimer"
         or field == "compositionResultTimer"
       local needsHide = isCanvas
       local needsDelete = field == "entryHotkey"
@@ -88,6 +90,11 @@ local function cleanup(owner, progress)
       if complete then
         if rawget(owner, field) == object then
           rawset(owner, field, nil)
+        end
+        if field == "compositionCanvas" then
+          rawset(owner, "compositionLabelRollback", nil)
+        elseif field == "compositionStatusCanvas" then
+          rawset(owner, "compositionStatusRollback", nil)
         end
         progress[field] = nil
       end
@@ -126,6 +133,17 @@ function Adapter:start()
   local exitCompositionMode
   local dismissCompositionPresentation
   local startCompositionLinger
+  local resolveCompositionPresentationRollback
+
+  local labelElements = {
+    { pill = 6, text = 7, edge = "left" },
+    { pill = 8, text = 9, edge = "top" },
+    { pill = 10, text = 11, edge = "right" },
+    { pill = 12, text = 13, edge = "bottom" },
+  }
+  local labelFillColor = { red = 0.08, green = 0.08, blue = 0.08, alpha = 0.92 }
+  local labelTextColor = { white = 1, alpha = 1 }
+  local invalidLabelTextColor = { red = 1, green = 0.28, blue = 0.22, alpha = 1 }
 
   local function compositionPresentationPending()
     return compositionTeardownPending
@@ -133,6 +151,9 @@ function Adapter:start()
       or compositionExitPending
       or compositionGeneration ~= nil
       or owner.compositionResultTimer ~= nil
+      or owner.compositionLiveTimer ~= nil
+      or owner.compositionLabelRollback ~= nil
+      or owner.compositionStatusRollback ~= nil
       or owner.compositionCanvas ~= nil
       or owner.compositionStatusCandidateCanvas ~= nil
       or owner.compositionStatusCanvas ~= nil
@@ -209,9 +230,53 @@ function Adapter:start()
     end)
     if deleted then
       owner.compositionCanvas = nil
+      owner.compositionLabelRollback = nil
       return true
     end
     return false, deleteError
+  end
+
+  local function stopCompositionLiveTimer()
+    local timer = owner.compositionLiveTimer
+    if not timer then
+      return true
+    end
+    local stopped, stopError = pcall(function()
+      timer:stop()
+    end)
+    if stopped then
+      owner.compositionLiveTimer = nil
+      return true
+    end
+    return false, stopError
+  end
+
+  local function closeActiveCompositionGuide()
+    local stopped, stopError = stopCompositionLiveTimer()
+    if not stopped then
+      return false, stopError
+    end
+    return closeCompositionGuide()
+  end
+
+  local function restoreCompositionLabels(canvas, snapshot)
+    local lastErrors = {}
+    for _ = 1, 2 do
+      local restoreErrors = {}
+      for index, definition in ipairs(labelElements) do
+        local ok, value = pcall(function()
+          canvas[definition.text] = snapshot[index]
+        end)
+        if not ok then
+          restoreErrors[#restoreErrors + 1] = tostring(value)
+        end
+      end
+      if #restoreErrors == 0 then
+        return true
+      end
+      lastErrors = restoreErrors
+    end
+    return false, table.concat(lastErrors, "; ")
   end
 
   local function closeCompositionStatus()
@@ -230,6 +295,7 @@ function Adapter:start()
     end)
     if deleted then
       owner.compositionStatusCanvas = nil
+      owner.compositionStatusRollback = nil
       return true
     end
     return false, deleteError
@@ -499,6 +565,19 @@ function Adapter:start()
     end
 
     local previous = owner.compositionStatusCanvas
+    local function restorePreviousVisibility()
+      local restoreError
+      for _ = 1, 2 do
+        local restored, value = pcall(function()
+          previous:show()
+        end)
+        if restored then
+          return true
+        end
+        restoreError = value
+      end
+      return false, restoreError
+    end
     if previous then
       local hidden, hideError = pcall(function()
         previous:hide()
@@ -511,22 +590,24 @@ function Adapter:start()
         candidate:show()
       end)
       if not shown then
-        pcall(function()
-          previous:show()
-        end)
+        local restored, restoreError = restorePreviousVisibility()
+        if not restored then
+          owner.compositionStatusRollback = {
+            canvas = previous,
+            error = tostring(restoreError),
+          }
+        end
         discardCandidate()
-        return false, showError
+        return false, restored and showError or (tostring(showError) .. "; status rollback failed: " .. tostring(restoreError))
       end
       local deleted, deleteError = pcall(function()
         previous:delete()
       end)
       if not deleted then
-        local candidateHidden = pcall(function()
+        local candidateHidden, candidateHideError = pcall(function()
           candidate:hide()
         end)
-        pcall(function()
-          previous:show()
-        end)
+        local restored, restoreError = restorePreviousVisibility()
         if candidateHidden then
           local candidateDeleted = pcall(function()
             candidate:delete()
@@ -537,7 +618,15 @@ function Adapter:start()
         else
           owner.compositionStatusCandidateCanvas = candidate
         end
-        return false, deleteError
+        if not candidateHidden or not restored then
+          owner.compositionStatusRollback = {
+            canvas = previous,
+            candidate = candidate,
+            error = tostring(not candidateHidden and candidateHideError or restoreError),
+          }
+        end
+        local rollbackError = not candidateHidden and candidateHideError or (not restored and restoreError or nil)
+        return false, rollbackError and (tostring(deleteError) .. "; status rollback failed: " .. tostring(rollbackError)) or deleteError
       end
     else
       local shown, showError = pcall(function()
@@ -550,6 +639,7 @@ function Adapter:start()
     end
 
     owner.compositionStatusCanvas = candidate
+    owner.compositionStatusRollback = nil
     return true
   end
 
@@ -690,7 +780,7 @@ function Adapter:start()
       screenScale = function(screen)
         return screen:currentMode().scale
       end,
-      renderGuide = function(_, fullFrame, guideFrame, help)
+      renderGuide = function(_, fullFrame, guideFrame, help, labels)
         if owner.compositionCanvas then
           local closed, closeError = closeCompositionGuide()
           if not closed then
@@ -750,6 +840,64 @@ function Adapter:start()
           strokeWidth = config.obsCrop.guideStrokeWidth,
           frame = localGuide,
         }
+        local labelWidth, labelHeight, labelGap = 88, 28, 8
+        local function labelFrame(edge)
+          local x, y
+          if edge == "left" then
+            x = localGuide.x - labelGap - labelWidth
+            y = localGuide.y + (localGuide.h - labelHeight) / 2
+            if x < 0 then
+              x = localGuide.x + labelGap
+            end
+          elseif edge == "right" then
+            x = localGuide.x + localGuide.w + labelGap
+            y = localGuide.y + (localGuide.h - labelHeight) / 2
+            if x + labelWidth > fullFrame.w then
+              x = localGuide.x + localGuide.w - labelGap - labelWidth
+            end
+          elseif edge == "top" then
+            x = localGuide.x + (localGuide.w - labelWidth) / 2
+            y = localGuide.y - labelGap - labelHeight
+            if y < 0 then
+              y = localGuide.y + labelGap
+            end
+          else
+            x = localGuide.x + (localGuide.w - labelWidth) / 2
+            y = localGuide.y + localGuide.h + labelGap
+            if y + labelHeight > fullFrame.h then
+              y = localGuide.y + localGuide.h - labelGap - labelHeight
+            end
+          end
+          return {
+            x = clamp(x, math.max(0, fullFrame.w - labelWidth)),
+            y = clamp(y, math.max(0, fullFrame.h - labelHeight)),
+            w = math.min(labelWidth, fullFrame.w),
+            h = math.min(labelHeight, fullFrame.h),
+          }
+        end
+        for index, definition in ipairs(labelElements) do
+          local label = labels[index]
+          if not label or label.edge ~= definition.edge then
+            error("Invalid composition edge labels")
+          end
+          local frame = labelFrame(definition.edge)
+          canvas[definition.pill] = {
+            type = "rectangle",
+            action = "fill",
+            fillColor = labelFillColor,
+            roundedRectRadii = { xRadius = 7, yRadius = 7 },
+            frame = frame,
+          }
+          canvas[definition.text] = {
+            type = "text",
+            text = label.text,
+            textSize = 16,
+            textColor = label.invalid and invalidLabelTextColor or labelTextColor,
+            textFont = "Menlo",
+            textAlignment = "center",
+            frame = frame,
+          }
+        end
         canvas:show()
         local rendered, renderError = compositionStatus(help)
         if rendered then
@@ -757,8 +905,69 @@ function Adapter:start()
         end
         return rendered, renderError
       end,
-      refreshPresentation = function(help)
+      refreshPresentation = function(help, labels)
+        local canvas = owner.compositionCanvas
+        if not canvas then
+          return false, "Composition guide is unavailable"
+        end
+        if owner.compositionLabelRollback then
+          return false, "Composition label rollback is pending teardown"
+        end
+        local previous = {}
+        local candidates = {}
+        for index, definition in ipairs(labelElements) do
+          local label = labels[index]
+          if not label or label.edge ~= definition.edge then
+            return false, "Invalid composition edge labels"
+          end
+          local readOk, prior = pcall(function()
+            return canvas[definition.text]
+          end)
+          if not readOk or not prior then
+            return false, prior
+          end
+          previous[index] = prior
+          local candidate = {}
+          for key, value in pairs(prior) do
+            candidate[key] = value
+          end
+          candidate.text = label.text
+          candidate.textColor = label.invalid and invalidLabelTextColor or labelTextColor
+          candidates[index] = candidate
+        end
+        for index, definition in ipairs(labelElements) do
+          local writeOk, writeError = pcall(function()
+            canvas[definition.text] = candidates[index]
+          end)
+          if not writeOk then
+            local restored, restoreError = restoreCompositionLabels(canvas, previous)
+            if not restored then
+              owner.compositionLabelRollback = {
+                canvas = canvas,
+                elements = previous,
+                error = restoreError,
+              }
+              return false, tostring(writeError) .. "; Composition label rollback failed: " .. restoreError
+            end
+            return false, writeError
+          end
+        end
+        if help == compositionHelp then
+          return true
+        end
         local rendered, renderError = refreshCompositionStatus(help)
+        if not rendered then
+          local restored, restoreError = restoreCompositionLabels(canvas, previous)
+          if not restored then
+            owner.compositionLabelRollback = {
+              canvas = canvas,
+              elements = previous,
+              error = restoreError,
+            }
+            return false, tostring(renderError) .. "; Composition label rollback failed: " .. restoreError
+          end
+          return false, renderError
+        end
         if rendered then
           compositionHelp = help
         end
@@ -767,7 +976,7 @@ function Adapter:start()
       copy = function(value)
         return hs.pasteboard.setContents(value)
       end,
-      close = closeCompositionGuide,
+      close = closeActiveCompositionGuide,
       alert = function(message, duration)
         if cropController:isActive() then
           return compositionStatus((compositionHelp and (compositionHelp .. "\n") or "") .. "Status: " .. message)
@@ -848,6 +1057,10 @@ function Adapter:start()
   end
   dismissCompositionPresentation = function()
     compositionTeardownPending = true
+    local liveTimerStopped = stopCompositionLiveTimer()
+    if not liveTimerStopped then
+      return false
+    end
     local timerStopped = stopCompositionResultTimer()
     if not timerStopped then
       return false
@@ -896,10 +1109,44 @@ function Adapter:start()
     owner.compositionResultTimer = timer
     return true
   end
+  resolveCompositionPresentationRollback = function(generation)
+    if not owner.compositionLabelRollback and not owner.compositionStatusRollback then
+      return true
+    end
+    local cancelled = cropController:cancel(generation)
+    if cancelled then
+      dismissCompositionPresentation()
+    end
+    return false
+  end
   function compositionMode:entered()
     local entered, generation = cropController:enter()
     if entered then
       compositionGeneration = generation
+      local timer
+      local acquired, timerOrError = pcall(function()
+        return hs.timer.doEvery(config.obsCrop.liveRefreshInterval, function()
+          if not currentGeneration() or owner.compositionLiveTimer ~= timer or compositionGeneration ~= generation or not cropController:isActive() then
+            return
+          end
+          local state = cropController:currentState()
+          local source = state.captureSource
+          if state.generation ~= generation or source ~= "window" then
+            return
+          end
+          cropController:refreshPreview(generation, source)
+          resolveCompositionPresentationRollback(generation)
+        end)
+      end)
+      if acquired then
+        timer = timerOrError
+      end
+      if not acquired or not timer then
+        cropController:cancel(generation)
+        dismissCompositionPresentation()
+        return
+      end
+      owner.compositionLiveTimer = timer
     elseif not compositionLinger then
       exitCompositionMode()
     end
@@ -998,7 +1245,9 @@ function Adapter:start()
   end
   local screenBinding = compositionMode:bind({}, "s", function()
     if currentGeneration() and cropController:isActive() and not compositionLinger then
-      return cropController:selectSource("screen", compositionGeneration)
+      local selected, failure = cropController:selectSource("screen", compositionGeneration)
+      resolveCompositionPresentationRollback(compositionGeneration)
+      return selected, failure
     end
   end)
   if not screenBinding then
@@ -1006,7 +1255,9 @@ function Adapter:start()
   end
   local windowBinding = compositionMode:bind({}, "w", function()
     if currentGeneration() and cropController:isActive() and not compositionLinger then
-      return cropController:selectSource("window", compositionGeneration)
+      local selected, failure = cropController:selectSource("window", compositionGeneration)
+      resolveCompositionPresentationRollback(compositionGeneration)
+      return selected, failure
     end
   end)
   if not windowBinding then

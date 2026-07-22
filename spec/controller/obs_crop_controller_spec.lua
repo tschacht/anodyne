@@ -4,14 +4,14 @@ local Controller = require("Anodyne.obs_crop_controller")
 local View = require("Anodyne.view")
 
 describe("OBS crop controller", function()
-  local controller, ports, log, target, screen, current
+  local controller, ports, log, target, screen, current, config, metadata
 
   local function rect(x, y, w, h)
     return { x = x, y = y, w = w, h = h }
   end
 
   before_each(function()
-    local config, metadata = Config.build()
+    config, metadata = Config.build()
     target = { id = 41, frame = rect(100, 80, 777, 432) }
     screen = { id = "display-a", fullFrame = rect(-100, 0, 1920, 1080), scale = 2 }
     target.screen = screen
@@ -65,8 +65,8 @@ describe("OBS crop controller", function()
         log.renders[#log.renders + 1] = { ... }
         return true
       end,
-      refreshPresentation = function(value)
-        log.presentations[#log.presentations + 1] = value
+      refreshPresentation = function(value, labels)
+        log.presentations[#log.presentations + 1] = { help = value, labels = labels }
         return true
       end,
       copy = function(value)
@@ -92,6 +92,15 @@ describe("OBS crop controller", function()
     return generation
   end
 
+  local function cropWithPreview(preview)
+    local crop = {}
+    for key, value in pairs(ObsCrop) do
+      crop[key] = value
+    end
+    crop.preview = preview
+    return crop
+  end
+
   it("enters only after rendering an exact arbitrary baseline snapshot", function()
     local original = target.frame
     local generation = enter()
@@ -111,6 +120,12 @@ describe("OBS crop controller", function()
       screen.fullFrame,
       state.guideFrame,
       "Composition Mode:\nLocked baseline: 777 x 432\nSelected source: Screen Capture\nS = Screen Capture · W = Window Capture\nReturn = Finish/Copy\nEsc = Cancel",
+      {
+        { edge = "left", text = "L 400", value = 400, invalid = false },
+        { edge = "top", text = "T 160", value = 160, invalid = false },
+        { edge = "right", text = "R 1886", value = 1886, invalid = false },
+        { edge = "bottom", text = "B 1136", value = 1136, invalid = false },
+      },
     }, log.renders[1])
   end)
 
@@ -134,13 +149,19 @@ describe("OBS crop controller", function()
     assert.are.equal(snapshots.screenFullFrame, state.screenFullFrame)
     assert.are.equal(snapshots.scale, state.scale)
     assert.are.equal(1, #log.renders)
-    assert.are.equal(1, log.frameReads)
+    assert.are.equal(2, log.frameReads)
     assert.are.equal(1, log.screenReads)
     assert.are.equal(1, log.scaleReads)
     assert.are.equal(
       "Composition Mode:\nLocked baseline: 777 x 432\nSelected source: Window Capture\nS = Screen Capture · W = Window Capture\nReturn = Finish/Copy\nEsc = Cancel",
-      log.presentations[1]
+      log.presentations[1].help
     )
+    assert.same({
+      { edge = "left", text = "L 0", value = 0, invalid = false },
+      { edge = "top", text = "T 0", value = 0, invalid = false },
+      { edge = "right", text = "R 0", value = 0, invalid = false },
+      { edge = "bottom", text = "B 0", value = 0, invalid = false },
+    }, log.presentations[1].labels)
     assert.is_true(controller:selectSource("window", generation))
     assert.are.equal(1, #log.presentations)
     assert.is_true(controller:selectSource("screen", generation))
@@ -180,6 +201,177 @@ describe("OBS crop controller", function()
       assert.are.equal(generation, controller:currentState().generation)
       assert.are.equal(1, #log.renders)
     end
+  end)
+
+  it("does not commit a source transition when its candidate frame or preview fails", function()
+    local generation = enter()
+    local originalFrame = ports.windowFrame
+    ports.windowFrame = function()
+      return false
+    end
+    assert.is_false(controller:selectSource("window", generation))
+    assert.are.equal("screen", controller:currentState().captureSource)
+    ports.windowFrame = originalFrame
+
+    local originalPreview = controller.crop.preview
+    controller.crop.preview = function()
+      error("preview")
+    end
+    assert.is_false(controller:selectSource("window", generation))
+    assert.are.equal("screen", controller:currentState().captureSource)
+    controller.crop.preview = originalPreview
+
+    assert.is_true(controller:selectSource("window", generation))
+    assert.are.equal("window", controller:currentState().captureSource)
+    assert.are.equal(1, #log.presentations)
+    assert.are.equal(0, #log.copies)
+  end)
+
+  it("keeps fixed Screen preview ticks entirely native-read and presentation free", function()
+    local generation = enter()
+    local reads = { frame = log.frameReads, screen = log.screenReads }
+
+    assert.is_true(controller:refreshPreview(generation, "screen"))
+    assert.is_true(controller:refreshPreview(generation))
+    assert.are.equal(reads.frame, log.frameReads)
+    assert.are.equal(reads.screen, log.screenReads)
+    assert.are.equal(0, #log.presentations)
+    assert.are.equal(0, #log.copies)
+  end)
+
+  it("updates signed Window labels, deduplicates them, and recovers all invalid edges", function()
+    local generation = enter()
+    assert.is_true(controller:selectSource("window", generation))
+    assert.are.equal(1, #log.presentations)
+
+    assert.is_true(controller:refreshPreview(generation, "window"))
+    assert.are.equal(1, #log.presentations)
+
+    target.frame = rect(110, 90, 750, 400)
+    assert.is_true(controller:refreshPreview(generation, "window"))
+    assert.same({
+      { edge = "left", text = "L -20", value = -20, invalid = true },
+      { edge = "top", text = "T -20", value = -20, invalid = true },
+      { edge = "right", text = "R -34", value = -34, invalid = true },
+      { edge = "bottom", text = "B -44", value = -44, invalid = true },
+    }, log.presentations[2].labels)
+
+    target.frame = rect(50, 40, 900, 520)
+    assert.is_true(controller:refreshPreview(generation, "window"))
+    assert.same({
+      { edge = "left", text = "L 100", value = 100, invalid = false },
+      { edge = "top", text = "T 80", value = 80, invalid = false },
+      { edge = "right", text = "R 146", value = 146, invalid = false },
+      { edge = "bottom", text = "B 96", value = 96, invalid = false },
+    }, log.presentations[3].labels)
+    assert.are.equal(0, #log.copies)
+  end)
+
+  it("retains the last complete labels across transient read, preview, and presentation failures", function()
+    local generation = enter()
+    assert.is_true(controller:selectSource("window", generation))
+    local state = controller:currentState()
+    local retainedLabels = state.lastLabels
+    local retainedPreview = state.lastPreview
+    target.frame = rect(50, 40, 900, 520)
+
+    local originalFrame = ports.windowFrame
+    ports.windowFrame = function()
+      return false
+    end
+    assert.is_false(controller:refreshPreview(generation, "window"))
+    ports.windowFrame = originalFrame
+
+    local originalPreview = controller.crop.preview
+    for _, behavior in ipairs({ "false", "raise" }) do
+      controller.crop.preview = function()
+        if behavior == "raise" then
+          error("preview")
+        end
+        return false
+      end
+      assert.is_false(controller:refreshPreview(generation, "window"))
+    end
+    controller.crop.preview = originalPreview
+
+    local originalPresentation = ports.refreshPresentation
+    for _, behavior in ipairs({ "false", "raise" }) do
+      ports.refreshPresentation = function()
+        if behavior == "raise" then
+          error("presentation")
+        end
+        return false
+      end
+      assert.is_false(controller:refreshPreview(generation, "window"))
+      assert.are.equal(retainedLabels, state.lastLabels)
+      assert.are.equal(retainedPreview, state.lastPreview)
+    end
+    ports.refreshPresentation = originalPresentation
+
+    assert.is_true(controller:refreshPreview(generation, "window"))
+    assert.are_not.equal(retainedLabels, state.lastLabels)
+    assert.are.equal(2, #log.presentations)
+    assert.are.equal(0, #log.copies)
+  end)
+
+  it("guards preview ticks by application, session, source, and closed source validity", function()
+    local generation = enter()
+    assert.is_false(controller:refreshPreview())
+    assert.is_false(controller:refreshPreview(generation + 1))
+    assert.is_false(controller:refreshPreview(generation, "window"))
+    assert.is_true(controller:selectSource("window", generation))
+    assert.is_false(controller:refreshPreview(generation, "screen"))
+    controller:currentState().captureSource = "invalid"
+    assert.is_false(controller:refreshPreview(generation))
+    controller:currentState().captureSource = "window"
+    current = false
+    assert.is_false(controller:refreshPreview(generation, "window"))
+    assert.are.equal(1, #log.presentations)
+    assert.are.equal(0, #log.copies)
+  end)
+
+  it("switches rapidly with a fresh candidate and restores the frozen Screen labels", function()
+    local generation = enter()
+    target.frame = rect(50, 40, 900, 520)
+    assert.is_true(controller:selectSource("window", generation))
+    assert.are.equal("L 100", log.presentations[1].labels[1].text)
+    assert.is_true(controller:selectSource("screen", generation))
+    assert.are.equal("L 400", log.presentations[2].labels[1].text)
+    target.frame = rect(25, 20, 1000, 600)
+    assert.is_true(controller:selectSource("window", generation))
+    assert.are.equal("L 150", log.presentations[3].labels[1].text)
+    assert.are.equal("window", controller:currentState().captureSource)
+    assert.are.equal(3, #log.presentations)
+  end)
+
+  it("does not enter when preview or label modeling cannot produce a complete snapshot", function()
+    for _, preview in ipairs({
+      function()
+        return false
+      end,
+      function()
+        error("preview")
+      end,
+    }) do
+      controller = Controller.new({
+        config = config,
+        crop = cropWithPreview(preview),
+        view = View.new(config, metadata),
+        ports = ports,
+      })
+      assert.is_false(controller:enter())
+      assert.same({ kind = "inactive" }, controller:currentState())
+      assert.are.equal(0, #log.renders)
+    end
+
+    local view = View.new(config, metadata)
+    view.cropEdgeLabels = function()
+      return { { edge = "left" } }
+    end
+    controller = Controller.new({ config = config, crop = ObsCrop, view = view, ports = ports })
+    assert.is_false(controller:enter())
+    assert.same({ kind = "inactive" }, controller:currentState())
+    assert.are.equal(0, #log.renders)
   end)
 
   it("uses a positive override while still freezing the native screen scale", function()
@@ -234,6 +426,20 @@ describe("OBS crop controller", function()
     assert.is_false(controller:cancel(generation))
     assert.are.equal(1, log.closes)
     assert.are.equal(1, #log.copies)
+  end)
+
+  it("keeps Finish authoritative when the last Window preview deliberately disagrees", function()
+    local generation = enter()
+    target.frame = rect(110, 90, 750, 400)
+    assert.is_true(controller:selectSource("window", generation))
+    assert.is_true(controller:refreshPreview(generation, "window"))
+    assert.is_true(controller:currentState().lastLabels[1].invalid)
+    assert.are.equal("L -20", controller:currentState().lastLabels[1].text)
+
+    target.frame = rect(50, 40, 900, 520)
+    assert.is_true(controller:finish(generation))
+    assert.are.equal("Window Capture | Left: 100, Top: 80, Right: 146, Bottom: 96 | Result: 1554 x 864 | Scale: 2", log.copies[1])
+    assert.same({ kind = "inactive" }, controller:currentState())
   end)
 
   it("keeps Screen Capture output invariant under arbitrary window movement and resizing", function()

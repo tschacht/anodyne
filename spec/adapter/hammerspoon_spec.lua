@@ -26,6 +26,28 @@ local function border(frame, width)
   }
 end
 
+local function labelPill(frame)
+  return {
+    type = "rectangle",
+    action = "fill",
+    fillColor = { red = 0.08, green = 0.08, blue = 0.08, alpha = 0.92 },
+    roundedRectRadii = { xRadius = 7, yRadius = 7 },
+    frame = frame,
+  }
+end
+
+local function labelText(frame, text, invalid)
+  return {
+    type = "text",
+    text = text,
+    textSize = 16,
+    textColor = invalid and { red = 1, green = 0.28, blue = 0.22, alpha = 1 } or { white = 1, alpha = 1 },
+    textFont = "Menlo",
+    textAlignment = "center",
+    frame = frame,
+  }
+end
+
 describe("Hammerspoon adapter", function()
   local adapter, driver, owner
 
@@ -334,6 +356,14 @@ describe("Hammerspoon adapter", function()
       mask({ x = 0, y = 100, w = 100, h = 600 }),
       mask({ x = 900, y = 100, w = 1020, h = 600 }),
       border({ x = 100, y = 100, w = 800, h = 600 }),
+      labelPill({ x = 4, y = 386, w = 88, h = 28 }),
+      labelText({ x = 4, y = 386, w = 88, h = 28 }, "L 100"),
+      labelPill({ x = 456, y = 64, w = 88, h = 28 }),
+      labelText({ x = 456, y = 64, w = 88, h = 28 }, "T 100"),
+      labelPill({ x = 908, y = 386, w = 88, h = 28 }),
+      labelText({ x = 908, y = 386, w = 88, h = 28 }, "R 1020"),
+      labelPill({ x = 456, y = 708, w = 88, h = 28 }),
+      labelText({ x = 456, y = 708, w = 88, h = 28 }, "B 380"),
     }, guideElements)
     local maskArea = 0
     for index = 1, 4 do
@@ -367,7 +397,7 @@ describe("Hammerspoon adapter", function()
     }, driver:canvasElements(helpCanvas))
     assert.is_nil(owner.compositionResultTimer)
     assert.are.equal(0, #driver:alerts())
-    assert.same({ timers = 0, menus = 1, hotkeys = 2, modals = 2, filters = 2, taps = 0, canvases = 2 }, driver:activeCounts())
+    assert.same({ timers = 1, menus = 1, hotkeys = 2, modals = 2, filters = 2, taps = 0, canvases = 2 }, driver:activeCounts())
 
     assert.is_true(driver:triggerModalHotkey({}, "w"))
     driver:setWindowFrame(window, { x = 50, y = 40, w = 900, h = 700 })
@@ -393,6 +423,489 @@ describe("Hammerspoon adapter", function()
     assert.are.equal("Window Capture | " .. expected, driver:clipboardContents())
   end)
 
+  it("polls Window labels at the configured interval while Screen ticks stay native-no-op", function()
+    start(nil, { obsCrop = { liveRefreshInterval = 0.25 } })
+    local target = driver.runtime.focused
+    driver:triggerHotkey({ "ctrl", "alt", "cmd" }, "c")
+    local guide = owner.compositionCanvas
+    local status = owner.compositionStatusCanvas
+    local timer = owner.compositionLiveTimer
+    assert.are.equal(0.25, timer._state.interval)
+    assert.is_true(timer._state.repeating)
+    assert.are.equal(1, driver:activeCounts().timers)
+
+    driver:clearFrameReads(target)
+    local writes = driver.runtime.invocationCounts["canvas.element"]
+    driver:advance(0.5)
+    assert.are.equal(2, timer._state.ticks)
+    assert.are.equal(0, #driver:frameReads(target))
+    assert.are.equal(writes, driver.runtime.invocationCounts["canvas.element"])
+    assert.are.equal(guide, owner.compositionCanvas)
+    assert.are.equal(status, owner.compositionStatusCanvas)
+
+    assert.is_true(driver:triggerModalHotkey({}, "w"))
+    assert.are.equal(1, #driver:frameReads(target))
+    status = owner.compositionStatusCanvas
+    driver:setWindowFrame(target, { x = 50, y = 40, w = 900, h = 700 })
+    driver:clearCallLog()
+    driver:advance(0.249)
+    assert.are.equal("L 0", driver:canvasElements(guide)[7].text)
+    driver:advance(0.001)
+    local elements = driver:canvasElements(guide)
+    assert.same({ "L 50", "T 60", "R 50", "B 40" }, {
+      elements[7].text,
+      elements[9].text,
+      elements[11].text,
+      elements[13].text,
+    })
+    assert.are.equal(guide, owner.compositionCanvas)
+    assert.are.equal(status, owner.compositionStatusCanvas)
+    assert.same({
+      "canvas.element.read#5",
+      "canvas.element.read#6",
+      "canvas.element.read#7",
+      "canvas.element.read#8",
+      "canvas.element.write#22",
+      "canvas.element#22",
+      "canvas.element.write#23",
+      "canvas.element#23",
+      "canvas.element.write#24",
+      "canvas.element#24",
+      "canvas.element.write#25",
+      "canvas.element#25",
+    }, driver:callLog())
+
+    local changedWrites = driver.runtime.invocationCounts["canvas.element"]
+    driver:advance(0.25)
+    assert.are.equal(changedWrites, driver.runtime.invocationCounts["canvas.element"])
+    driver:setFault(target, "readThrows")
+    driver:advance(0.25)
+    assert.same(elements, driver:canvasElements(guide))
+    driver:clearFaults(target)
+    driver:setWindowFrame(target, { x = 40, y = 30, w = 920, h = 720 })
+    driver:advance(0.25)
+    assert.same({ "L 60", "T 70", "R 60", "B 50" }, {
+      driver:canvasElements(guide)[7].text,
+      driver:canvasElements(guide)[9].text,
+      driver:canvasElements(guide)[11].text,
+      driver:canvasElements(guide)[13].text,
+    })
+  end)
+
+  it("tears down coherently when a Window tick cannot restore its full label snapshot", function()
+    start(nil, { obsCrop = { liveRefreshInterval = 0.1 } })
+    local target = driver.runtime.focused
+    driver:triggerHotkey({ "ctrl", "alt", "cmd" }, "c")
+    assert.is_true(driver:triggerModalHotkey({}, "w"))
+    local guide = owner.compositionCanvas
+    driver:setWindowFrame(target, { x = 50, y = 40, w = 900, h = 700 })
+    driver:advance(0.1)
+    local prior = driver:canvasElements(guide)
+    assert.same({ "L 50", "T 60", "R 50", "B 40" }, {
+      prior[7].text,
+      prior[9].text,
+      prior[11].text,
+      prior[13].text,
+    })
+
+    driver:setWindowFrame(target, { x = 40, y = 30, w = 920, h = 720 })
+    local writes = driver.runtime.invocationCounts["canvas.element.write"] or 0
+    driver:setLifecycleFaultSequence("canvas.element.write", {
+      writes + 3,
+      writes + 5,
+      writes + 9,
+    })
+    driver:advance(0.1)
+    assert.is_nil(owner.compositionLabelRollback)
+    assert.is_nil(owner.compositionLiveTimer)
+    assert.is_nil(owner.compositionCanvas)
+    assert.is_nil(owner.compositionStatusCanvas)
+    assert.is_true(guide._state.deleted)
+    assert.is_false(owner.compositionMode._state.active)
+    assert.is_nil(driver:clipboardContents())
+  end)
+
+  it("renders adaptive label geometry and all signed invalid edges exactly", function()
+    local cases = {
+      {
+        fullFrame = { x = -500, y = -300, w = 1920, h = 1080 },
+        guide = { x = 100, y = 100, w = 800, h = 600 },
+        frames = {
+          { x = 504, y = 686, w = 88, h = 28 },
+          { x = 956, y = 364, w = 88, h = 28 },
+          { x = 1408, y = 686, w = 88, h = 28 },
+          { x = 956, y = 1008, w = 88, h = 28 },
+        },
+        texts = { "L 600", "T 400", "R 520", "B 80" },
+      },
+      {
+        fullFrame = { x = 0, y = 0, w = 1920, h = 1080 },
+        guide = { x = 0, y = 0, w = 1920, h = 1080 },
+        frames = {
+          { x = 8, y = 526, w = 88, h = 28 },
+          { x = 916, y = 8, w = 88, h = 28 },
+          { x = 1824, y = 526, w = 88, h = 28 },
+          { x = 916, y = 1044, w = 88, h = 28 },
+        },
+        texts = { "L 0", "T 0", "R 0", "B 0" },
+      },
+      {
+        fullFrame = { x = 0, y = 0, w = 1920, h = 1080 },
+        guide = { x = -10, y = -20, w = 1940, h = 1120 },
+        frames = {
+          { x = 0, y = 526, w = 88, h = 28 },
+          { x = 916, y = 0, w = 88, h = 28 },
+          { x = 1832, y = 526, w = 88, h = 28 },
+          { x = 916, y = 1052, w = 88, h = 28 },
+        },
+        texts = { "L -10", "T -20", "R -10", "B -20" },
+        invalid = true,
+      },
+    }
+
+    for _, case in ipairs(cases) do
+      driver = FakeHs.new()
+      driver:setFullFrame(driver.runtime.screens[1], case.fullFrame)
+      driver:setWindowFrame(driver.runtime.focused, case.guide)
+      start()
+      driver:triggerHotkey({ "ctrl", "alt", "cmd" }, "c")
+      local elements = driver:canvasElements(owner.compositionCanvas)
+      for index = 1, 4 do
+        local pillIndex = 4 + index * 2
+        local textIndex = pillIndex + 1
+        assert.same(labelPill(case.frames[index]), elements[pillIndex])
+        assert.same(labelText(case.frames[index], case.texts[index], case.invalid), elements[textIndex])
+      end
+      assert.is_true(owner.compositionCanvas._state.mouseCallbackSet)
+      assert.is_nil(adapter:stop())
+      assertNoResources(driver)
+      driver:shutdown()
+      adapter = nil
+    end
+  end)
+
+  it("rolls label and status presentation back atomically on either failure side", function()
+    for _, failure in ipairs({ "labels", "status" }) do
+      driver = FakeHs.new()
+      start()
+      driver:triggerHotkey({ "ctrl", "alt", "cmd" }, "c")
+      assert.is_true(driver:triggerModalHotkey({}, "w"))
+      local guide = owner.compositionCanvas
+      local status = owner.compositionStatusCanvas
+      local priorLabels = driver:canvasElements(guide)
+      if failure == "labels" then
+        driver:setLifecycleFault("canvas.element", (driver.runtime.invocationCounts["canvas.element"] or 0) + 2)
+      else
+        driver:setLifecycleReturn("canvas.new", (driver.runtime.invocationCounts["canvas.new"] or 0) + 1, nil)
+      end
+
+      assert.is_true(driver:triggerModalHotkey({}, "s"))
+      assert.are.equal(guide, owner.compositionCanvas)
+      assert.are.equal(status, owner.compositionStatusCanvas)
+      assert.is_true(status._state.visible)
+      assert.matches("Selected source: Window Capture", driver:canvasElements(status)[2].text)
+      for _, textIndex in ipairs({ 7, 9, 11, 13 }) do
+        assert.same(priorLabels[textIndex], driver:canvasElements(guide)[textIndex])
+      end
+
+      driver:clearLifecycleFaults()
+      driver:clearLifecycleReturns()
+      assert.is_true(driver:triggerModalHotkey({}, "s"))
+      assert.matches("Selected source: Screen Capture", driver:canvasElements(owner.compositionStatusCanvas)[2].text)
+      assert.is_nil(adapter:stop())
+      assertNoResources(driver)
+      driver:shutdown()
+      adapter = nil
+    end
+  end)
+
+  it("restores prior status visibility after candidate-show and prior-show faults", function()
+    start()
+    driver:triggerHotkey({ "ctrl", "alt", "cmd" }, "c")
+    assert.is_true(driver:triggerModalHotkey({}, "w"))
+    local guide = owner.compositionCanvas
+    local status = owner.compositionStatusCanvas
+    local priorLabels = driver:canvasElements(guide)
+    local shows = driver.runtime.invocationCounts["canvas.show"] or 0
+    driver:setLifecycleFaultSequence("canvas.show", { shows + 1, shows + 2 })
+
+    assert.is_true(driver:triggerModalHotkey({}, "s"))
+    assert.is_nil(owner.compositionStatusRollback)
+    assert.are.equal(status, owner.compositionStatusCanvas)
+    assert.is_true(status._state.visible)
+    assert.matches("Selected source: Window Capture", driver:canvasElements(status)[2].text)
+    for _, textIndex in ipairs({ 7, 9, 11, 13 }) do
+      assert.same(priorLabels[textIndex], driver:canvasElements(guide)[textIndex])
+    end
+    assert.is_true(owner.compositionMode._state.active)
+  end)
+
+  it("restores prior status after old-delete and prior-show faults", function()
+    start()
+    driver:triggerHotkey({ "ctrl", "alt", "cmd" }, "c")
+    assert.is_true(driver:triggerModalHotkey({}, "w"))
+    local status = owner.compositionStatusCanvas
+    local deletes = driver.runtime.invocationCounts["canvas.delete"] or 0
+    local shows = driver.runtime.invocationCounts["canvas.show"] or 0
+    driver:setLifecycleFault("canvas.delete", deletes + 1)
+    driver:setLifecycleFault("canvas.show", shows + 2)
+
+    assert.is_true(driver:triggerModalHotkey({}, "s"))
+    assert.is_nil(owner.compositionStatusRollback)
+    assert.are.equal(status, owner.compositionStatusCanvas)
+    assert.is_true(status._state.visible)
+    assert.matches("Selected source: Window Capture", driver:canvasElements(status)[2].text)
+    assert.is_true(owner.compositionMode._state.active)
+  end)
+
+  it("forces coherent teardown when old-delete compensation cannot hide the candidate", function()
+    start()
+    driver:triggerHotkey({ "ctrl", "alt", "cmd" }, "c")
+    assert.is_true(driver:triggerModalHotkey({}, "w"))
+    local guide = owner.compositionCanvas
+    local status = owner.compositionStatusCanvas
+    local deletes = driver.runtime.invocationCounts["canvas.delete"] or 0
+    local hides = driver.runtime.invocationCounts["canvas.hide"] or 0
+    driver:setLifecycleFault("canvas.delete", deletes + 1)
+    driver:setLifecycleFault("canvas.hide", hides + 2)
+
+    assert.is_true(driver:triggerModalHotkey({}, "s"))
+    assert.is_nil(owner.compositionStatusRollback)
+    assert.is_nil(owner.compositionStatusCandidateCanvas)
+    assert.is_true(guide._state.deleted)
+    assert.is_true(status._state.deleted)
+    assert.is_nil(owner.compositionLiveTimer)
+    assert.is_false(owner.compositionMode._state.active)
+  end)
+
+  it("retains hidden status rollback resources when forced teardown cannot delete", function()
+    start()
+    driver:triggerHotkey({ "ctrl", "alt", "cmd" }, "c")
+    assert.is_true(driver:triggerModalHotkey({}, "w"))
+    local guide = owner.compositionCanvas
+    local status = owner.compositionStatusCanvas
+    local shows = driver.runtime.invocationCounts["canvas.show"] or 0
+    driver:setLifecycleFaultSequence("canvas.show", { shows + 1, shows + 2, shows + 3 })
+    driver:setPersistentLifecycleFault("canvas.delete")
+
+    assert.is_true(driver:triggerModalHotkey({}, "s"))
+    local candidate = owner.compositionStatusCandidateCanvas
+    assert.is_table(owner.compositionStatusRollback)
+    assert.are.equal(status, owner.compositionStatusRollback.canvas)
+    assert.is_nil(owner.compositionLiveTimer)
+    assert.are.equal(guide, owner.compositionCanvas)
+    assert.are.equal(status, owner.compositionStatusCanvas)
+    assert.is_not_nil(candidate)
+    assert.is_false(guide._state.visible)
+    assert.is_false(status._state.visible)
+    assert.is_false(candidate._state.visible)
+    assert.is_true(owner.compositionMode._state.active)
+
+    driver:clearLifecycleFaults()
+    assert.is_true(driver:triggerModalHotkey({}, "escape"))
+    assert.is_nil(owner.compositionStatusRollback)
+    assert.is_nil(owner.compositionStatusCandidateCanvas)
+    assert.is_nil(owner.compositionCanvas)
+    assert.is_nil(owner.compositionStatusCanvas)
+    assert.is_false(owner.compositionMode._state.active)
+  end)
+
+  it("snapshots every label before mutation and retries transient status rollback writes", function()
+    start()
+    driver:triggerHotkey({ "ctrl", "alt", "cmd" }, "c")
+    assert.is_true(driver:triggerModalHotkey({}, "w"))
+    local guide = owner.compositionCanvas
+    local status = owner.compositionStatusCanvas
+    local prior = driver:canvasElements(guide)
+    local reads = driver.runtime.invocationCounts["canvas.element.read"] or 0
+    local writes = driver.runtime.invocationCounts["canvas.element.write"] or 0
+    driver:setLifecycleFault("canvas.element.read", reads + 4)
+
+    assert.is_true(driver:triggerModalHotkey({}, "s"))
+    assert.are.equal(writes, driver.runtime.invocationCounts["canvas.element.write"] or 0)
+    assert.are.equal(status, owner.compositionStatusCanvas)
+    assert.matches("Selected source: Window Capture", driver:canvasElements(status)[2].text)
+    for _, textIndex in ipairs({ 7, 9, 11, 13 }) do
+      assert.same(prior[textIndex], driver:canvasElements(guide)[textIndex])
+    end
+
+    driver:clearLifecycleFaults()
+    local canvasNew = (driver.runtime.invocationCounts["canvas.new"] or 0) + 1
+    writes = driver.runtime.invocationCounts["canvas.element.write"] or 0
+    driver:setLifecycleReturn("canvas.new", canvasNew, nil)
+    driver:setLifecycleFault("canvas.element.write", writes + 5)
+    assert.is_true(driver:triggerModalHotkey({}, "s"))
+    assert.is_nil(owner.compositionLabelRollback)
+    assert.are.equal(status, owner.compositionStatusCanvas)
+    assert.matches("Selected source: Window Capture", driver:canvasElements(status)[2].text)
+    for _, textIndex in ipairs({ 7, 9, 11, 13 }) do
+      assert.same(prior[textIndex], driver:canvasElements(guide)[textIndex])
+    end
+
+    driver:clearLifecycleFaults()
+    driver:clearLifecycleReturns()
+    assert.is_true(driver:triggerModalHotkey({}, "s"))
+    assert.matches("Selected source: Screen Capture", driver:canvasElements(owner.compositionStatusCanvas)[2].text)
+  end)
+
+  it("cancels a Screen session when a source transition cannot restore its labels", function()
+    start()
+    driver:triggerHotkey({ "ctrl", "alt", "cmd" }, "c")
+    local guide = owner.compositionCanvas
+    local writes = driver.runtime.invocationCounts["canvas.element.write"] or 0
+    driver:setLifecycleFaultSequence("canvas.element.write", {
+      writes + 3,
+      writes + 5,
+      writes + 9,
+    })
+
+    assert.is_true(driver:triggerModalHotkey({}, "w"))
+    assert.is_nil(owner.compositionLabelRollback)
+    assert.is_nil(owner.compositionLiveTimer)
+    assert.is_nil(owner.compositionCanvas)
+    assert.is_nil(owner.compositionStatusCanvas)
+    assert.is_true(guide._state.deleted)
+    assert.is_false(owner.compositionMode._state.active)
+    assert.is_nil(driver:clipboardContents())
+  end)
+
+  it("retains only hidden cleanup-retry state when rollback cancellation cannot delete canvases", function()
+    start()
+    driver:triggerHotkey({ "ctrl", "alt", "cmd" }, "c")
+    local guide = owner.compositionCanvas
+    local status = owner.compositionStatusCanvas
+    local writes = driver.runtime.invocationCounts["canvas.element.write"] or 0
+    driver:setLifecycleFaultSequence("canvas.element.write", {
+      writes + 3,
+      writes + 5,
+      writes + 9,
+    })
+    driver:setPersistentLifecycleFault("canvas.delete")
+    assert.is_true(driver:triggerModalHotkey({}, "w"))
+    local rollback = owner.compositionLabelRollback
+    assert.is_table(rollback)
+    assert.are.equal(guide, rollback.canvas)
+    assert.are.equal(guide, owner.compositionCanvas)
+    assert.are.equal(status, owner.compositionStatusCanvas)
+    assert.is_false(guide._state.visible)
+    assert.is_false(status._state.visible)
+    assert.is_nil(owner.compositionLiveTimer)
+    assert.is_true(owner.compositionMode._state.active)
+
+    driver:clearLifecycleFaults()
+    assert.is_true(driver:triggerModalHotkey({}, "escape"))
+    assert.is_nil(owner.compositionCanvas)
+    assert.is_nil(owner.compositionStatusCanvas)
+    assert.is_nil(owner.compositionLabelRollback)
+    assert.is_false(owner.compositionMode._state.active)
+  end)
+
+  it("rolls Composition entry fully back when the repeating timer cannot be acquired", function()
+    for _, result in ipairs({ "nil", "false", "throw" }) do
+      driver = FakeHs.new()
+      start()
+      if result == "throw" then
+        driver:setLifecycleFault("timer.doEvery", 1)
+      else
+        driver:setLifecycleReturn("timer.doEvery", 1, result == "false" and false or nil)
+      end
+      driver:triggerHotkey({ "ctrl", "alt", "cmd" }, "c")
+      assert.is_false(owner.compositionMode._state.active)
+      assert.is_nil(owner.compositionLiveTimer)
+      assert.is_nil(owner.compositionCanvas)
+      assert.is_nil(owner.compositionStatusCanvas)
+      assert.same({ timers = 0, menus = 1, hotkeys = 2, modals = 2, filters = 2, taps = 0, canvases = 0 }, driver:activeCounts())
+
+      driver:clearLifecycleFaults()
+      driver:clearLifecycleReturns()
+      driver:triggerHotkey({ "ctrl", "alt", "cmd" }, "c")
+      assert.is_true(owner.compositionMode._state.active)
+      assert.is_true(owner.compositionLiveTimer._state.active)
+      assert.is_true(driver:triggerModalHotkey({}, "escape"))
+      assert.is_nil(adapter:stop())
+      assertNoResources(driver)
+      driver:shutdown()
+      adapter = nil
+    end
+  end)
+
+  it("recovers timer-acquisition rollback after a retained modal-exit failure", function()
+    start()
+    driver:setLifecycleReturn("timer.doEvery", 1, nil)
+    driver:setLifecycleFault("modal.exit", (driver.runtime.invocationCounts["modal.exit"] or 0) + 1)
+    driver:triggerHotkey({ "ctrl", "alt", "cmd" }, "c")
+    assert.is_true(owner.compositionMode._state.active)
+    assert.is_nil(owner.compositionLiveTimer)
+    assert.is_nil(owner.compositionCanvas)
+    assert.matches("Composition Mode could not close", driver:canvasElements(owner.compositionStatusCanvas)[2].text)
+    assert.same({ timers = 0, menus = 1, hotkeys = 2, modals = 2, filters = 2, taps = 0, canvases = 1 }, driver:activeCounts())
+
+    driver:clearLifecycleFaults()
+    driver:clearLifecycleReturns()
+    driver:triggerHotkey({ "ctrl", "alt", "cmd" }, "c")
+    assert.is_true(owner.compositionMode._state.active)
+    assert.is_not_nil(owner.compositionCanvas)
+    assert.is_true(owner.compositionLiveTimer._state.active)
+    assert.is_true(driver:triggerModalHotkey({}, "escape"))
+  end)
+
+  it("retains hidden acquisition-rollback canvases until persistent delete failure clears", function()
+    start()
+    driver:setLifecycleReturn("timer.doEvery", 1, nil)
+    driver:setPersistentLifecycleFault("canvas.delete")
+    driver:triggerHotkey({ "ctrl", "alt", "cmd" }, "c")
+    local guide = owner.compositionCanvas
+    local status = owner.compositionStatusCanvas
+    assert.is_true(owner.compositionMode._state.active)
+    assert.is_nil(owner.compositionLiveTimer)
+    assert.is_not_nil(guide)
+    assert.is_not_nil(status)
+    assert.is_false(guide._state.visible)
+    assert.is_false(status._state.visible)
+    assert.same({ timers = 0, menus = 1, hotkeys = 2, modals = 2, filters = 2, taps = 0, canvases = 2 }, driver:activeCounts())
+    assert.is_true(driver:triggerModalHotkey({}, "escape"))
+    assert.are.equal(guide, owner.compositionCanvas)
+    assert.are.equal(status, owner.compositionStatusCanvas)
+
+    driver:clearLifecycleFaults()
+    driver:clearLifecycleReturns()
+    assert.is_true(driver:triggerModalHotkey({}, "escape"))
+    assert.is_false(owner.compositionMode._state.active)
+    assert.is_true(guide._state.deleted)
+    assert.is_true(status._state.deleted)
+    assert.is_nil(owner.compositionCanvas)
+    assert.is_nil(owner.compositionStatusCanvas)
+    assert.same({ timers = 0, menus = 1, hotkeys = 2, modals = 2, filters = 2, taps = 0, canvases = 0 }, driver:activeCounts())
+  end)
+
+  it("retains a failed live-timer stop for retry and makes stale callbacks inert", function()
+    start()
+    driver:triggerHotkey({ "ctrl", "alt", "cmd" }, "c")
+    assert.is_true(driver:triggerModalHotkey({}, "w"))
+    local timer = owner.compositionLiveTimer
+    local stale = driver:timerCallback(timer)
+    local guide = owner.compositionCanvas
+    driver:setPersistentLifecycleFault("timer.stop")
+    assert.is_true(driver:triggerModalHotkey({}, "escape"))
+    assert.are.equal(timer, owner.compositionLiveTimer)
+    assert.are.equal(guide, owner.compositionCanvas)
+    assert.is_true(owner.compositionMode._state.active)
+    local errors = adapter:stop()
+    assert.is_table(errors)
+    assert.matches("compositionLiveTimer.stop", table.concat(errors, "\n"))
+
+    driver:clearLifecycleFaults()
+    assert.is_nil(adapter:stop())
+    assertNoResources(driver)
+    adapter:start()
+    driver:triggerHotkey({ "ctrl", "alt", "cmd" }, "c")
+    local replacementGuide = owner.compositionCanvas
+    local writes = driver.runtime.invocationCounts["canvas.element"]
+    stale()
+    assert.are.equal(replacementGuide, owner.compositionCanvas)
+    assert.are.equal(writes, driver.runtime.invocationCounts["canvas.element"])
+  end)
+
   it("defaults visibly to Screen and refreshes only status for idempotent S/W selection", function()
     start()
     local target = driver.runtime.focused
@@ -415,18 +928,22 @@ describe("Hammerspoon adapter", function()
     assert.matches("Selected source: Window Capture", driver:canvasElements(windowStatus)[2].text)
     assert.are.equal(guide, owner.compositionCanvas)
     assert.same(guideFrame, driver:canvasFrame(guide))
-    assert.same(guideElements, driver:canvasElements(guide))
-    assert.are.equal(frameReads, #target._state.frameReads)
+    local windowElements = driver:canvasElements(guide)
+    for index = 1, 6 do
+      assert.same(guideElements[index], windowElements[index])
+    end
+    assert.are.equal("L 0", windowElements[7].text)
+    assert.are.equal(frameReads + 1, #target._state.frameReads)
 
     assert.is_true(driver:triggerModalHotkey({}, "w"))
     assert.are.equal(windowStatus, owner.compositionStatusCanvas)
     assert.are.equal(guide, owner.compositionCanvas)
-    assert.are.equal(frameReads, #target._state.frameReads)
+    assert.are.equal(frameReads + 1, #target._state.frameReads)
 
     assert.is_true(driver:triggerModalHotkey({}, "s"))
     assert.matches("Selected source: Screen Capture", driver:canvasElements(owner.compositionStatusCanvas)[2].text)
     assert.are.equal(guide, owner.compositionCanvas)
-    assert.are.equal(frameReads, #target._state.frameReads)
+    assert.are.equal(frameReads + 1, #target._state.frameReads)
   end)
 
   it("rolls back every status refresh stage without changing the visible Window selection", function()
@@ -464,7 +981,7 @@ describe("Hammerspoon adapter", function()
       assert.are.equal(windowText, driver:canvasElements(windowStatus)[2].text)
       assert.matches("Selected source: Window Capture", windowText)
       assert.are.equal(guide, owner.compositionCanvas)
-      assert.same({ timers = 0, menus = 1, hotkeys = 2, modals = 2, filters = 2, taps = 0, canvases = 2 }, driver:activeCounts())
+      assert.same({ timers = 1, menus = 1, hotkeys = 2, modals = 2, filters = 2, taps = 0, canvases = 2 }, driver:activeCounts())
       if #driver.runtime.canvases > canvasCount then
         assert.is_true(driver.runtime.canvases[#driver.runtime.canvases]._state.deleted)
       end
@@ -592,6 +1109,7 @@ describe("Hammerspoon adapter", function()
     local expectedFinishLog = {
       "screen.currentMode#2",
       "pasteboard.setContents#1",
+      "timer.stop#1",
       "canvas.hide#2",
       "canvas.delete#2",
       "canvas.hide#3",
@@ -600,8 +1118,10 @@ describe("Hammerspoon adapter", function()
       "canvas.level#4",
       "canvas.behavior#3",
       "canvas.mouseCallback#4",
-      "canvas.element#10",
-      "canvas.element#11",
+      "canvas.element.write#22",
+      "canvas.element#22",
+      "canvas.element.write#23",
+      "canvas.element#23",
       "canvas.show#4",
       "timer.doAfter#1",
     }
@@ -712,7 +1232,11 @@ describe("Hammerspoon adapter", function()
       start()
       driver:triggerHotkey({ "ctrl", "alt", "cmd" }, "c")
       assert.same(case.fullFrame, driver:canvasFrame(owner.compositionCanvas))
-      assert.same(case.elements, driver:canvasElements(owner.compositionCanvas))
+      local actualElements = driver:canvasElements(owner.compositionCanvas)
+      for index = 1, 5 do
+        assert.same(case.elements[index], actualElements[index])
+      end
+      assert.are.equal(13, #actualElements)
       assert.is_true(owner.compositionCanvas._state.mouseCallbackSet)
       for index = 1, 4 do
         local frame = case.elements[index].frame
@@ -989,6 +1513,14 @@ describe("Hammerspoon adapter", function()
       { "canvas.element", 3 },
       { "canvas.element", 4 },
       { "canvas.element", 5 },
+      { "canvas.element", 6 },
+      { "canvas.element", 7 },
+      { "canvas.element", 8 },
+      { "canvas.element", 9 },
+      { "canvas.element", 10 },
+      { "canvas.element", 11 },
+      { "canvas.element", 12 },
+      { "canvas.element", 13 },
       { "canvas.show", 1 },
     }) do
       driver = FakeHs.new()
@@ -1012,8 +1544,8 @@ describe("Hammerspoon adapter", function()
       { "canvas.level", 2 },
       { "canvas.behavior", 1 },
       { "canvas.mouseCallback", 2 },
-      { "canvas.element", 6 },
-      { "canvas.element", 7 },
+      { "canvas.element", 14 },
+      { "canvas.element", 15 },
       { "canvas.show", 2 },
     }) do
       driver = FakeHs.new()

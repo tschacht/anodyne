@@ -16,6 +16,33 @@ local function sameRect(left, right)
   return left and right and left.x == right.x and left.y == right.y and left.w == right.w and left.h == right.h
 end
 
+local function sameLabels(left, right)
+  if type(left) ~= "table" or type(right) ~= "table" or #left ~= 4 or #right ~= 4 then
+    return false
+  end
+  for index = 1, 4 do
+    local a, b = left[index], right[index]
+    if type(a) ~= "table" or type(b) ~= "table" or a.edge ~= b.edge or a.text ~= b.text or a.value ~= b.value or a.invalid ~= b.invalid then
+      return false
+    end
+  end
+  return true
+end
+
+local function completeLabels(labels)
+  if type(labels) ~= "table" or #labels ~= 4 then
+    return false
+  end
+  local edges = { "left", "top", "right", "bottom" }
+  for index, edge in ipairs(edges) do
+    local label = labels[index]
+    if type(label) ~= "table" or label.edge ~= edge or type(label.text) ~= "string" or type(label.value) ~= "number" or type(label.invalid) ~= "boolean" then
+      return false
+    end
+  end
+  return true
+end
+
 local function call(port, ...)
   local ok, first, second = pcall(port, ...)
   if not ok or first == false or first == nil then
@@ -76,6 +103,18 @@ function Controller:readScreen(screen)
   return { identity = identity, fullFrame = copyRect(fullFrame), scale = screenScale }
 end
 
+function Controller:previewFor(finalFrame, guideFrame, scale)
+  local previewOk, preview = call(self.crop.preview, finalFrame, guideFrame, scale)
+  if not previewOk or type(preview) ~= "table" or preview.ok ~= true then
+    return nil, { kind = "preview-failed" }
+  end
+  local labelsOk, labels = call(self.view.cropEdgeLabels, self.view, preview)
+  if not labelsOk or not completeLabels(labels) then
+    return nil, { kind = "preview-failed" }
+  end
+  return { preview = preview, labels = labels }
+end
+
 function Controller:enter()
   if not self:isApplicationCurrent() then
     return false, { kind = "stale-generation" }
@@ -114,8 +153,13 @@ function Controller:enter()
 
   local guideFrame = copyRect(frame)
   local captureSource = "screen"
+  local screenPreview, previewFailure = self:previewFor(screenSnapshot.fullFrame, guideFrame, chosenScale)
+  if not screenPreview then
+    self:alert("Composition Mode could not start")
+    return false, previewFailure
+  end
   local help = self.view:compositionHelpText({ width = guideFrame.w, height = guideFrame.h }, nil, captureSource)
-  local rendered = call(self.ports.renderGuide, screen, screenSnapshot.fullFrame, guideFrame, help)
+  local rendered = call(self.ports.renderGuide, screen, screenSnapshot.fullFrame, guideFrame, help, screenPreview.labels)
   if not rendered then
     self:alert("Composition Mode could not start")
     return false, { kind = "render-failed" }
@@ -132,6 +176,10 @@ function Controller:enter()
     screenScale = screenSnapshot.scale,
     scale = chosenScale,
     captureSource = captureSource,
+    screenPreview = screenPreview.preview,
+    screenLabels = screenPreview.labels,
+    lastPreview = screenPreview.preview,
+    lastLabels = screenPreview.labels,
     generation = self.nextGeneration,
   }
   return true, self.state.generation
@@ -149,13 +197,65 @@ function Controller:selectSource(source, expectedGeneration)
   end
 
   local state = self.state
+  local candidate
+  if source == "screen" then
+    candidate = { preview = state.screenPreview, labels = state.screenLabels }
+  else
+    local frameOk, currentFrame = call(self.ports.windowFrame, state.window)
+    if not frameOk then
+      return false, { kind = "preview-frame-failed" }
+    end
+    candidate = self:previewFor(currentFrame, state.guideFrame, state.scale)
+    if not candidate then
+      return false, { kind = "preview-failed" }
+    end
+  end
   local help = self.view:compositionHelpText({ width = state.guideFrame.w, height = state.guideFrame.h }, nil, source)
-  local presented = call(self.ports.refreshPresentation, help)
+  local presented = call(self.ports.refreshPresentation, help, candidate.labels)
   if not presented then
     return false, { kind = "presentation-failed" }
   end
   state.captureSource = source
+  state.lastPreview = candidate.preview
+  state.lastLabels = candidate.labels
   return true
+end
+
+function Controller:refreshPreview(expectedGeneration, expectedSource)
+  if not self:isCurrentSession(expectedGeneration) then
+    return false, { kind = "stale-generation" }
+  end
+  local state = self.state
+  local source = state.captureSource
+  if expectedSource ~= nil and expectedSource ~= source then
+    return false, { kind = "stale-source" }
+  end
+  if not captureSources[source] then
+    return false, { code = "invalid-source", source = source }
+  end
+  if source == "screen" then
+    return true, state.screenPreview
+  end
+
+  local frameOk, currentFrame = call(self.ports.windowFrame, state.window)
+  if not frameOk then
+    return false, { kind = "preview-frame-failed" }
+  end
+  local candidate, previewFailure = self:previewFor(currentFrame, state.guideFrame, state.scale)
+  if not candidate then
+    return false, previewFailure
+  end
+  if sameLabels(candidate.labels, state.lastLabels) then
+    return true, candidate.preview
+  end
+  local help = self.view:compositionHelpText({ width = state.guideFrame.w, height = state.guideFrame.h }, nil, source)
+  local presented = call(self.ports.refreshPresentation, help, candidate.labels)
+  if not presented then
+    return false, { kind = "presentation-failed" }
+  end
+  state.lastPreview = candidate.preview
+  state.lastLabels = candidate.labels
+  return true, candidate.preview
 end
 
 function Controller:teardown(status, successText)

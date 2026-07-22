@@ -28,7 +28,7 @@ local function live(state, kind)
   end
 end
 
-local function strictObject(kind, methods, state, numeric, beforeNumericWrite)
+local function strictObject(kind, methods, state, numeric, beforeNumericRead, beforeNumericWrite)
   local object = {}
   local metatable = {
     __index = function(_, key)
@@ -37,6 +37,9 @@ local function strictObject(kind, methods, state, numeric, beforeNumericWrite)
       end
       if numeric and type(key) == "number" then
         live(state, kind)
+        if beforeNumericRead then
+          beforeNumericRead()
+        end
         return state.elements[key]
       end
       fail("unknown " .. kind .. " member " .. tostring(key))
@@ -83,7 +86,7 @@ function Fake.new(options)
     runtime.invocationCounts[operation] = invocation
     table.insert(runtime.callLog, operation .. "#" .. invocation)
     local fault = runtime.lifecycleFaults[operation]
-    if fault and (fault.persistent or fault.invocation == invocation) then
+    if fault and (fault.persistent or fault.invocation == invocation or (fault.invocations and fault.invocations[invocation])) then
       error(fault.message or ("injected " .. operation .. " failure"))
     end
     local returned = runtime.lifecycleReturns[operation]
@@ -577,6 +580,28 @@ function Fake.new(options)
     table.insert(runtime.timers, timer)
     return timer
   end
+  function hs.timer.doEvery(interval, callback, ...)
+    noExtra("timer.doEvery", ...)
+    local overridden, value = lifecycle("timer.doEvery")
+    if overridden then
+      return value
+    end
+    if type(interval) ~= "number" or interval <= 0 or interval == math.huge or interval ~= interval or type(callback) ~= "function" then
+      fail("timer.doEvery requires finite positive interval and callback")
+    end
+    local state = {
+      due = runtime.now + interval,
+      interval = interval,
+      callback = callback,
+      active = true,
+      repeating = true,
+      ticks = 0,
+    }
+    local timer = strictObject("timer", timerMethods, state)
+    rawset(timer, "_state", state)
+    table.insert(runtime.timers, timer)
+    return timer
+  end
   function hs.menubar.new(...)
     if select("#", ...) ~= 0 then
       fail("menubar.new takes no arguments")
@@ -676,6 +701,9 @@ function Fake.new(options)
     end
     local state = { frame = copyFrame(frame), elements = {}, visible = false }
     local canvas = strictObject("canvas", canvasMethods, state, true, function()
+      lifecycle("canvas.element.read")
+    end, function()
+      lifecycle("canvas.element.write")
       lifecycle("canvas.element")
     end)
     rawset(canvas, "_state", state)
@@ -793,6 +821,25 @@ function Fake.new(options)
       fail("driver:setPersistentLifecycleFault requires an operation")
     end
     runtime.lifecycleFaults[operation] = { persistent = true, message = message }
+  end
+  function driver:setLifecycleFaultSequence(operation, invocations, message)
+    if type(operation) ~= "string" or type(invocations) ~= "table" or #invocations == 0 then
+      fail("driver:setLifecycleFaultSequence requires an operation and invocation array")
+    end
+    local selected = {}
+    for index, invocation in ipairs(invocations) do
+      if type(invocation) ~= "number" or invocation < 1 or invocation % 1 ~= 0 then
+        fail("driver:setLifecycleFaultSequence invocations must be positive integers")
+      end
+      if selected[invocation] then
+        fail("driver:setLifecycleFaultSequence invocations must be unique")
+      end
+      selected[invocation] = true
+      if index > 1 and invocations[index - 1] >= invocation then
+        fail("driver:setLifecycleFaultSequence invocations must be increasing")
+      end
+    end
+    runtime.lifecycleFaults[operation] = { invocations = selected, message = message }
   end
   function driver:setLifecycleReturn(operation, invocation, value)
     if type(operation) ~= "string" or type(invocation) ~= "number" or invocation < 1 then
@@ -1002,10 +1049,31 @@ function Fake.new(options)
         break
       end
       runtime.now = nextTimer._state.due
-      nextTimer._state.active = false
+      if nextTimer._state.repeating then
+        nextTimer._state.ticks = nextTimer._state.ticks + 1
+        nextTimer._state.due = nextTimer._state.due + nextTimer._state.interval
+      else
+        nextTimer._state.active = false
+      end
       nextTimer._state.callback()
     end
     runtime.now = target
+  end
+  function driver:timerCallback(timer)
+    if not timer or not timer._state or type(timer._state.callback) ~= "function" then
+      fail("driver:timerCallback requires a timer")
+    end
+    return timer._state.callback
+  end
+  function driver:tickTimer(timer)
+    if not timer or not timer._state or not timer._state.active then
+      fail("driver:tickTimer requires an active timer")
+    end
+    if not timer._state.repeating then
+      fail("driver:tickTimer requires a repeating timer")
+    end
+    timer._state.ticks = timer._state.ticks + 1
+    return timer._state.callback()
   end
   function driver:lastMessage()
     for index = #runtime.canvases, 1, -1 do
