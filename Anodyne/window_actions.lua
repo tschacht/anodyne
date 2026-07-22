@@ -203,6 +203,9 @@ function WindowActions:applyFrame(window, frame, label, options)
   if not changed then
     status = "No change — " .. status
   end
+  if options and options.returnFrames then
+    return true, nil, status, currentFrame, actualFrame
+  end
   return true, nil, status
 end
 
@@ -354,7 +357,18 @@ function WindowActions:moveByStep(direction, step)
   if not target then
     return failure("Unknown move direction: " .. tostring(direction))
   end
-  return self:applyFrame(window, target, string.format("Move %s %d px", direction, step))
+  local ok, failureMessage, _, beforeFrame, afterFrame =
+    self:applyFrame(window, target, string.format("Move %s %d px", direction, step), { returnFrames = true })
+  if not ok then
+    return failure(failureMessage)
+  end
+  local axis = (direction == "left" or direction == "right") and "x" or "y"
+  local displacement = self.geometry.round(math.abs(afterFrame[axis] - beforeFrame[axis]))
+  local status = string.format("Move %s %d px", direction, displacement)
+  if displacement == 0 then
+    status = "No change — " .. status
+  end
+  return true, nil, status
 end
 
 function WindowActions:forgetWindow(window)

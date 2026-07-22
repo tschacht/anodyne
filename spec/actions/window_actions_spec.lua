@@ -326,16 +326,38 @@ describe("Milestone 5 transactional window actions", function()
     assert.same({ false, "Unknown move direction: nowhere" }, { actions:moveByStep("nowhere") })
   end)
 
-  it("uses the selected origin-relative move step with shared status and history semantics", function()
+  it("reports actual origin-relative movement after snapping and clamping", function()
     driver:setWindowFrame(window, frame(103, 107, 800, 600))
-    assert.same({ true, nil, "Move left 5 px" }, { actions:moveByStep("left", 5) })
+    assert.same({ true, nil, "Move left 3 px" }, { actions:moveByStep("left", 5) })
     assert.same(frame(100, 107, 800, 600), window:frame())
     assert.same(frame(103, 107, 800, 600), entries[1][1].before)
     assert.same(frame(100, 107, 800, 600), entries[1][1].after)
 
-    assert.same({ true, nil, "Move down 50 px" }, { actions:moveByStep("down", 50) })
+    assert.same({ true, nil, "Move down 43 px" }, { actions:moveByStep("down", 50) })
     assert.same(frame(100, 150, 800, 600), window:frame())
     assert.are.equal(2, #entries[1])
+
+    assert.same({ true, nil, "Move right 5 px" }, { actions:moveByStep("right", 5) })
+    assert.same(frame(105, 150, 800, 600), window:frame())
+
+    assert.same({ true, nil, "Move up 50 px" }, { actions:moveByStep("up", 50) })
+    assert.same(frame(105, 100, 800, 600), window:frame())
+
+    driver:setWindowFrame(window, frame(1120, 100, 800, 600))
+    assert.same({ true, nil, "No change — Move right 0 px" }, { actions:moveByStep("right", 50) })
+    assert.same(frame(1120, 100, 800, 600), window:frame())
+  end)
+
+  it("rounds authoritative fractional movement after calculating displacement", function()
+    driver:setWindowFrame(window, frame(100.4, 100, 800, 600))
+    driver:setFault(window, "coerceWrite")
+    driver:setFault(window, "coerceField", "x")
+    driver:setFault(window, "coerceBy", -0.4)
+
+    assert.same({ true, nil, "Move right 49 px" }, { actions:moveByStep("right", 50) })
+    assert.same(frame(149.6, 100, 800, 600), window:frame())
+    assert.same(frame(100.4, 100, 800, 600), entries[1][1].before)
+    assert.same(frame(149.6, 100, 800, 600), entries[1][1].after)
   end)
 
   it("clamps snapped resizes to configured minima and usable-screen maxima", function()

@@ -749,24 +749,38 @@ describe("Milestone 2 characterization", function()
         previous = _G.Anodyne,
         config = { moveStep = 37, shortMoveStep = 7 },
       })
-      driver:setWindowFrame(window, frame(111, 100, 800, 600))
+      driver:setWindowFrame(window, frame(111, 111, 800, 600))
       driver:triggerEntry()
       driver:key("m")
 
       assert.is_true(driver:key("right", { alt = true, fn = true }))
       driver:advance(0.05)
       assert.are.equal(112, window:frame().x)
-      assert.are.equal("Status: Move right 7 px", driver:lastMessage():match("([^\n]+)$"))
+      assert.are.equal("Status: Move right 1 px", driver:lastMessage():match("([^\n]+)$"))
 
       driver:key("u")
       driver:advance(0.05)
-      assertFrame(frame(111, 100, 800, 600), window:frame())
+      assertFrame(frame(111, 111, 800, 600), window:frame())
       assert.are.equal("Status: Undid last action (800 x 600)", driver:lastMessage():match("([^\n]+)$"))
 
       driver:key("right")
       driver:advance(0.05)
       assert.are.equal(148, window:frame().x)
       assert.are.equal("Status: Move right 37 px", driver:lastMessage():match("([^\n]+)$"))
+
+      driver:key("down", { alt = true })
+      driver:advance(0.05)
+      assert.are.equal(112, window:frame().y)
+      assert.are.equal("Status: Move down 1 px", driver:lastMessage():match("([^\n]+)$"))
+
+      driver:key("u")
+      driver:advance(0.05)
+      assertFrame(frame(148, 111, 800, 600), window:frame())
+
+      driver:key("down")
+      driver:advance(0.05)
+      assert.are.equal(148, window:frame().y)
+      assert.are.equal("Status: Move down 37 px", driver:lastMessage():match("([^\n]+)$"))
     end)
 
     it("routes shifted arrows before ordinary movement", function()
