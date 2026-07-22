@@ -26,23 +26,13 @@ local function border(frame, width)
   }
 end
 
-local function labelPill(frame)
-  return {
-    type = "rectangle",
-    action = "fill",
-    fillColor = { red = 0.08, green = 0.08, blue = 0.08, alpha = 0.92 },
-    roundedRectRadii = { xRadius = 7, yRadius = 7 },
-    frame = frame,
-  }
-end
-
 local function labelText(frame, text, invalid)
   return {
     type = "text",
     text = text,
-    textSize = 16,
-    textColor = invalid and { red = 1, green = 0.28, blue = 0.22, alpha = 1 } or { white = 1, alpha = 1 },
-    textFont = "Menlo",
+    textSize = 13,
+    textColor = invalid and { red = 1, green = 0.28, blue = 0.22, alpha = 1 } or { red = 1, green = 0.5, blue = 0, alpha = 1 },
+    textFont = "Helvetica Neue",
     textAlignment = "center",
     frame = frame,
   }
@@ -356,14 +346,10 @@ describe("Hammerspoon adapter", function()
       mask({ x = 0, y = 100, w = 100, h = 600 }),
       mask({ x = 900, y = 100, w = 1020, h = 600 }),
       border({ x = 100, y = 100, w = 800, h = 600 }),
-      labelPill({ x = 4, y = 386, w = 88, h = 28 }),
-      labelText({ x = 4, y = 386, w = 88, h = 28 }, "L 100"),
-      labelPill({ x = 456, y = 64, w = 88, h = 28 }),
-      labelText({ x = 456, y = 64, w = 88, h = 28 }, "T 100"),
-      labelPill({ x = 908, y = 386, w = 88, h = 28 }),
-      labelText({ x = 908, y = 386, w = 88, h = 28 }, "R 1020"),
-      labelPill({ x = 456, y = 708, w = 88, h = 28 }),
-      labelText({ x = 456, y = 708, w = 88, h = 28 }, "B 380"),
+      labelText({ x = 32, y = 391, w = 64, h = 18 }, "L 100"),
+      labelText({ x = 468, y = 78, w = 64, h = 18 }, "T 100"),
+      labelText({ x = 904, y = 391, w = 64, h = 18 }, "R 1020"),
+      labelText({ x = 468, y = 704, w = 64, h = 18 }, "B 380"),
     }, guideElements)
     local maskArea = 0
     for index = 1, 4 do
@@ -430,54 +416,76 @@ describe("Hammerspoon adapter", function()
     local guide = owner.compositionCanvas
     local status = owner.compositionStatusCanvas
     local timer = owner.compositionLiveTimer
+    local initialElements = driver:canvasElements(guide)
     assert.are.equal(0.25, timer._state.interval)
     assert.is_true(timer._state.repeating)
     assert.are.equal(1, driver:activeCounts().timers)
 
     driver:clearFrameReads(target)
-    local writes = driver.runtime.invocationCounts["canvas.element"]
+    local guideWholeAccesses = driver:canvasWholeElementAccesses(guide)
+    local attributeWrites = driver.runtime.invocationCounts["canvas.elementAttribute.write"]
     driver:advance(0.5)
     assert.are.equal(2, timer._state.ticks)
     assert.are.equal(0, #driver:frameReads(target))
-    assert.are.equal(writes, driver.runtime.invocationCounts["canvas.element"])
+    assert.same(guideWholeAccesses, driver:canvasWholeElementAccesses(guide))
+    assert.are.equal(attributeWrites, driver.runtime.invocationCounts["canvas.elementAttribute.write"])
     assert.are.equal(guide, owner.compositionCanvas)
     assert.are.equal(status, owner.compositionStatusCanvas)
 
     assert.is_true(driver:triggerModalHotkey({}, "w"))
     assert.are.equal(1, #driver:frameReads(target))
+    for index = 6, 9 do
+      assert.same(initialElements[index].frame, driver:canvasElements(guide)[index].frame)
+    end
     status = owner.compositionStatusCanvas
     driver:setWindowFrame(target, { x = 50, y = 40, w = 900, h = 700 })
     driver:clearCallLog()
     driver:advance(0.249)
-    assert.are.equal("L 0", driver:canvasElements(guide)[7].text)
+    assert.are.equal("L 0", driver:canvasElements(guide)[6].text)
     driver:advance(0.001)
     local elements = driver:canvasElements(guide)
     assert.same({ "L 50", "T 60", "R 50", "B 40" }, {
+      elements[6].text,
       elements[7].text,
+      elements[8].text,
       elements[9].text,
-      elements[11].text,
-      elements[13].text,
     })
+    for index = 6, 9 do
+      assert.same(initialElements[index].frame, elements[index].frame)
+    end
     assert.are.equal(guide, owner.compositionCanvas)
     assert.are.equal(status, owner.compositionStatusCanvas)
     assert.same({
-      "canvas.element.read#5",
-      "canvas.element.read#6",
-      "canvas.element.read#7",
-      "canvas.element.read#8",
-      "canvas.element.write#22",
-      "canvas.element#22",
-      "canvas.element.write#23",
-      "canvas.element#23",
-      "canvas.element.write#24",
-      "canvas.element#24",
-      "canvas.element.write#25",
-      "canvas.element#25",
+      "canvas.elementAttribute.read#9",
+      "canvas.elementAttribute.read#10",
+      "canvas.elementAttribute.read#11",
+      "canvas.elementAttribute.read#12",
+      "canvas.elementAttribute.read#13",
+      "canvas.elementAttribute.read#14",
+      "canvas.elementAttribute.read#15",
+      "canvas.elementAttribute.read#16",
+      "canvas.elementAttribute.write#9",
+      "canvas.elementAttribute#9",
+      "canvas.elementAttribute.write#10",
+      "canvas.elementAttribute#10",
+      "canvas.elementAttribute.write#11",
+      "canvas.elementAttribute#11",
+      "canvas.elementAttribute.write#12",
+      "canvas.elementAttribute#12",
+      "canvas.elementAttribute.write#13",
+      "canvas.elementAttribute#13",
+      "canvas.elementAttribute.write#14",
+      "canvas.elementAttribute#14",
+      "canvas.elementAttribute.write#15",
+      "canvas.elementAttribute#15",
+      "canvas.elementAttribute.write#16",
+      "canvas.elementAttribute#16",
     }, driver:callLog())
+    assert.same(guideWholeAccesses, driver:canvasWholeElementAccesses(guide))
 
-    local changedWrites = driver.runtime.invocationCounts["canvas.element"]
+    local changedWrites = driver.runtime.invocationCounts["canvas.elementAttribute.write"]
     driver:advance(0.25)
-    assert.are.equal(changedWrites, driver.runtime.invocationCounts["canvas.element"])
+    assert.are.equal(changedWrites, driver.runtime.invocationCounts["canvas.elementAttribute.write"])
     driver:setFault(target, "readThrows")
     driver:advance(0.25)
     assert.same(elements, driver:canvasElements(guide))
@@ -485,10 +493,10 @@ describe("Hammerspoon adapter", function()
     driver:setWindowFrame(target, { x = 40, y = 30, w = 920, h = 720 })
     driver:advance(0.25)
     assert.same({ "L 60", "T 70", "R 60", "B 50" }, {
+      driver:canvasElements(guide)[6].text,
       driver:canvasElements(guide)[7].text,
+      driver:canvasElements(guide)[8].text,
       driver:canvasElements(guide)[9].text,
-      driver:canvasElements(guide)[11].text,
-      driver:canvasElements(guide)[13].text,
     })
   end)
 
@@ -502,18 +510,18 @@ describe("Hammerspoon adapter", function()
     driver:advance(0.1)
     local prior = driver:canvasElements(guide)
     assert.same({ "L 50", "T 60", "R 50", "B 40" }, {
+      prior[6].text,
       prior[7].text,
+      prior[8].text,
       prior[9].text,
-      prior[11].text,
-      prior[13].text,
     })
 
     driver:setWindowFrame(target, { x = 40, y = 30, w = 920, h = 720 })
-    local writes = driver.runtime.invocationCounts["canvas.element.write"] or 0
-    driver:setLifecycleFaultSequence("canvas.element.write", {
+    local writes = driver.runtime.invocationCounts["canvas.elementAttribute.write"] or 0
+    driver:setLifecycleFaultSequence("canvas.elementAttribute.write", {
       writes + 3,
-      writes + 5,
-      writes + 9,
+      writes + 4,
+      writes + 12,
     })
     driver:advance(0.1)
     assert.is_nil(owner.compositionLabelRollback)
@@ -531,10 +539,10 @@ describe("Hammerspoon adapter", function()
         fullFrame = { x = -500, y = -300, w = 1920, h = 1080 },
         guide = { x = 100, y = 100, w = 800, h = 600 },
         frames = {
-          { x = 504, y = 686, w = 88, h = 28 },
-          { x = 956, y = 364, w = 88, h = 28 },
-          { x = 1408, y = 686, w = 88, h = 28 },
-          { x = 956, y = 1008, w = 88, h = 28 },
+          { x = 532, y = 691, w = 64, h = 18 },
+          { x = 968, y = 378, w = 64, h = 18 },
+          { x = 1404, y = 691, w = 64, h = 18 },
+          { x = 968, y = 1004, w = 64, h = 18 },
         },
         texts = { "L 600", "T 400", "R 520", "B 80" },
       },
@@ -542,10 +550,10 @@ describe("Hammerspoon adapter", function()
         fullFrame = { x = 0, y = 0, w = 1920, h = 1080 },
         guide = { x = 0, y = 0, w = 1920, h = 1080 },
         frames = {
-          { x = 8, y = 526, w = 88, h = 28 },
-          { x = 916, y = 8, w = 88, h = 28 },
-          { x = 1824, y = 526, w = 88, h = 28 },
-          { x = 916, y = 1044, w = 88, h = 28 },
+          { x = 4, y = 531, w = 64, h = 18 },
+          { x = 928, y = 4, w = 64, h = 18 },
+          { x = 1852, y = 531, w = 64, h = 18 },
+          { x = 928, y = 1058, w = 64, h = 18 },
         },
         texts = { "L 0", "T 0", "R 0", "B 0" },
       },
@@ -553,10 +561,10 @@ describe("Hammerspoon adapter", function()
         fullFrame = { x = 0, y = 0, w = 1920, h = 1080 },
         guide = { x = -10, y = -20, w = 1940, h = 1120 },
         frames = {
-          { x = 0, y = 526, w = 88, h = 28 },
-          { x = 916, y = 0, w = 88, h = 28 },
-          { x = 1832, y = 526, w = 88, h = 28 },
-          { x = 916, y = 1052, w = 88, h = 28 },
+          { x = 0, y = 531, w = 64, h = 18 },
+          { x = 928, y = 0, w = 64, h = 18 },
+          { x = 1856, y = 531, w = 64, h = 18 },
+          { x = 928, y = 1062, w = 64, h = 18 },
         },
         texts = { "L -10", "T -20", "R -10", "B -20" },
         invalid = true,
@@ -571,10 +579,17 @@ describe("Hammerspoon adapter", function()
       driver:triggerHotkey({ "ctrl", "alt", "cmd" }, "c")
       local elements = driver:canvasElements(owner.compositionCanvas)
       for index = 1, 4 do
-        local pillIndex = 4 + index * 2
-        local textIndex = pillIndex + 1
-        assert.same(labelPill(case.frames[index]), elements[pillIndex])
-        assert.same(labelText(case.frames[index], case.texts[index], case.invalid), elements[textIndex])
+        assert.same(labelText(case.frames[index], case.texts[index], case.invalid), elements[index + 5])
+      end
+      assert.are.equal(9, #elements)
+      if case.invalid then
+        for index = 6, 9 do
+          assert.same({ red = 1, green = 0.28, blue = 0.22, alpha = 1 }, elements[index].textColor)
+        end
+      else
+        for index = 6, 9 do
+          assert.are.equal(owner.compositionCanvas._state.elements[5].strokeColor, owner.compositionCanvas._state.elements[index].textColor)
+        end
       end
       assert.is_true(owner.compositionCanvas._state.mouseCallbackSet)
       assert.is_nil(adapter:stop())
@@ -594,7 +609,7 @@ describe("Hammerspoon adapter", function()
       local status = owner.compositionStatusCanvas
       local priorLabels = driver:canvasElements(guide)
       if failure == "labels" then
-        driver:setLifecycleFault("canvas.element", (driver.runtime.invocationCounts["canvas.element"] or 0) + 2)
+        driver:setLifecycleFault("canvas.elementAttribute.write", (driver.runtime.invocationCounts["canvas.elementAttribute.write"] or 0) + 2)
       else
         driver:setLifecycleReturn("canvas.new", (driver.runtime.invocationCounts["canvas.new"] or 0) + 1, nil)
       end
@@ -604,7 +619,7 @@ describe("Hammerspoon adapter", function()
       assert.are.equal(status, owner.compositionStatusCanvas)
       assert.is_true(status._state.visible)
       assert.matches("Selected source: Window Capture", driver:canvasElements(status)[2].text)
-      for _, textIndex in ipairs({ 7, 9, 11, 13 }) do
+      for _, textIndex in ipairs({ 6, 7, 8, 9 }) do
         assert.same(priorLabels[textIndex], driver:canvasElements(guide)[textIndex])
       end
 
@@ -634,7 +649,7 @@ describe("Hammerspoon adapter", function()
     assert.are.equal(status, owner.compositionStatusCanvas)
     assert.is_true(status._state.visible)
     assert.matches("Selected source: Window Capture", driver:canvasElements(status)[2].text)
-    for _, textIndex in ipairs({ 7, 9, 11, 13 }) do
+    for _, textIndex in ipairs({ 6, 7, 8, 9 }) do
       assert.same(priorLabels[textIndex], driver:canvasElements(guide)[textIndex])
     end
     assert.is_true(owner.compositionMode._state.active)
@@ -717,28 +732,28 @@ describe("Hammerspoon adapter", function()
     local guide = owner.compositionCanvas
     local status = owner.compositionStatusCanvas
     local prior = driver:canvasElements(guide)
-    local reads = driver.runtime.invocationCounts["canvas.element.read"] or 0
-    local writes = driver.runtime.invocationCounts["canvas.element.write"] or 0
-    driver:setLifecycleFault("canvas.element.read", reads + 4)
+    local reads = driver.runtime.invocationCounts["canvas.elementAttribute.read"] or 0
+    local writes = driver.runtime.invocationCounts["canvas.elementAttribute.write"] or 0
+    driver:setLifecycleFault("canvas.elementAttribute.read", reads + 8)
 
     assert.is_true(driver:triggerModalHotkey({}, "s"))
-    assert.are.equal(writes, driver.runtime.invocationCounts["canvas.element.write"] or 0)
+    assert.are.equal(writes, driver.runtime.invocationCounts["canvas.elementAttribute.write"] or 0)
     assert.are.equal(status, owner.compositionStatusCanvas)
     assert.matches("Selected source: Window Capture", driver:canvasElements(status)[2].text)
-    for _, textIndex in ipairs({ 7, 9, 11, 13 }) do
+    for _, textIndex in ipairs({ 6, 7, 8, 9 }) do
       assert.same(prior[textIndex], driver:canvasElements(guide)[textIndex])
     end
 
     driver:clearLifecycleFaults()
     local canvasNew = (driver.runtime.invocationCounts["canvas.new"] or 0) + 1
-    writes = driver.runtime.invocationCounts["canvas.element.write"] or 0
+    writes = driver.runtime.invocationCounts["canvas.elementAttribute.write"] or 0
     driver:setLifecycleReturn("canvas.new", canvasNew, nil)
-    driver:setLifecycleFault("canvas.element.write", writes + 5)
+    driver:setLifecycleFault("canvas.elementAttribute.write", writes + 9)
     assert.is_true(driver:triggerModalHotkey({}, "s"))
     assert.is_nil(owner.compositionLabelRollback)
     assert.are.equal(status, owner.compositionStatusCanvas)
     assert.matches("Selected source: Window Capture", driver:canvasElements(status)[2].text)
-    for _, textIndex in ipairs({ 7, 9, 11, 13 }) do
+    for _, textIndex in ipairs({ 6, 7, 8, 9 }) do
       assert.same(prior[textIndex], driver:canvasElements(guide)[textIndex])
     end
 
@@ -752,11 +767,11 @@ describe("Hammerspoon adapter", function()
     start()
     driver:triggerHotkey({ "ctrl", "alt", "cmd" }, "c")
     local guide = owner.compositionCanvas
-    local writes = driver.runtime.invocationCounts["canvas.element.write"] or 0
-    driver:setLifecycleFaultSequence("canvas.element.write", {
+    local writes = driver.runtime.invocationCounts["canvas.elementAttribute.write"] or 0
+    driver:setLifecycleFaultSequence("canvas.elementAttribute.write", {
       writes + 3,
-      writes + 5,
-      writes + 9,
+      writes + 4,
+      writes + 12,
     })
 
     assert.is_true(driver:triggerModalHotkey({}, "w"))
@@ -774,11 +789,11 @@ describe("Hammerspoon adapter", function()
     driver:triggerHotkey({ "ctrl", "alt", "cmd" }, "c")
     local guide = owner.compositionCanvas
     local status = owner.compositionStatusCanvas
-    local writes = driver.runtime.invocationCounts["canvas.element.write"] or 0
-    driver:setLifecycleFaultSequence("canvas.element.write", {
+    local writes = driver.runtime.invocationCounts["canvas.elementAttribute.write"] or 0
+    driver:setLifecycleFaultSequence("canvas.elementAttribute.write", {
       writes + 3,
-      writes + 5,
-      writes + 9,
+      writes + 4,
+      writes + 12,
     })
     driver:setPersistentLifecycleFault("canvas.delete")
     assert.is_true(driver:triggerModalHotkey({}, "w"))
@@ -880,6 +895,7 @@ describe("Hammerspoon adapter", function()
 
   it("retains a failed live-timer stop for retry and makes stale callbacks inert", function()
     start()
+    local target = driver.runtime.focused
     driver:triggerHotkey({ "ctrl", "alt", "cmd" }, "c")
     assert.is_true(driver:triggerModalHotkey({}, "w"))
     local timer = owner.compositionLiveTimer
@@ -899,11 +915,33 @@ describe("Hammerspoon adapter", function()
     assertNoResources(driver)
     adapter:start()
     driver:triggerHotkey({ "ctrl", "alt", "cmd" }, "c")
+    assert.is_true(driver:triggerModalHotkey({}, "w"))
     local replacementGuide = owner.compositionCanvas
-    local writes = driver.runtime.invocationCounts["canvas.element"]
+    local replacementTimer = owner.compositionLiveTimer
+    local replacementStatus = owner.compositionStatusCanvas
+    local replacementFrame = driver:canvasFrame(replacementGuide)
+    local replacementElements = driver:canvasElements(replacementGuide)
+    local replacementWholeAccesses = driver:canvasWholeElementAccesses(replacementGuide)
+    local attributeReads = driver.runtime.invocationCounts["canvas.elementAttribute.read"] or 0
+    local attributeWrites = driver.runtime.invocationCounts["canvas.elementAttribute.write"] or 0
+    local frameReads = #driver:frameReads(target)
+    local resources = driver:activeCounts()
     stale()
     assert.are.equal(replacementGuide, owner.compositionCanvas)
-    assert.are.equal(writes, driver.runtime.invocationCounts["canvas.element"])
+    assert.are.equal(replacementTimer, owner.compositionLiveTimer)
+    assert.are.equal(replacementStatus, owner.compositionStatusCanvas)
+    assert.same(replacementFrame, driver:canvasFrame(replacementGuide))
+    assert.same(replacementElements, driver:canvasElements(replacementGuide))
+    assert.are.equal(9, #driver:canvasElements(replacementGuide))
+    for index = 6, 9 do
+      assert.same(replacementElements[index].frame, driver:canvasElements(replacementGuide)[index].frame)
+    end
+    assert.same(replacementWholeAccesses, driver:canvasWholeElementAccesses(replacementGuide))
+    assert.are.equal(attributeReads, driver.runtime.invocationCounts["canvas.elementAttribute.read"] or 0)
+    assert.are.equal(attributeWrites, driver.runtime.invocationCounts["canvas.elementAttribute.write"] or 0)
+    assert.are.equal(frameReads, #driver:frameReads(target))
+    assert.same(resources, driver:activeCounts())
+    assert.is_nil(driver:clipboardContents())
   end)
 
   it("defaults visibly to Screen and refreshes only status for idempotent S/W selection", function()
@@ -929,10 +967,10 @@ describe("Hammerspoon adapter", function()
     assert.are.equal(guide, owner.compositionCanvas)
     assert.same(guideFrame, driver:canvasFrame(guide))
     local windowElements = driver:canvasElements(guide)
-    for index = 1, 6 do
+    for index = 1, 5 do
       assert.same(guideElements[index], windowElements[index])
     end
-    assert.are.equal("L 0", windowElements[7].text)
+    assert.are.equal("L 0", windowElements[6].text)
     assert.are.equal(frameReads + 1, #target._state.frameReads)
 
     assert.is_true(driver:triggerModalHotkey({}, "w"))
@@ -1118,10 +1156,10 @@ describe("Hammerspoon adapter", function()
       "canvas.level#4",
       "canvas.behavior#3",
       "canvas.mouseCallback#4",
-      "canvas.element.write#22",
-      "canvas.element#22",
-      "canvas.element.write#23",
-      "canvas.element#23",
+      "canvas.element.write#14",
+      "canvas.element#14",
+      "canvas.element.write#15",
+      "canvas.element#15",
       "canvas.show#4",
       "timer.doAfter#1",
     }
@@ -1236,7 +1274,7 @@ describe("Hammerspoon adapter", function()
       for index = 1, 5 do
         assert.same(case.elements[index], actualElements[index])
       end
-      assert.are.equal(13, #actualElements)
+      assert.are.equal(9, #actualElements)
       assert.is_true(owner.compositionCanvas._state.mouseCallbackSet)
       for index = 1, 4 do
         local frame = case.elements[index].frame
@@ -1517,10 +1555,6 @@ describe("Hammerspoon adapter", function()
       { "canvas.element", 7 },
       { "canvas.element", 8 },
       { "canvas.element", 9 },
-      { "canvas.element", 10 },
-      { "canvas.element", 11 },
-      { "canvas.element", 12 },
-      { "canvas.element", 13 },
       { "canvas.show", 1 },
     }) do
       driver = FakeHs.new()
@@ -1544,8 +1578,8 @@ describe("Hammerspoon adapter", function()
       { "canvas.level", 2 },
       { "canvas.behavior", 1 },
       { "canvas.mouseCallback", 2 },
-      { "canvas.element", 14 },
-      { "canvas.element", 15 },
+      { "canvas.element", 10 },
+      { "canvas.element", 11 },
       { "canvas.show", 2 },
     }) do
       driver = FakeHs.new()

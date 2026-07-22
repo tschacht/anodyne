@@ -117,6 +117,7 @@ describe("Milestone 2 characterization", function()
 
     it("reloads an active Composition guide without stale bindings or canvas", function()
       driver:triggerHotkey({ "ctrl", "alt", "cmd" }, "c")
+      assert.is_true(driver:triggerModalHotkey({}, "w"))
       local manager = _G.Anodyne
       local oldModal = manager.compositionMode
       local oldCanvas = manager.compositionCanvas
@@ -135,16 +136,39 @@ describe("Milestone 2 characterization", function()
       assert.is_nil(_G.Anodyne.compositionLiveTimer)
       assert.is_nil(_G.Anodyne.compositionCanvas)
       assert.is_nil(_G.Anodyne.compositionStatusCanvas)
+      assert.same({ timers = 0, menus = 1, hotkeys = 2, modals = 2, filters = 2, taps = 0, canvases = 0 }, driver:activeCounts())
+
+      driver:triggerHotkey({ "ctrl", "alt", "cmd" }, "c")
+      assert.is_true(driver:triggerModalHotkey({}, "w"))
+      local replacementGuide = _G.Anodyne.compositionCanvas
+      local replacementTimer = _G.Anodyne.compositionLiveTimer
+      local replacementStatus = _G.Anodyne.compositionStatusCanvas
+      local replacementElements = driver:canvasElements(replacementGuide)
+      local replacementWholeAccesses = driver:canvasWholeElementAccesses(replacementGuide)
+      local attributeReads = driver.runtime.invocationCounts["canvas.elementAttribute.read"] or 0
+      local attributeWrites = driver.runtime.invocationCounts["canvas.elementAttribute.write"] or 0
+      local frameReads = #driver:frameReads(window)
+      local resources = driver:activeCounts()
       oldFinish()
       oldScreen()
       oldWindow()
       staleTick()
       assert.is_nil(driver:clipboardContents())
-      assert.same({ timers = 0, menus = 1, hotkeys = 2, modals = 2, filters = 2, taps = 0, canvases = 0 }, driver:activeCounts())
-
-      driver:triggerHotkey({ "ctrl", "alt", "cmd" }, "c")
       assert.is_true(_G.Anodyne.compositionMode._state.active)
       assert.is_not.equal(oldCanvas, _G.Anodyne.compositionCanvas)
+      assert.are.equal(replacementGuide, _G.Anodyne.compositionCanvas)
+      assert.are.equal(replacementTimer, _G.Anodyne.compositionLiveTimer)
+      assert.are.equal(replacementStatus, _G.Anodyne.compositionStatusCanvas)
+      assert.are.equal(9, #driver:canvasElements(replacementGuide))
+      assert.same(replacementElements, driver:canvasElements(replacementGuide))
+      for index = 6, 9 do
+        assert.same(replacementElements[index].frame, driver:canvasElements(replacementGuide)[index].frame)
+      end
+      assert.same(replacementWholeAccesses, driver:canvasWholeElementAccesses(replacementGuide))
+      assert.are.equal(attributeReads, driver.runtime.invocationCounts["canvas.elementAttribute.read"] or 0)
+      assert.are.equal(attributeWrites, driver.runtime.invocationCounts["canvas.elementAttribute.write"] or 0)
+      assert.are.equal(frameReads, #driver:frameReads(window))
+      assert.same(resources, driver:activeCounts())
     end)
 
     it("reloads a lingering Composition result without stale timer or status", function()
@@ -216,12 +240,54 @@ describe("Milestone 2 characterization", function()
       assert.is_nil(driver:lastMessage())
     end)
 
-    it("returns nil for a missing live element and roundtrips table elements", function()
+    it("models native dynamic element proxies and attribute-only mutation", function()
       local canvas = driver.hs.canvas.new(frame(0, 0, 100, 100))
       assert.is_nil(canvas[99])
-      local element = { type = "text", text = "roundtrip" }
+      local element = {
+        type = "text",
+        text = "roundtrip",
+        textColor = { red = 1, green = 0.5, blue = 0, alpha = 1 },
+        frame = frame(10, 20, 30, 40),
+      }
       canvas[1] = element
-      assert.are.equal(element, canvas[1])
+      local proxy = canvas[1]
+      assert.is_nil(next(proxy))
+      assert.are.equal("roundtrip", proxy.text)
+      assert.are.equal(10, proxy.frame.x)
+      assert.is_nil(next(proxy.frame))
+      local copied = {}
+      for key, value in pairs(proxy) do
+        copied[key] = value
+      end
+      assert.are.equal("text", copied.type)
+      assert.are.equal("roundtrip", copied.text)
+      assert.is_nil(next(copied.frame))
+
+      canvas[1] = copied
+      assert.same({ x = "0%", y = "0%", w = "100%", h = "100%" }, driver:canvasElements(canvas)[1].frame)
+
+      canvas[1] = element
+      local wholeWrites = driver.runtime.invocationCounts["canvas.element.write"]
+      assert.are.equal("roundtrip", canvas:elementAttribute(1, "text"))
+      canvas:elementAttribute(1, "text", "updated")
+      canvas:elementAttribute(1, "textColor", { red = 1, alpha = 1 })
+      assert.are.equal("updated", canvas:elementAttribute(1, "text"))
+      assert.same(frame(10, 20, 30, 40), driver:canvasElements(canvas)[1].frame)
+      assert.are.equal(wholeWrites, driver.runtime.invocationCounts["canvas.element.write"])
+
+      local reads = driver.runtime.invocationCounts["canvas.elementAttribute.read"]
+      driver:setLifecycleFault("canvas.elementAttribute.read", reads + 1)
+      assert.has_error(function()
+        canvas:elementAttribute(1, "text")
+      end, "injected canvas.elementAttribute.read failure")
+      driver:clearLifecycleFaults()
+      local writes = driver.runtime.invocationCounts["canvas.elementAttribute.write"]
+      driver:setLifecycleFault("canvas.elementAttribute.write", writes + 1)
+      assert.has_error(function()
+        canvas:elementAttribute(1, "text", "rejected")
+      end, "injected canvas.elementAttribute.write failure")
+      assert.are.equal("updated", driver:canvasElements(canvas)[1].text)
+      driver:clearLifecycleFaults()
       assert.has_error(function()
         canvas.bad = {}
       end, "fake_hs: canvas elements require numeric indexes and table values")
@@ -245,6 +311,9 @@ describe("Milestone 2 characterization", function()
       end, "fake_hs: canvas used after delete")
       assert.has_error(function()
         canvas[2] = "bad"
+      end, "fake_hs: canvas used after delete")
+      assert.has_error(function()
+        canvas:elementAttribute(1, "text")
       end, "fake_hs: canvas used after delete")
       assert.has_error(function()
         canvas.bad = {}

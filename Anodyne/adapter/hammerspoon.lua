@@ -136,13 +136,12 @@ function Adapter:start()
   local resolveCompositionPresentationRollback
 
   local labelElements = {
-    { pill = 6, text = 7, edge = "left" },
-    { pill = 8, text = 9, edge = "top" },
-    { pill = 10, text = 11, edge = "right" },
-    { pill = 12, text = 13, edge = "bottom" },
+    { index = 6, edge = "left" },
+    { index = 7, edge = "top" },
+    { index = 8, edge = "right" },
+    { index = 9, edge = "bottom" },
   }
-  local labelFillColor = { red = 0.08, green = 0.08, blue = 0.08, alpha = 0.92 }
-  local labelTextColor = { white = 1, alpha = 1 }
+  local guideColor = { red = 1, green = 0.5, blue = 0, alpha = 1 }
   local invalidLabelTextColor = { red = 1, green = 0.28, blue = 0.22, alpha = 1 }
 
   local function compositionPresentationPending()
@@ -264,11 +263,13 @@ function Adapter:start()
     for _ = 1, 2 do
       local restoreErrors = {}
       for index, definition in ipairs(labelElements) do
-        local ok, value = pcall(function()
-          canvas[definition.text] = snapshot[index]
-        end)
-        if not ok then
-          restoreErrors[#restoreErrors + 1] = tostring(value)
+        for _, attribute in ipairs({ "text", "textColor" }) do
+          local ok, value = pcall(function()
+            canvas:elementAttribute(definition.index, attribute, snapshot[index][attribute])
+          end)
+          if not ok then
+            restoreErrors[#restoreErrors + 1] = tostring(value)
+          end
         end
       end
       if #restoreErrors == 0 then
@@ -836,11 +837,11 @@ function Adapter:start()
         canvas[5] = {
           type = "rectangle",
           action = "stroke",
-          strokeColor = { red = 1, green = 0.5, blue = 0, alpha = 1 },
+          strokeColor = guideColor,
           strokeWidth = config.obsCrop.guideStrokeWidth,
           frame = localGuide,
         }
-        local labelWidth, labelHeight, labelGap = 88, 28, 8
+        local labelWidth, labelHeight, labelGap = 64, 18, 4
         local function labelFrame(edge)
           local x, y
           if edge == "left" then
@@ -881,19 +882,12 @@ function Adapter:start()
             error("Invalid composition edge labels")
           end
           local frame = labelFrame(definition.edge)
-          canvas[definition.pill] = {
-            type = "rectangle",
-            action = "fill",
-            fillColor = labelFillColor,
-            roundedRectRadii = { xRadius = 7, yRadius = 7 },
-            frame = frame,
-          }
-          canvas[definition.text] = {
+          canvas[definition.index] = {
             type = "text",
             text = label.text,
-            textSize = 16,
-            textColor = label.invalid and invalidLabelTextColor or labelTextColor,
-            textFont = "Menlo",
+            textSize = 13,
+            textColor = label.invalid and invalidLabelTextColor or guideColor,
+            textFont = "Helvetica Neue",
             textAlignment = "center",
             frame = frame,
           }
@@ -914,42 +908,43 @@ function Adapter:start()
           return false, "Composition label rollback is pending teardown"
         end
         local previous = {}
-        local candidates = {}
         for index, definition in ipairs(labelElements) do
           local label = labels[index]
           if not label or label.edge ~= definition.edge then
             return false, "Invalid composition edge labels"
           end
-          local readOk, prior = pcall(function()
-            return canvas[definition.text]
-          end)
-          if not readOk or not prior then
-            return false, prior
+          previous[index] = {}
+          for _, attribute in ipairs({ "text", "textColor" }) do
+            local readOk, prior = pcall(function()
+              return canvas:elementAttribute(definition.index, attribute)
+            end)
+            if not readOk or prior == nil then
+              return false, prior
+            end
+            previous[index][attribute] = prior
           end
-          previous[index] = prior
-          local candidate = {}
-          for key, value in pairs(prior) do
-            candidate[key] = value
-          end
-          candidate.text = label.text
-          candidate.textColor = label.invalid and invalidLabelTextColor or labelTextColor
-          candidates[index] = candidate
         end
         for index, definition in ipairs(labelElements) do
-          local writeOk, writeError = pcall(function()
-            canvas[definition.text] = candidates[index]
-          end)
-          if not writeOk then
-            local restored, restoreError = restoreCompositionLabels(canvas, previous)
-            if not restored then
-              owner.compositionLabelRollback = {
-                canvas = canvas,
-                elements = previous,
-                error = restoreError,
-              }
-              return false, tostring(writeError) .. "; Composition label rollback failed: " .. restoreError
+          local label = labels[index]
+          for _, candidate in ipairs({
+            { attribute = "text", value = label.text },
+            { attribute = "textColor", value = label.invalid and invalidLabelTextColor or guideColor },
+          }) do
+            local writeOk, writeError = pcall(function()
+              canvas:elementAttribute(definition.index, candidate.attribute, candidate.value)
+            end)
+            if not writeOk then
+              local restored, restoreError = restoreCompositionLabels(canvas, previous)
+              if not restored then
+                owner.compositionLabelRollback = {
+                  canvas = canvas,
+                  attributes = previous,
+                  error = restoreError,
+                }
+                return false, tostring(writeError) .. "; Composition label rollback failed: " .. restoreError
+              end
+              return false, writeError
             end
-            return false, writeError
           end
         end
         if help == compositionHelp then
@@ -961,7 +956,7 @@ function Adapter:start()
           if not restored then
             owner.compositionLabelRollback = {
               canvas = canvas,
-              elements = previous,
+              attributes = previous,
               error = restoreError,
             }
             return false, tostring(renderError) .. "; Composition label rollback failed: " .. restoreError

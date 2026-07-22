@@ -38,7 +38,10 @@ local function strictObject(kind, methods, state, numeric, beforeNumericRead, be
       if numeric and type(key) == "number" then
         live(state, kind)
         if beforeNumericRead then
-          beforeNumericRead()
+          local overridden, value = beforeNumericRead(key)
+          if overridden then
+            return value
+          end
         end
         return state.elements[key]
       end
@@ -52,7 +55,10 @@ local function strictObject(kind, methods, state, numeric, beforeNumericRead, be
         fail(kind .. " elements require numeric indexes and table values")
       end
       if beforeNumericWrite then
-        beforeNumericWrite()
+        local replacement = beforeNumericWrite(key, value)
+        if replacement ~= nil then
+          value = replacement
+        end
       end
       state.elements[key] = value
     end
@@ -442,6 +448,70 @@ function Fake.new(options)
     return self
   end
   local canvasMethods = {}
+  local canvasElementProxySources = setmetatable({}, { __mode = "k" })
+
+  local function canvasElementProxy(value, topLevel)
+    if type(value) ~= "table" then
+      return value
+    end
+    local proxy = {}
+    canvasElementProxySources[proxy] = value
+    local proxyMetatable = {
+      __index = function(_, key)
+        return canvasElementProxy(value[key], false)
+      end,
+    }
+    if topLevel then
+      proxyMetatable.__pairs = function()
+        local key
+        return function()
+          key = next(value, key)
+          if key == nil then
+            return nil
+          end
+          return key, canvasElementProxy(value[key], false)
+        end
+      end
+    end
+    return setmetatable(proxy, proxyMetatable)
+  end
+
+  local function containsCanvasProxy(value, seen)
+    if type(value) ~= "table" then
+      return false
+    end
+    if canvasElementProxySources[value] then
+      return true
+    end
+    seen = seen or {}
+    if seen[value] then
+      return false
+    end
+    seen[value] = true
+    for _, nested in pairs(value) do
+      if containsCanvasProxy(nested, seen) then
+        return true
+      end
+    end
+    return false
+  end
+
+  local function consumeCanvasLiteral(value, seen)
+    if type(value) ~= "table" then
+      return value
+    end
+    seen = seen or {}
+    if seen[value] then
+      return seen[value]
+    end
+    local consumed = {}
+    seen[value] = consumed
+    for key, nested in next, value do
+      consumed[key] = consumeCanvasLiteral(nested, seen)
+    end
+    return consumed
+  end
+
   function canvasMethods:level(value, ...)
     noExtra("canvas:level", ...)
     lifecycle("canvas.level")
@@ -493,6 +563,29 @@ function Fake.new(options)
     live(self._state, "canvas")
     self._state.visible = false
     self._state.deleted = true
+  end
+  function canvasMethods:elementAttribute(index, attribute, ...)
+    live(self._state, "canvas")
+    if type(index) ~= "number" or index < 1 or index % 1 ~= 0 or type(attribute) ~= "string" then
+      fail("canvas:elementAttribute requires a positive integer index and string attribute")
+    end
+    local argumentCount = select("#", ...)
+    if argumentCount == 0 then
+      lifecycle("canvas.elementAttribute.read")
+      local element = self._state.elements[index]
+      return element and element[attribute] or nil
+    end
+    if argumentCount ~= 1 then
+      fail("canvas:elementAttribute received too many arguments")
+    end
+    lifecycle("canvas.elementAttribute.write")
+    lifecycle("canvas.elementAttribute")
+    local element = self._state.elements[index]
+    if not element then
+      fail("canvas:elementAttribute index has no element")
+    end
+    element[attribute] = ...
+    return self
   end
 
   local hs = {
@@ -699,12 +792,28 @@ function Fake.new(options)
     if overridden then
       return value
     end
-    local state = { frame = copyFrame(frame), elements = {}, visible = false }
-    local canvas = strictObject("canvas", canvasMethods, state, true, function()
+    local state = {
+      frame = copyFrame(frame),
+      elements = {},
+      visible = false,
+      wholeElementReads = 0,
+      wholeElementWrites = 0,
+    }
+    local canvas = strictObject("canvas", canvasMethods, state, true, function(index)
+      state.wholeElementReads = state.wholeElementReads + 1
       lifecycle("canvas.element.read")
-    end, function()
+      return true, canvasElementProxy(state.elements[index], true)
+    end, function(_, value)
+      state.wholeElementWrites = state.wholeElementWrites + 1
       lifecycle("canvas.element.write")
       lifecycle("canvas.element")
+      if containsCanvasProxy(value) then
+        local consumed = consumeCanvasLiteral(value)
+        if type(consumed.frame) == "table" and next(consumed.frame) == nil then
+          consumed.frame = { x = "0%", y = "0%", w = "100%", h = "100%" }
+        end
+        return consumed
+      end
     end)
     rawset(canvas, "_state", state)
     table.insert(runtime.canvases, canvas)
@@ -984,6 +1093,12 @@ function Fake.new(options)
       return result
     end
     return copy(canvas._state.elements)
+  end
+  function driver:canvasWholeElementAccesses(canvas)
+    return {
+      reads = canvas._state.wholeElementReads,
+      writes = canvas._state.wholeElementWrites,
+    }
   end
   function driver:key(name, flags, eventType)
     local code
