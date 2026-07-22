@@ -178,6 +178,29 @@ describe("Anodyne view", function()
     assert.is_nil(view:cropClipboardText(result):match("\n"))
   end)
 
+  it("models compact crop edge labels in deterministic OBS order", function()
+    local labels = view:cropEdgeLabels({
+      left = 12,
+      top = -3,
+      right = 0,
+      bottom = -45,
+      invalid = { left = false, top = true, right = false, bottom = true },
+      resultWidth = 1280,
+      resultHeight = 720,
+      scale = 2,
+    })
+    assert.same({
+      { edge = "left", text = "L 12", value = 12, invalid = false },
+      { edge = "top", text = "T -3", value = -3, invalid = true },
+      { edge = "right", text = "R 0", value = 0, invalid = false },
+      { edge = "bottom", text = "B -45", value = -45, invalid = true },
+    }, labels)
+    local text = table.concat({ labels[1].text, labels[2].text, labels[3].text, labels[4].text }, " ")
+    assert.is_nil(text:match("Result"))
+    assert.is_nil(text:match("Scale"))
+    assert.is_nil(text:match("Capture"))
+  end)
+
   it("renders exact closed capture-source labels and explicit-source help", function()
     assert.are.equal("Screen Capture", view:captureSourceLabel("screen"))
     assert.are.equal("Window Capture", view:captureSourceLabel("window"))

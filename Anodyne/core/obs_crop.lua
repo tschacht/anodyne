@@ -20,6 +20,26 @@ local function round(value)
   return math.floor(value + 0.5)
 end
 
+local function pixelGeometry(finalRect, guideRect, scale)
+  local sourceWidth = round(finalRect.w * scale)
+  local sourceHeight = round(finalRect.h * scale)
+  local resultWidth = round(guideRect.w * scale)
+  local resultHeight = round(guideRect.h * scale)
+  local left = round((guideRect.x - finalRect.x) * scale)
+  local top = round((guideRect.y - finalRect.y) * scale)
+
+  return {
+    left = left,
+    top = top,
+    right = sourceWidth - left - resultWidth,
+    bottom = sourceHeight - top - resultHeight,
+    sourceWidth = sourceWidth,
+    sourceHeight = sourceHeight,
+    resultWidth = resultWidth,
+    resultHeight = resultHeight,
+  }
+end
+
 function ObsCrop.validateRect(rect, name)
   local rectName = name or "rect"
   if type(rect) ~= "table" then
@@ -114,6 +134,79 @@ function ObsCrop.toPixelRect(rect, scale)
   }
 end
 
+function ObsCrop.preview(finalRect, guideRect, scale)
+  local scaleValidation = ObsCrop.validateScale(scale)
+  if not scaleValidation.ok then
+    return scaleValidation
+  end
+
+  local finalValidation = ObsCrop.validateRect(finalRect, "final")
+  if not finalValidation.ok then
+    return finalValidation
+  end
+  local guideValidation = ObsCrop.validateRect(guideRect, "guide")
+  if not guideValidation.ok then
+    return guideValidation
+  end
+
+  local finalRight = finalRect.x + finalRect.w
+  local finalBottom = finalRect.y + finalRect.h
+  local guideRight = guideRect.x + guideRect.w
+  local guideBottom = guideRect.y + guideRect.h
+  local deficits = {
+    left = math.max(0, finalRect.x - guideRect.x),
+    top = math.max(0, finalRect.y - guideRect.y),
+    right = math.max(0, guideRight - finalRight),
+    bottom = math.max(0, guideBottom - finalBottom),
+  }
+  local pointInvalid = {}
+  for _, edge in ipairs({ "left", "top", "right", "bottom" }) do
+    pointInvalid[edge] = deficits[edge] > ObsCrop.POINT_TOLERANCE
+  end
+
+  local guide = { x = guideRect.x, y = guideRect.y, w = guideRect.w, h = guideRect.h }
+  if deficits.left > 0 and not pointInvalid.left then
+    guide.x = finalRect.x
+  elseif deficits.right > 0 and not pointInvalid.right then
+    guide.x = finalRight - guide.w
+  end
+  if deficits.top > 0 and not pointInvalid.top then
+    guide.y = finalRect.y
+  elseif deficits.bottom > 0 and not pointInvalid.bottom then
+    guide.y = finalBottom - guide.h
+  end
+
+  local pixels = pixelGeometry(finalRect, guide, scale)
+  local invalid = {
+    left = pointInvalid.left or pixels.left < 0,
+    top = pointInvalid.top or pixels.top < 0,
+    right = pointInvalid.right or pixels.right < 0,
+    bottom = pointInvalid.bottom or pixels.bottom < 0,
+  }
+
+  local function signedValue(edge)
+    if pointInvalid[edge] then
+      return -math.max(1, math.ceil(deficits[edge] * scale))
+    end
+    return pixels[edge]
+  end
+
+  return {
+    ok = true,
+    valid = not (invalid.left or invalid.top or invalid.right or invalid.bottom),
+    left = signedValue("left"),
+    top = signedValue("top"),
+    right = signedValue("right"),
+    bottom = signedValue("bottom"),
+    invalid = invalid,
+    sourceWidth = pixels.sourceWidth,
+    sourceHeight = pixels.sourceHeight,
+    resultWidth = pixels.resultWidth,
+    resultHeight = pixels.resultHeight,
+    scale = scale,
+  }
+end
+
 function ObsCrop.calculate(finalRect, guideRect, scale)
   local scaleValidation = ObsCrop.validateScale(scale)
   if not scaleValidation.ok then
@@ -126,42 +219,37 @@ function ObsCrop.calculate(finalRect, guideRect, scale)
   end
 
   local guide = containment.rect
-  local sourceWidth = round(finalRect.w * scale)
-  local sourceHeight = round(finalRect.h * scale)
-  local resultWidth = round(guide.w * scale)
-  local resultHeight = round(guide.h * scale)
-  if resultWidth > sourceWidth then
+  local pixels = pixelGeometry(finalRect, guide, scale)
+  if pixels.resultWidth > pixels.sourceWidth then
     return failure("outside_final", { edge = guide.x < finalRect.x and "left" or "right" })
   end
-  if resultHeight > sourceHeight then
+  if pixels.resultHeight > pixels.sourceHeight then
     return failure("outside_final", { edge = guide.y < finalRect.y and "top" or "bottom" })
   end
 
-  local left = round((guide.x - finalRect.x) * scale)
-  local top = round((guide.y - finalRect.y) * scale)
-  if left < 0 then
+  if pixels.left < 0 then
     return failure("outside_final", { edge = "left" })
   end
-  if top < 0 then
+  if pixels.top < 0 then
     return failure("outside_final", { edge = "top" })
   end
-  if left + resultWidth > sourceWidth then
+  if pixels.right < 0 then
     return failure("outside_final", { edge = "right" })
   end
-  if top + resultHeight > sourceHeight then
+  if pixels.bottom < 0 then
     return failure("outside_final", { edge = "bottom" })
   end
 
   return {
     ok = true,
-    left = left,
-    top = top,
-    right = sourceWidth - left - resultWidth,
-    bottom = sourceHeight - top - resultHeight,
-    sourceWidth = sourceWidth,
-    sourceHeight = sourceHeight,
-    resultWidth = resultWidth,
-    resultHeight = resultHeight,
+    left = pixels.left,
+    top = pixels.top,
+    right = pixels.right,
+    bottom = pixels.bottom,
+    sourceWidth = pixels.sourceWidth,
+    sourceHeight = pixels.sourceHeight,
+    resultWidth = pixels.resultWidth,
+    resultHeight = pixels.resultHeight,
     scale = scale,
   }
 end

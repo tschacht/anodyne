@@ -516,40 +516,40 @@
     </div>
 
     <div class="phase">
-      <h3><code class="status">[]</code> Milestone 9: Signed Live-Preview Contracts</h3>
+      <h3><code class="status">[x]</code> Milestone 9: Signed Live-Preview Contracts</h3>
       <p>Define advisory signed crop geometry, refresh configuration, and deterministic edge-label models without yet adding controller polling or native resources.</p>
       <p><strong>Validation goal:</strong> every valid preview is numerically identical to authoritative Finish output, invalid edges expose exact signed deficits, and existing clipboard/result behavior remains byte-compatible.</p>
 
       <h4>9.1 Primary-agent live-preview preflight</h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> Record the implementation starting SHA and <code>git status --short</code>; preserve the later exact-pixel preset commits and stop on any overlap with the declared packets.</li>
-        <li><code class="status">[]</code> Run <code>make verify</code> before edits. If red, diagnose read-only first. Under the owner's standing baseline-first authorization, repair an attributable repository defect through a dedicated scoped worker, reviewer gate, and separate pre-milestone commit only when no user-owned or unrelated path overlaps; otherwise halt and report before writing.</li>
-        <li><code class="status">[]</code> Inventory exact Finish, clipboard, result-modal, containment, guide-element, timer-resource, reload, and Window/Screen source expectations that live preview must preserve.</li>
+        <li><code class="status">[x]</code> Record the implementation starting SHA and <code>git status --short</code>; preserve the later exact-pixel preset commits and stop on any overlap with the declared packets.</li>
+        <li><code class="status">[x]</code> Run <code>make verify</code> before edits. If red, diagnose read-only first. Under the owner's standing baseline-first authorization, repair an attributable repository defect through a dedicated scoped worker, reviewer gate, and separate pre-milestone commit only when no user-owned or unrelated path overlaps; otherwise halt and report before writing.</li>
+        <li><code class="status">[x]</code> Inventory exact Finish, clipboard, result-modal, containment, guide-element, timer-resource, reload, and Window/Screen source expectations that live preview must preserve.</li>
       </ul>
 
       <h4><span class="tag packet">WP-13</span> Pure signed preview geometry</h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> Owner: crop-math worker. Touch only <code>Anodyne/core/obs_crop.lua</code> and <code>spec/core/obs_crop_spec.lua</code>.</li>
-        <li><code class="status">[]</code> Add a pure preview API returning integer <code>left</code>, <code>top</code>, <code>right</code>, and <code>bottom</code> even when one or more values are negative. Reuse factored pixel conversion rather than duplicating Finish arithmetic.</li>
-        <li><code class="status">[]</code> Determine beyond-tolerance point invalidity independently for all four edges before rounding. Clamp only within-tolerance residues, derive Right/Bottom from rounded source and guide pixel sizes, and combine point-invalid flags with pixel-margin negativity into per-edge plus aggregate validity.</li>
-        <li><code class="status">[]</code> For a point-invalid edge, expose <code>-max(1, ceil(deficitPoints × scale))</code> so a subpixel outside edge can never appear as a valid zero; otherwise expose the raw signed pixel margin. Preserve all four values instead of stopping at the first invalid edge.</li>
-        <li><code class="status">[]</code> Prove valid preview output equals <code>calculate()</code> exactly across normal, scale 1/2, fractional, negative-origin, zero-edge, and tolerance fixtures; cover one and multiple signed deficits, subpixel beyond-tolerance deficits that round naïvely to zero, undersized sources, and invalid rect/scale failures.</li>
-        <li><code class="status">[]</code> Keep <code>calculate()</code>, its structured failures, result dimensions, and all existing Window/Screen fixtures behaviorally unchanged.</li>
+        <li><code class="status">[x]</code> Owner: crop-math worker. Touch only <code>Anodyne/core/obs_crop.lua</code> and <code>spec/core/obs_crop_spec.lua</code>.</li>
+        <li><code class="status">[x]</code> Add a pure preview API returning integer <code>left</code>, <code>top</code>, <code>right</code>, and <code>bottom</code> even when one or more values are negative. Reuse factored pixel conversion rather than duplicating Finish arithmetic.</li>
+        <li><code class="status">[x]</code> Determine beyond-tolerance point invalidity independently for all four edges before rounding. Clamp only within-tolerance residues, derive Right/Bottom from rounded source and guide pixel sizes, and combine point-invalid flags with pixel-margin negativity into per-edge plus aggregate validity.</li>
+        <li><code class="status">[x]</code> For a point-invalid edge, expose <code>-max(1, ceil(deficitPoints × scale))</code> so a subpixel outside edge can never appear as a valid zero; otherwise expose the raw signed pixel margin. Preserve all four values instead of stopping at the first invalid edge.</li>
+        <li><code class="status">[x]</code> Prove valid preview output equals <code>calculate()</code> exactly across normal, scale 1/2, fractional, negative-origin, zero-edge, and tolerance fixtures; cover one and multiple signed deficits, subpixel beyond-tolerance deficits that round naïvely to zero, undersized sources, and invalid rect/scale failures.</li>
+        <li><code class="status">[x]</code> Keep <code>calculate()</code>, its structured failures, result dimensions, and all existing Window/Screen fixtures behaviorally unchanged.</li>
       </ul>
 
       <h4><span class="tag packet">WP-14</span> Refresh configuration and label model</h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> Owner: config/view worker in parallel with WP-13. Touch only <code>Anodyne/config.lua</code>, <code>Anodyne/view.lua</code>, <code>spec/core/config_spec.lua</code>, and <code>spec/controller/view_spec.lua</code>.</li>
-        <li><code class="status">[]</code> Add immutable finite-positive <code>obsCrop.liveRefreshInterval</code> with default exactly <code>0.1</code> seconds and preserve all existing default/config validation behavior.</li>
-        <li><code class="status">[]</code> Add a deterministic four-item label model in Left, Top, Right, Bottom order. Each item carries its edge, compact text (<code>L n</code>, <code>T n</code>, <code>R n</code>, <code>B n</code>), integer value, and invalid flag; negative values retain the minus sign.</li>
-        <li><code class="status">[]</code> Keep Result, Scale, source prefix, clipboard, lingering result, help, and status text out of edge labels and unchanged in their existing surfaces.</li>
+        <li><code class="status">[x]</code> Owner: config/view worker in parallel with WP-13. Touch only <code>Anodyne/config.lua</code>, <code>Anodyne/view.lua</code>, <code>spec/core/config_spec.lua</code>, and <code>spec/controller/view_spec.lua</code>.</li>
+        <li><code class="status">[x]</code> Add immutable finite-positive <code>obsCrop.liveRefreshInterval</code> with default exactly <code>0.1</code> seconds and preserve all existing default/config validation behavior.</li>
+        <li><code class="status">[x]</code> Add a deterministic four-item label model in Left, Top, Right, Bottom order. Each item carries its edge, compact text (<code>L n</code>, <code>T n</code>, <code>R n</code>, <code>B n</code>), integer value, and invalid flag; negative values retain the minus sign.</li>
+        <li><code class="status">[x]</code> Keep Result, Scale, source prefix, clipboard, lingering result, help, and status text out of edge labels and unchanged in their existing surfaces.</li>
       </ul>
 
       <h4>9.4 Testing Strategy</h4>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>make test-core test-controller format-check coverage</code> — proves signed math, configuration, label models, exact authoritative compatibility, and coverage floors.</li>
-        <li><code class="status">[]</code> Independent reviewer approval — audits rounding/tolerance equivalence, signed far-edge derivation, immutable configuration, and absence of controller/native behavior changes.</li>
-        <li><code class="status">[]</code> Commit Milestone 9 as one attributable, fully green commit only after both non-overlapping packets and reviewer gate pass.</li>
+        <li><code class="status">[x]</code> <code>make test-core test-controller format-check coverage</code> — proves signed math, configuration, label models, exact authoritative compatibility, and coverage floors.</li>
+        <li><code class="status">[x]</code> Independent reviewer approval — audits rounding/tolerance equivalence, signed far-edge derivation, immutable configuration, and absence of controller/native behavior changes.</li>
+        <li><code class="status">[x]</code> Commit Milestone 9 as one attributable, fully green commit only after both non-overlapping packets and reviewer gate pass.</li>
       </ul>
       <div class="loop">🔁 <strong>Do not advance until valid live values are golden-equal to Finish and invalid values remain precise signed advisory data.</strong></div>
     </div>

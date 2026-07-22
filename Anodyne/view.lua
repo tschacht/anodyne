@@ -6,6 +6,13 @@ local captureSourceLabels = {
   window = "Window Capture",
 }
 
+local cropEdges = {
+  { edge = "left", label = "L" },
+  { edge = "top", label = "T" },
+  { edge = "right", label = "R" },
+  { edge = "bottom", label = "B" },
+}
+
 local function append(target, source)
   for _, item in ipairs(source) do
     target[#target + 1] = item
@@ -52,6 +59,20 @@ end
 
 function View:captureSourceLabel(source)
   return captureSourceLabels[source] or "Unknown capture source"
+end
+
+function View:cropEdgeLabels(preview)
+  local labels = {}
+  for _, definition in ipairs(cropEdges) do
+    local value = preview[definition.edge]
+    labels[#labels + 1] = {
+      edge = definition.edge,
+      text = string.format("%s %d", definition.label, value),
+      value = value,
+      invalid = preview.invalid[definition.edge] == true,
+    }
+  end
+  return labels
 end
 
 function View:statusText(status, source)

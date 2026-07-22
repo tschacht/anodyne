@@ -26,6 +26,7 @@ local DEFAULTS = {
     resultDuration = 4,
     dimAlpha = 0.45,
     guideStrokeWidth = 1,
+    liveRefreshInterval = 0.1,
   },
   exactPresets = {
     { width = 2560, height = 1440 },
@@ -248,6 +249,10 @@ function Config.build(overrides)
   local guideStrokeWidth = values.obsCrop.guideStrokeWidth
   if guideStrokeWidth <= 0 or guideStrokeWidth == math.huge or guideStrokeWidth ~= guideStrokeWidth then
     error("CONFIG.obsCrop.guideStrokeWidth must be a finite positive number", 2)
+  end
+  local liveRefreshInterval = values.obsCrop.liveRefreshInterval
+  if liveRefreshInterval <= 0 or liveRefreshInterval == math.huge or liveRefreshInterval ~= liveRefreshInterval then
+    error("CONFIG.obsCrop.liveRefreshInterval must be a finite positive number", 2)
   end
   local frozen = freeze(values)
   return frozen, metadata(frozen)
