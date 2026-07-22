@@ -22,8 +22,9 @@ describe("Anodyne view", function()
       "Undo Last Action [U]",
       "Reset Session [Shift+U]",
       "-",
-      "Exact pixels [E then 1-1]",
+      "Exact pixels [E then 1-2]",
       "2560 x 1440 px [E 1]",
+      "1920 x 1080 px [E 2]",
       "-",
       "Aspect [A then 1-5]",
       "16:9 [A 1]",
@@ -76,15 +77,15 @@ describe("Anodyne view", function()
     }, titles)
     assert.same({ type = "action", action = "undo" }, items[4].intent)
     assert.same({ type = "action", action = "exact", value = config.exactPresets[1] }, items[8].intent)
-    assert.same({ type = "action", action = "width", value = 1000 }, items[18].intent)
+    assert.same({ type = "action", action = "width", value = 1000 }, items[19].intent)
     assert.is_true(items[5].disabled)
-    assert.same({ type = "composition", action = "enter" }, items[57].intent)
+    assert.same({ type = "composition", action = "enter" }, items[58].intent)
   end)
 
   it("renders exact bodies for every screen", function()
     local expectedBodies = {
       home = { "Choose a mode with E, A, W, H, M, or R" },
-      exact = { "1 = 2560 x 1440 px" },
+      exact = { "1 = 2560 x 1440 px", "2 = 1920 x 1080 px" },
       aspect = { "1 = 16:9", "2 = 4:3", "3 = 3:2", "4 = 2:1", "5 = 3:1" },
       width = { "1 = 1000 px", "2 = 1200 px", "3 = 1400 px", "4 = 1600 px", "5 = 1800 px", "6 = 2000 px", "7 = 2200 px", "8 = 2400 px" },
       height = { "1 = 600 px", "2 = 700 px", "3 = 800 px", "4 = 1000 px", "5 = 1200 px", "6 = 1400 px", "7 = 1500 px", "8 = 1600 px" },

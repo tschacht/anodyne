@@ -28,11 +28,12 @@ While Window Mode is open:
 
 The `WI` menu-bar item exposes the same actions and a separate Composition Mode entry. Defaults, including presets, minimum dimensions, step sizes, shortcuts, undo depth, and modal duration, are defined in `Anodyne/config.lua`.
 
-Exact-pixel presets are configured as an ordered list of one to nine entries, matching the modal's single-digit selection keys. The default provides one `2560 x 1440` entry:
+Exact-pixel presets are configured as an ordered list of one to nine entries, matching the modal's single-digit selection keys. The defaults provide `2560 x 1440` and `1920 x 1080`:
 
 ```lua
 exactPresets = {
   { width = 2560, height = 1440 },
+  { width = 1920, height = 1080 },
 }
 ```
 

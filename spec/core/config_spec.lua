@@ -26,6 +26,7 @@ describe("configuration", function()
       obsCrop = { scaleOverride = 0, resultDuration = 4, dimAlpha = 0.45, guideStrokeWidth = 1 },
       exactPresets = {
         { width = 2560, height = 1440 },
+        { width = 1920, height = 1080 },
       },
       aspectPresets = {
         { label = "16:9", width = 16, height = 9 },

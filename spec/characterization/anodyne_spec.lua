@@ -342,6 +342,10 @@ describe("Milestone 2 characterization", function()
       driver:key("u")
       driver:advance(0.05)
       assertFrame(frame(100, 100, 800, 600), window:frame())
+      driver:key("e")
+      driver:key("2")
+      driver:advance(0.05)
+      assertFrame(frame(100, 100, 1920, 1080), window:frame())
     end)
 
     it("clamps a width preset and position to usable bounds", function()
@@ -668,7 +672,7 @@ describe("Milestone 2 characterization", function()
       assert.same({ 10, 11, 12 }, driver.runtime.taps[1]._state.events)
     end)
 
-    it("constructs all 57 menu items with frozen strings and order", function()
+    it("constructs all 58 menu items with frozen strings and order", function()
       local items = driver:menuItems()
       local titles = {}
       for _, item in ipairs(items) do
@@ -681,8 +685,9 @@ describe("Milestone 2 characterization", function()
         "Undo Last Action [U]",
         "Reset Session [Shift+U]",
         "-",
-        "Exact pixels [E then 1-1]",
+        "Exact pixels [E then 1-2]",
         "2560 x 1440 px [E 1]",
+        "1920 x 1080 px [E 2]",
         "-",
         "Aspect [A then 1-5]",
         "16:9 [A 1]",
@@ -794,6 +799,7 @@ describe("Milestone 2 characterization", function()
         "Current: 800 x 600",
         "",
         "1 = 2560 x 1440 px",
+        "2 = 1920 x 1080 px",
       })
     end)
 
