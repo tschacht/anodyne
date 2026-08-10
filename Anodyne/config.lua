@@ -31,6 +31,7 @@ local DEFAULTS = {
   exactPresets = {
     { width = 2560, height = 1440 },
     { width = 1920, height = 1080 },
+    { width = 2000, height = 1500 },
   },
   aspectPresets = {
     { label = "16:9", width = 16, height = 9 },
